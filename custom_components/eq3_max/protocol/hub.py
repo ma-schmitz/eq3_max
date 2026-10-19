@@ -405,6 +405,9 @@ class MaxHub:
             radio.task = asyncio.create_task(radio.scheduler.run())
         for dev in self.devices.values():
             if dev.has_pending:
+                # Going out now: a "failed" mark from the store would make the first
+                # connect send it a second time.
+                dev.command_failed = False
                 self._submit_pending(dev)
             self._submit_pending_config(dev)
             self._start_links(dev)

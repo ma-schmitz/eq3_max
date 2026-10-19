@@ -16,6 +16,9 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
   nächsten Meldung wieder raus; einmalige Warnung „antwortet nicht … Gerät prüfen“.
 - Die Warnung „Port wird neu geoeffnet“ erscheint nur noch, wenn der Port wirklich neu geöffnet
   wird (vorher auch, wenn die Funkverbindung das Neu-Öffnen ablehnte).
+- Nach einem Neustart ging ein ausstehender, schon einmal gescheiterter Befehl doppelt raus:
+  einmal beim Start und noch einmal beim ersten Verbinden, weil er laut Speicher noch als
+  gescheitert galt.
 
 ### Geändert
 

@@ -1676,3 +1676,25 @@ async def test_reopen_warning_only_when_the_port_is_really_reopened(caplog):
         assert "neu geoeffnet" not in caplog.text
     finally:
         await h.stop()
+
+
+async def test_restored_failed_command_goes_out_once_at_start():
+    """After a restart a pending command marked failed in the store went out twice:
+    once from start() and once more from the first connect (it still looked failed)."""
+    cul = FakeCul()
+    h = _make(cul)
+    dev = h.devices[HT]
+    dev.set_pending(22.0, Mode.MANUAL, None)
+    dev.command_failed = True
+    await h.start()
+    try:
+        # The unreachable device makes the stick look deaf: one reopen, after it one resend.
+        await until(lambda: cul.opened == 2, timeout=2.0)
+        await until(lambda: h.devices[HT].command_failed and h.connected, timeout=2.0)
+        await asyncio.sleep(0.3)
+        sent = [l for l in cul.all_written + cul.written if l.startswith("Zs") and l[16:22] == "A1B005"]
+        # Two commands (each with its retries): the one from start() and the resend after the
+        # reopen - not a third from the first connect.
+        assert len({l[4:6] for l in sent}) == 2
+    finally:
+        await h.stop()
