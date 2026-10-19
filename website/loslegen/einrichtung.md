@@ -33,7 +33,7 @@ Sechs Hexziffern, Standard `C0FFEE`. MAX!-Geräte merken sich die Adresse ihrer 
 | **Homegear** | Homegear direkt abfragen, solange es noch läuft |
 | **keine** | Neuinstallation, Geräte werden danach [angelernt](../handbuch/anlernen.md) |
 
-Die Entity-IDs der bisherigen `homematic`- bzw. `max_cul`-Integration bleiben dabei erhalten.
+Die Entity-IDs der bisherigen `homematic`-Integration bleiben dabei erhalten.
 
 ## Optionen
 

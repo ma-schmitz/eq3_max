@@ -27,7 +27,6 @@ Wert — Automationen kippen dadurch nicht.
 | CUL nicht erreichbar | seit 15 min keine Verbindung zum CUL (Pfad bzw. `host:port` steht in der Meldung) |
 | CUL-Stick empfängt nichts | auch nach zwei Neustarts kein Empfang → anderer USB-Port; Netzwerk-CUL stromlos neu starten |
 | Homematic-Integration noch aktiv | `homematic:` aus der YAML entfernen, neu starten |
-| max_cul noch aktiv | alte Integration entfernen, neu starten |
 
 ## Diagnose
 

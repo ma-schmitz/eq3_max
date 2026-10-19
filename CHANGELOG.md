@@ -16,6 +16,8 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Dokumentation
 
+- README und Projektseite ohne den früheren Namen `max_cul` (Umzugsanleitung bleibt im
+  internen Wiki; der Umzug selbst funktioniert weiter).
 - Funkbudget neutral beschrieben (Standard-culfw, Bremse an); kein Hinweis mehr auf culfw-Builds
   ohne Budgetprüfung als erprobte Firmware.
 

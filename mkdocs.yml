@@ -91,7 +91,6 @@ nav:
   - Umstieg:
       - umstieg/index.md
       - Von Homegear: umstieg/homegear.md
-      - Von max_cul: umstieg/max_cul.md
   - Handbuch:
       - handbuch/index.md
       - Thermostat bedienen: handbuch/bedienung.md

@@ -8,7 +8,6 @@ Erprobt ist der Weg von Homegear an einer Installation mit 24 Geräten.
 | Bisher | Anleitung | Neu anlernen? | Entity-IDs |
 |---|---|---|---|
 | Homegear + legacy `homematic`-Integration | [Von Homegear](homegear.md) | nein | automatisch übernommen |
-| `max_cul` (früherer Name dieser Integration) | [Von max_cul](max_cul.md) | nein | automatisch übernommen |
 | nichts, Neuinstallation | [Einrichtung](../loslegen/einrichtung.md) | – | – |
 
 ## Das Prinzip
@@ -19,7 +18,7 @@ Erprobt ist der Weg von Homegear an einer Installation mit 24 Geräten.
       Adresse und kennt es die Geräteliste, muss kein Gerät neu angelernt werden.
     - **Entity-IDs bleiben**, damit Automationen, Dashboards und der Verlauf weiterlaufen.
     - **Nie zwei Zentralen gleichzeitig.** Die alte Lösung wird abgeschaltet, bevor eq3_max
-      startet. Solange `homematic` oder `max_cul` in HA geladen ist, verweigert eq3_max die
+      startet. Solange `homematic` in HA geladen ist, verweigert eq3_max die
       Einrichtung.
 
 ## Voraussetzungen

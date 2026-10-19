@@ -2,7 +2,7 @@
 
 Home-Assistant-Integration für eQ-3 MAX! über einen CUL mit culfw: USB-Stick (z. B. nanoCUL868)
 oder im Netzwerk (a-culfw auf CUN oder geflashtem MAX! Cube).
-Ersetzt Homegear und die legacy `homematic`-Integration. Hieß bis 2026-10-09 `max_cul`.
+Ersetzt Homegear und die legacy `homematic`-Integration.
 
 **Dokumentation:** https://ma-schmitz.github.io/eq3_max/ – Installation, Umstieg von Homegear,
 Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
@@ -15,7 +15,6 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
 - Fensterkontakte, Eco-Taster (als Event-Entitäten), Batterie, RSSI, Funkfehler
 - Zustand übersteht Neustarts, verlorene Befehle werden erkannt und wiederholt
 - Übernahme bestehender Homegear-Kopplungen und -Entity-IDs ohne Neuanlernen
-- Übernahme der Entity-IDs des Vorgängers `max_cul` (gleiche unique_ids)
 - Sendezeit-Sensor und Bremse auf 1 % (36 s pro Stunde, bei neuen Einträgen an)
 - Preset „Abwesend“ (temporär mit Endzeit), Werksreset und Löschen von Geräten
 - Gerätekonfiguration (Komfort-/Eco-Temperatur, Offset, Fenster, Boost, Entkalkung, Ventil)
@@ -252,22 +251,7 @@ neu starten, Integration „eQ-3 MAX!“ hinzufügen.
 Über HACS: dieses Repository unter HACS → Benutzerdefinierte Repositories mit der
 Kategorie „Integration“ hinzufügen, „eQ-3 MAX!“ herunterladen, Home Assistant neu starten.
 
-Umstieg von Homegear oder von `max_cul`: siehe `website/umstieg/`.
-
-### Umstieg von `max_cul`
-
-1. Frischen Export (Format wie bei `tools/homegear_export.py`) als
-   `/config/eq3_max_export.json` ablegen.
-2. `custom_components/max_cul` entfernen, `custom_components/eq3_max` einspielen,
-   Home Assistant neu starten. Der alte Eintrag lädt dann nicht mehr, seine
-   Entitäten bleiben in der Registry.
-3. „eQ-3 MAX!“ per Einrichtungsdialog mit dem Export hinzufügen. Die Entitäten
-   von `max_cul` werden mit gleicher entity_id, Bereich, Name und Einstellungen
-   übernommen. Solange `max_cul` noch geladen ist, bricht die Einrichtung mit
-   einer Reparaturmeldung ab.
-4. Danach den alten Eintrag „MAX! CUL“ löschen. Die Hub-Entitäten heißen jetzt
-   `binary_sensor.eq3_max_verbunden`, `sensor.eq3_max_sendezeit_1h`,
-   `sensor.eq3_max_warteschlange` und `button.eq3_max_anlernen`.
+Umstieg von Homegear: siehe `website/umstieg/`.
 
 ## Entwicklung
 
