@@ -15,6 +15,9 @@ const TYPE_ICONS = {
 const MODE_LABELS = { auto: "Automatik", manual: "Manuell", temporary: "Temporär", boost: "Boost" };
 const PRESET_LABELS = { away: "Abwesend", boost: "Boost" };
 const HVAC_LABELS = { off: "Aus" };
+const TONE_COLORS = {
+  heat: "var(--e3-heat)", open: "var(--e3-open)", alert: "var(--e3-error)", off: "var(--e3-muted)", idle: "var(--e3-accent)",
+};
 const SOURCE_LABELS = { homegear: "Homegear", werksvorgabe: "Werksvorgabe", gesetzt: "gesetzt" };
 const LINK_LABELS = {
   pending: "ausstehend",
@@ -37,20 +40,24 @@ const STYLE = `
   :host {
     display: block;
     min-height: 100vh;
-    background: var(--primary-background-color, #fafafa);
-    color: var(--primary-text-color, #212121);
+    background: var(--primary-background-color, #f5f6f8);
+    color: var(--primary-text-color, #1c2430);
     font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
     --e3-gap: 16px;
-    --e3-radius: var(--ha-card-border-radius, 12px);
+    --e3-radius: var(--ha-card-border-radius, 14px);
     --e3-card: var(--card-background-color, #fff);
     --e3-divider: var(--divider-color, rgba(0, 0, 0, 0.12));
-    --e3-muted: var(--secondary-text-color, #727272);
+    --e3-muted: var(--secondary-text-color, #6b7380);
     --e3-ok: var(--success-color, #43a047);
     --e3-warn: var(--warning-color, #ffa600);
     --e3-error: var(--error-color, #db4437);
     --e3-accent: var(--primary-color, #03a9f4);
+    --e3-heat: var(--state-climate-heat-color, #ff8100);
+    --e3-open: var(--warning-color, #ff9800);
+    --e3-shadow: var(--ha-card-box-shadow, 0 1px 2px rgba(0, 0, 0, .08), 0 2px 8px rgba(0, 0, 0, .05));
   }
   * { box-sizing: border-box; }
+  ha-icon { --mdc-icon-size: 20px; display: inline-flex; }
   .toolbar {
     display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 16px;
     background: var(--app-header-background-color, var(--primary-color));
@@ -58,111 +65,209 @@ const STYLE = `
     font-size: 20px; position: sticky; top: 0; z-index: 2;
   }
   .menu-btn { background: none; border: 0; color: inherit; cursor: pointer; padding: 8px; font-size: 22px; }
-  main { padding: var(--e3-gap); max-width: 1400px; margin: 0 auto; }
-  section.entry { margin-bottom: 32px; }
+  main { padding: 20px var(--e3-gap) 32px; max-width: 1400px; margin: 0 auto; }
+  section.entry { margin-bottom: 40px; }
+
+  /* --- Kopf: Funkmodule und Kennzahlen --- */
   .hub {
-    background: var(--e3-card); border-radius: var(--e3-radius); padding: 12px 16px;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
-    box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0,0,0,.15));
+    background: var(--e3-card); border-radius: var(--e3-radius); padding: 16px 18px;
+    box-shadow: var(--e3-shadow); display: flex; flex-direction: column; gap: 14px;
   }
-  .hub .title { font-weight: 500; font-size: 16px; }
-  .hub .item { display: flex; align-items: center; gap: 8px; color: var(--e3-muted); }
+  .hub-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .hub-head .title { font-weight: 600; font-size: 17px; }
+  .hub-head .sub { color: var(--e3-muted); font-size: 13px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px;
+    font-size: 13px; font-weight: 500;
+    background: color-mix(in srgb, var(--e3-ok) 14%, transparent); color: var(--e3-ok);
+  }
+  .pill.bad { background: color-mix(in srgb, var(--e3-error) 14%, transparent); color: var(--e3-error); }
+  .pill .dot { width: 8px; height: 8px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--e3-error); flex: none; }
   .dot.ok { background: var(--e3-ok); }
-  .meter { width: 120px; height: 8px; border-radius: 4px; background: var(--e3-divider); overflow: hidden; }
-  .meter > span { display: block; height: 100%; background: var(--e3-accent); }
+  .spacer { flex: 1; }
+  .radios { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .radio {
+    border: 1px solid var(--e3-divider); border-radius: 12px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  }
+  .radio .top { display: flex; align-items: center; gap: 8px; }
+  .radio .name { font-weight: 600; flex: 1; }
+  .radio .conn { display: flex; align-items: center; gap: 6px; color: var(--e3-muted); font-size: 12.5px; min-width: 0; }
+  .radio .conn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .radio .conn ha-icon { --mdc-icon-size: 16px; }
+  .air { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--e3-muted); }
+  .air .meter { flex: 1; }
+  .meter { width: 120px; height: 6px; border-radius: 3px; background: var(--e3-divider); overflow: hidden; }
+  .meter > span { display: block; height: 100%; border-radius: 3px; background: var(--e3-accent); transition: width .3s; }
   .meter.warn > span { background: var(--e3-warn); }
   .meter.alarm > span { background: var(--e3-error); }
-  .spacer { flex: 1; }
-  .radios { flex-basis: 100%; display: grid; gap: 6px; border-top: 1px solid var(--e3-divider); padding-top: 10px; }
-  .radio { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--e3-muted); }
-  .radio .name { color: var(--primary-text-color); font-weight: 500; min-width: 120px; display: flex; align-items: center; gap: 8px; }
+  .stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+  .stat {
+    border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+    background: color-mix(in srgb, var(--e3-divider) 45%, transparent);
+  }
+  .stat .ic { width: 34px; height: 34px; }
+  .stat .v { font-size: 20px; font-weight: 600; line-height: 1.1; }
+  .stat .l { font-size: 12px; color: var(--e3-muted); white-space: nowrap; }
+  .stat.heat { background: color-mix(in srgb, var(--e3-heat) 12%, transparent); }
+  .stat.open { background: color-mix(in srgb, var(--e3-open) 14%, transparent); }
+  .stat.alert { background: color-mix(in srgb, var(--e3-error) 12%, transparent); }
+
   button.action {
     border: 1px solid var(--e3-accent); color: var(--e3-accent); background: transparent;
-    border-radius: 18px; padding: 6px 14px; cursor: pointer; font: inherit; font-size: 14px;
+    border-radius: 999px; padding: 7px 16px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 500;
+    transition: background .15s, box-shadow .15s;
   }
-  button.action.primary { background: var(--e3-accent); color: var(--text-primary-color, #fff); }
+  button.action:hover:not(:disabled) { background: color-mix(in srgb, var(--e3-accent) 10%, transparent); }
+  button.action.primary { background: var(--e3-accent); color: var(--text-primary-color, #fff); border-color: var(--e3-accent); }
+  button.action.primary:hover:not(:disabled) { box-shadow: 0 2px 8px color-mix(in srgb, var(--e3-accent) 40%, transparent); background: var(--e3-accent); }
   button.action.danger { border-color: var(--e3-error); color: var(--e3-error); }
   button.action:disabled { opacity: 0.45; cursor: default; }
-  h2.area { font-size: 15px; font-weight: 500; color: var(--e3-muted); margin: 24px 4px 8px; }
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-  .card {
-    background: var(--e3-card); border-radius: var(--e3-radius); padding: 12px 14px; cursor: pointer;
-    box-shadow: var(--ha-card-box-shadow, 0 1px 3px rgba(0,0,0,.15)); border: 1px solid transparent;
-    display: flex; flex-direction: column; gap: 8px; text-align: left; color: inherit; font: inherit;
+
+  /* --- Bereiche und Karten --- */
+  h2.area {
+    display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; letter-spacing: .02em;
+    color: var(--e3-muted); margin: 28px 2px 10px; text-transform: uppercase;
   }
-  .card:hover, .card:focus-visible { border-color: var(--e3-accent); outline: none; }
-  .card.rf { border-color: var(--e3-error); }
-  .card .head { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
-  .card .name { font-weight: 500; flex: 1 1 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card .big { font-size: 22px; }
-  .card .sub { color: var(--e3-muted); font-size: 13px; }
-  .card .foot { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--e3-muted); font-size: 12px; align-items: center; }
-  .card .foot .radio-tag { display: inline-flex; align-items: center; gap: 3px; }
-  .card .foot .radio-tag ha-icon { --mdc-icon-size: 14px; }
+  h2.area .count {
+    font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 7px;
+    background: color-mix(in srgb, var(--e3-divider) 70%, transparent); color: var(--e3-muted);
+  }
+  h2.area::after { content: ""; flex: 1; height: 1px; background: var(--e3-divider); margin-left: 4px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+  .card {
+    --tone: var(--e3-muted);
+    position: relative; overflow: hidden;
+    background: var(--e3-card); border-radius: var(--e3-radius); padding: 14px 16px 12px; cursor: pointer;
+    box-shadow: var(--e3-shadow); border: 1px solid transparent;
+    display: flex; flex-direction: column; gap: 10px; text-align: left; color: inherit; font: inherit;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: transparent; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+  .card:focus-visible { border-color: var(--e3-accent); outline: none; }
+  .card.tone-idle { --tone: var(--e3-accent); }
+  .card.tone-heat { --tone: var(--e3-heat); }
+  .card.tone-open { --tone: var(--e3-open); }
+  .card.tone-alert { --tone: var(--e3-error); }
+  .card.tone-heat::before, .card.tone-open::before, .card.tone-alert::before { background: var(--tone); }
+  .ic {
+    width: 38px; height: 38px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--tone, var(--e3-muted)) 14%, transparent); color: var(--tone, var(--e3-muted));
+  }
+  .card .head { display: flex; align-items: center; gap: 10px; }
+  .card .who { flex: 1; min-width: 0; }
+  .card .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .kind { color: var(--e3-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  .temps { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .temps .cur { font-size: 30px; font-weight: 400; letter-spacing: -.02em; line-height: 1; }
+  .temps .cur small { font-size: 15px; color: var(--e3-muted); margin-left: 2px; }
+  .target {
+    display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 500;
+    background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--primary-text-color);
+  }
+  .target ha-icon { --mdc-icon-size: 15px; color: var(--tone); }
+  .valve { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--e3-muted); }
+  .valve .meter { flex: 1; width: auto; height: 6px; }
+  .valve .meter > span { background: var(--tone); }
+  .card.tone-idle .valve .meter > span, .card:not([class*="tone-"]) .valve .meter > span { background: var(--e3-muted); }
+  .wstate { display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 500; }
+  .wstate.open { color: var(--e3-open); }
+  .card .foot {
+    display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--e3-muted); font-size: 12px; align-items: center;
+    border-top: 1px solid var(--e3-divider); padding-top: 9px; margin-top: auto;
+  }
+  .card .foot > span { display: inline-flex; align-items: center; gap: 4px; }
+  .card .foot ha-icon { --mdc-icon-size: 14px; }
+  .card .foot .low { color: var(--e3-error); }
   .chip {
-    display: inline-block; border-radius: 10px; padding: 1px 8px; font-size: 12px; white-space: nowrap;
+    display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 500; white-space: nowrap;
     background: var(--e3-divider); color: var(--primary-text-color);
   }
-  .chip.ok { background: var(--e3-ok); color: #fff; }
-  .chip.warn { background: var(--e3-warn); color: #000; }
-  .chip.error { background: var(--e3-error); color: #fff; }
-  .chip.info { background: var(--e3-accent); color: var(--text-primary-color, #fff); }
+  .chip.ok { background: color-mix(in srgb, var(--e3-ok) 16%, transparent); color: var(--e3-ok); }
+  .chip.warn { background: color-mix(in srgb, var(--e3-warn) 22%, transparent); color: color-mix(in srgb, var(--e3-warn) 55%, var(--primary-text-color)); }
+  .chip.error { background: color-mix(in srgb, var(--e3-error) 15%, transparent); color: var(--e3-error); }
+  .chip.info { background: color-mix(in srgb, var(--e3-accent) 15%, transparent); color: var(--e3-accent); }
   .bars { display: inline-flex; align-items: flex-end; gap: 1px; height: 12px; }
-  .bars span { width: 3px; background: var(--e3-divider); }
+  .bars span { width: 3px; border-radius: 1px; background: var(--e3-divider); }
   .bars span.on { background: var(--e3-muted); }
-  .valve { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--e3-muted); }
-  .valve .meter { flex: 1; width: auto; }
   .empty { color: var(--e3-muted); padding: 16px 4px; }
-  .notice { background: var(--e3-card); border-left: 4px solid var(--e3-warn); padding: 10px 14px; border-radius: 6px; }
-  .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 5; }
+  .notice {
+    background: color-mix(in srgb, var(--e3-warn) 10%, var(--e3-card)); border-left: 4px solid var(--e3-warn);
+    padding: 10px 14px; border-radius: 8px; font-size: 14px; line-height: 1.45;
+  }
+
+  /* --- Seitenfenster --- */
+  .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 5; animation: fade .15s; }
   .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); z-index: 6;
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(540px, 100%); z-index: 6;
     background: var(--e3-card); display: flex; flex-direction: column;
-    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.3);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.25); animation: slide .2s ease-out;
   }
-  .drawer header { padding: 16px; border-bottom: 1px solid var(--e3-divider); display: flex; gap: 12px; align-items: flex-start; }
-  .drawer header .t { flex: 1; }
-  .drawer header .t div:first-child { font-size: 18px; font-weight: 500; }
-  .drawer header .t div + div { color: var(--e3-muted); font-size: 13px; margin-top: 2px; }
-  .close { background: none; border: 0; font-size: 22px; cursor: pointer; color: var(--primary-text-color); }
-  .tabs { display: flex; border-bottom: 1px solid var(--e3-divider); }
+  @keyframes slide { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .drawer header { padding: 18px 18px 14px; display: flex; gap: 14px; align-items: flex-start; }
+  .drawer header .ic { width: 46px; height: 46px; }
+  .drawer header .ic ha-icon { --mdc-icon-size: 24px; }
+  .drawer header .t { flex: 1; min-width: 0; }
+  .drawer header .t .n { font-size: 19px; font-weight: 600; }
+  .drawer header .t .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .drawer header .t .meta { color: var(--e3-muted); font-size: 12px; margin-top: 8px; }
+  .close {
+    background: none; border: 0; font-size: 18px; cursor: pointer; color: var(--e3-muted);
+    width: 34px; height: 34px; border-radius: 50%;
+  }
+  .close:hover { background: color-mix(in srgb, var(--e3-divider) 60%, transparent); color: var(--primary-text-color); }
+  .tabs {
+    display: flex; gap: 4px; margin: 0 18px 4px; padding: 4px; border-radius: 12px;
+    background: color-mix(in srgb, var(--e3-divider) 45%, transparent);
+  }
   .tabs button {
-    flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 12px; cursor: pointer;
-    color: var(--e3-muted); font: inherit;
+    flex: 1; background: none; border: 0; padding: 8px 10px; cursor: pointer; border-radius: 9px;
+    color: var(--e3-muted); font: inherit; font-size: 14px; font-weight: 500; transition: background .15s, color .15s;
   }
-  .tabs button.active { color: var(--e3-accent); border-bottom-color: var(--e3-accent); }
-  .body { overflow-y: auto; padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 16px; }
-  .row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--e3-divider); flex-wrap: wrap; }
-  .row .grow { flex: 1; min-width: 120px; }
+  .tabs button.active { background: var(--e3-card); color: var(--primary-text-color); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+  .body { overflow-y: auto; padding: 14px 18px 18px; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--e3-divider); flex-wrap: wrap; }
+  .row:last-child { border-bottom: 0; }
+  .row .grow { flex: 1; min-width: 120px; font-weight: 500; }
   .row .hint { flex-basis: 100%; color: var(--e3-muted); font-size: 12px; }
   .add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   select, input {
-    font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--e3-divider);
+    font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--e3-divider);
     background: var(--e3-card); color: var(--primary-text-color);
   }
+  select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--e3-accent) 45%, transparent); outline-offset: 0; }
   input:invalid { border-color: var(--e3-error); }
   input.changed, select.changed { border-color: var(--e3-accent); border-width: 2px; }
-  fieldset { border: 1px solid var(--e3-divider); border-radius: 8px; padding: 8px 12px 12px; margin: 0; }
-  legend { padding: 0 6px; font-weight: 500; }
-  .cfg { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--e3-divider); }
+  fieldset { border: 1px solid var(--e3-divider); border-radius: 12px; padding: 8px 14px 14px; margin: 0; }
+  legend { padding: 0 6px; font-weight: 600; }
+  .cfg { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--e3-divider); }
   .cfg .label { font-size: 14px; }
-  .cfg .meta { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--e3-muted); }
+  .cfg .meta { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--e3-muted); align-items: center; }
   .cfg .ctl { display: flex; align-items: center; gap: 6px; }
   .cfg input { width: 96px; text-align: right; }
+  .sub { color: var(--e3-muted); font-size: 13px; }
   .setfoot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
-  .confirm { border: 1px solid var(--e3-warn); border-radius: 8px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
+  .confirm { border: 1px solid var(--e3-warn); border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
   .confirm ul { margin: 6px 0; padding-left: 20px; }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; max-width: 90%;
-    background: var(--e3-card); color: var(--primary-text-color); border-radius: 8px; padding: 10px 16px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); border-left: 4px solid var(--e3-ok);
+    background: var(--e3-card); color: var(--primary-text-color); border-radius: 10px; padding: 10px 16px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); border-left: 4px solid var(--e3-ok); animation: fade .15s;
   }
   .toast.error { border-left-color: var(--e3-error); }
   @media (max-width: 600px) {
-    main { padding: 8px; }
+    main { padding: 12px 8px 24px; }
     .grid { grid-template-columns: 1fr; }
-    .hub { gap: 8px 16px; }
+    .hub { padding: 14px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .drawer, .overlay, .toast, .meter > span { transition: none; animation: none; }
+    .card:hover { transform: none; }
   }
 `;
 
@@ -219,6 +324,16 @@ function isMulti(entry) {
 function radioName(entry, id) {
   const radio = entry.hub.radios.find((r) => r.id === id);
   return radio ? radio.name : entry.hub.radios[0].name;
+}
+
+/** Zustand für Farbe und Akzent der Karte: heat · open · alert · off · idle. */
+function cardTone(dev) {
+  const st = dev.state;
+  if (st.rf_error || st.command_failed || st.config_failed.length || st.battery_low) return "alert";
+  if (dev.type === "shutter_contact") return st.window_open ? "open" : "idle";
+  if (st.hvac === "off") return "off";
+  if (dev.type === "heating_thermostat" && st.valve > 0) return "heat";
+  return "idle";
 }
 
 function chip(text, kind = "") {
@@ -510,7 +625,7 @@ class Eq3MaxPanel extends HTMLElement {
       this._renderHub(entry),
       entry.devices.length ? null : h("div", { class: "empty" }, "Noch keine Geräte angelernt."),
       ordered.map(([, group]) => [
-        h("h2", { class: "area" }, group.name),
+        h("h2", { class: "area" }, group.name, h("span", { class: "count" }, String(group.devices.length))),
         h("div", { class: "grid" }, group.devices.map((dev) => this._renderCard(entry, dev))),
       ]),
     );
@@ -519,15 +634,9 @@ class Eq3MaxPanel extends HTMLElement {
   _airtime(airtime, limit) {
     const ratio = Math.min(1, airtime / limit);
     const meterClass = ratio >= AIRTIME_ALARM ? "alarm" : ratio >= AIRTIME_WARN ? "warn" : "";
-    return h("span", { class: "item", title: `Sendezeit der letzten Stunde (Grenze ${limit} s)` },
+    return h("div", { class: "air", title: `Sendezeit der letzten Stunde (Grenze ${limit} s)` },
       "Sendezeit", h("span", { class: `meter ${meterClass}` }, h("span", { style: `width:${ratio * 100}%` })),
       `${num(airtime)} / ${limit} s`);
-  }
-
-  _connection(item) {
-    return h("span", { class: "item", title: item.version || "" },
-      icon(item.connection === "network" ? "mdi:lan" : "mdi:usb"),
-      `${item.connection === "network" ? "Netzwerk" : "USB"} · ${item.target}`);
   }
 
   _renderHub(entry) {
@@ -535,75 +644,108 @@ class Eq3MaxPanel extends HTMLElement {
     const multi = isMulti(entry);
     const left = Math.max(0, Math.round(((this._pairingUntil[entry.entry_id] || 0) - Date.now()) / 1000));
     const busy = this._busy.has(`pair:${entry.entry_id}`);
+    const radios = hub.radios && hub.radios.length ? hub.radios : [{ ...hub, name: "Funkmodul", id: "" }];
+    const n = entry.devices.length;
     return h("div", { class: "hub" },
-      h("span", { class: "title" }, entry.title),
-      h("span", { class: "item" }, h("span", { class: `dot ${hub.connected ? "ok" : ""}` }),
-        hub.connected ? "verbunden" : multi ? "nicht alle verbunden" : "getrennt"),
-      multi ? null : this._connection(hub),
-      multi ? null : this._airtime(hub.airtime, hub.airtime_limit),
-      h("span", { class: "item" }, `Warteschlange: ${hub.queue}`),
-      h("span", { class: "spacer" }),
-      h("button", {
-        class: "action primary",
-        "data-pairing": entry.entry_id,
-        disabled: left > 0 || busy || !hub.any_connected,
-        title: hub.any_connected ? "Neue Geräte 60 s lang annehmen" : "Funkmodul nicht verbunden",
-        onclick: () => this._call(`pair:${entry.entry_id}`, { type: "eq3_max/pair", entry_id: entry.entry_id },
-          "Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."),
-      }, left > 0 ? `Anlernen läuft … ${left} s` : "Anlernen (60 s)"),
-      multi
-        ? h("div", { class: "radios" }, hub.radios.map((radio) => h("div", { class: "radio" },
-          h("span", { class: "name" }, h("span", { class: `dot ${radio.connected ? "ok" : ""}` }), radio.name),
-          this._connection(radio),
-          this._airtime(radio.airtime, hub.airtime_limit),
-          h("span", { class: "item" }, `Warteschlange: ${radio.queue}`))))
-        : null,
+      h("div", { class: "hub-head" },
+        h("div", {},
+          h("div", { class: "title" }, entry.title),
+          h("div", { class: "sub" }, `${n === 1 ? "1 Gerät" : `${n} Geräte`} · Warteschlange ${hub.queue}`)),
+        h("span", { class: `pill ${hub.connected ? "" : "bad"}` }, h("span", { class: `dot ${hub.connected ? "ok" : ""}` }),
+          hub.connected ? "verbunden" : multi ? "nicht alle verbunden" : "getrennt"),
+        h("span", { class: "spacer" }),
+        h("button", {
+          class: "action primary",
+          "data-pairing": entry.entry_id,
+          disabled: left > 0 || busy || !hub.any_connected,
+          title: hub.any_connected ? "Neue Geräte 60 s lang annehmen" : "Funkmodul nicht verbunden",
+          onclick: () => this._call(`pair:${entry.entry_id}`, { type: "eq3_max/pair", entry_id: entry.entry_id },
+            "Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."),
+        }, left > 0 ? `Anlernen läuft … ${left} s` : "Anlernen (60 s)")),
+      h("div", { class: "radios" }, radios.map((radio) => h("div", { class: "radio" },
+        h("div", { class: "top" },
+          h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? "verbunden" : "getrennt" }),
+          h("span", { class: "name" }, radio.name),
+          multi ? h("span", { class: "sub" }, `Warteschlange ${radio.queue}`) : null),
+        h("div", { class: "conn", title: radio.version || "" },
+          icon(radio.connection === "network" ? "mdi:lan" : "mdi:usb"),
+          h("span", {}, `${radio.connection === "network" ? "Netzwerk" : "USB"} · ${radio.target}`)),
+        this._airtime(radio.airtime, hub.airtime_limit)))),
+      this._renderStats(entry),
     );
+  }
+
+  _renderStats(entry) {
+    const devs = entry.devices;
+    const climates = devs.filter((d) => d.type === "heating_thermostat" || d.type === "wall_thermostat").length;
+    const heating = devs.filter((d) => cardTone(d) === "heat").length;
+    const open = devs.filter((d) => d.type === "shutter_contact" && d.state.window_open).length;
+    const battery = devs.filter((d) => d.state.battery_low).length;
+    const attention = devs.filter((d) => d.pending || d.state.command_failed || d.state.config_failed.length || d.state.rf_error).length;
+    const tile = (cls, tone, ic, value, label) => h("div", { class: `stat ${value ? cls : ""}` },
+      h("span", { class: "ic", style: value && tone ? `--tone:${tone}` : "" }, icon(ic)),
+      h("div", {}, h("div", { class: "v" }, String(value)), h("div", { class: "l" }, label)));
+    return h("div", { class: "stats" },
+      tile("", "", "mdi:thermostat", climates, "Thermostate"),
+      tile("heat", "var(--e3-heat)", "mdi:fire", heating, heating === 1 ? "heizt gerade" : "heizen gerade"),
+      tile("open", "var(--e3-open)", "mdi:window-open-variant", open, "Fenster offen"),
+      tile("alert", "var(--e3-error)", "mdi:battery-alert-variant-outline", battery, "Batterie schwach"),
+      tile("alert", "var(--e3-error)", "mdi:clock-alert-outline", attention, "auffällig"));
   }
 
   _renderCard(entry, dev) {
     const st = dev.state;
+    const tone = cardTone(dev);
     const badges = [];
     if (dev.pending) badges.push(chip("ausstehend", "warn"));
     if (st.command_failed || st.config_failed.length) badges.push(chip("nicht quittiert", "error"));
     if (st.rf_error) badges.push(chip("Funkfehler", "error"));
-    if (st.battery_low) badges.push(chip("Batterie schwach", "error"));
 
+    let kind = dev.type_name;
     let body;
     if (dev.type === "heating_thermostat" || dev.type === "wall_thermostat") {
-      const mode = st.hvac === "off" ? HVAC_LABELS.off : PRESET_LABELS[st.preset] || MODE_LABELS[st.mode] || "–";
+      kind = st.hvac === "off" ? HVAC_LABELS.off : PRESET_LABELS[st.preset] || MODE_LABELS[st.mode] || dev.type_name;
       body = [
-        h("div", { class: "big" }, `${num(st.measured)} °C → ${num(st.target)} °C`),
-        h("div", { class: "sub" }, mode),
+        h("div", { class: "temps" },
+          h("span", { class: "cur" }, num(st.measured), h("small", {}, "°C")),
+          h("span", { class: "target", title: "Sollwert" }, icon("mdi:target"), `${num(st.target)} °C`)),
         dev.type === "heating_thermostat"
-          ? h("div", { class: "valve" }, "Ventil",
+          ? h("div", { class: "valve", title: "Ventilöffnung" }, "Ventil",
             h("span", { class: "meter" }, h("span", { style: `width:${st.valve || 0}%` })),
             st.valve === null ? "–" : `${st.valve} %`)
           : null,
       ];
     } else if (dev.type === "shutter_contact") {
-      body = h("div", { class: "big" }, st.window_open === null ? "unbekannt" : st.window_open ? "offen" : "geschlossen");
+      const isOpen = st.window_open;
+      body = h("div", { class: `wstate ${isOpen ? "open" : ""}` },
+        icon(isOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant"),
+        isOpen === null ? "unbekannt" : isOpen ? "offen" : "geschlossen");
     } else {
-      body = h("div", { class: "sub" }, dev.type_name);
+      body = h("div", { class: "sub" }, "Taster für Automatik und Eco");
     }
     const linkCount = dev.links.partners.length;
     const open = () => this._open(entry.entry_id, dev.serial);
     return h("div", {
-      class: `card ${st.rf_error ? "rf" : ""}`,
+      class: `card tone-${tone}`,
       "data-serial": dev.serial,
       tabindex: "0",
       role: "button",
       onclick: open,
       onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } },
     },
-      h("div", { class: "head" }, icon(TYPE_ICONS[dev.type] || "mdi:help"), h("span", { class: "name", title: dev.name }, dev.name), badges),
+      h("div", { class: "head" },
+        h("span", { class: "ic" }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
+        h("div", { class: "who" }, h("div", { class: "name", title: dev.name }, dev.name), h("div", { class: "kind" }, kind)),
+        badges.length ? h("div", { class: "badges" }, badges) : null),
       body,
       h("div", { class: "foot" },
-        h("span", {}, st.battery_low ? "Batterie schwach" : st.battery_low === false ? "Batterie ok" : "Batterie ?"),
-        h("span", {}, rssiBars(st.rssi), " ", st.rssi === null ? "– dBm" : `${num(st.rssi)} dBm`),
-        h("span", { "data-ago": st.last_seen || 0 }, ago(st.last_seen)),
-        h("span", {}, linkCount === 1 ? "1 Verknüpfung" : `${linkCount} Verknüpfungen`),
-        isMulti(entry) ? h("span", { class: "radio-tag", title: "Funkmodul" }, icon("mdi:radio-tower"), radioName(entry, dev.radio)) : null,
+        h("span", { class: st.battery_low ? "low" : "", title: "Batterie" },
+          icon(st.battery_low ? "mdi:battery-alert-variant-outline" : "mdi:battery-high"),
+          st.battery_low ? "schwach" : st.battery_low === false ? "ok" : "?"),
+        h("span", { title: "Empfangsstärke" }, rssiBars(st.rssi), st.rssi === null ? "– dBm" : `${num(st.rssi, 0)} dBm`),
+        h("span", { title: "zuletzt gemeldet" }, icon("mdi:clock-outline"), h("span", { "data-ago": st.last_seen || 0 }, ago(st.last_seen))),
+        h("span", { title: "Verknüpfungen" }, icon("mdi:link-variant"), String(linkCount)),
+        isMulti(entry) ? h("span", { title: "Funkmodul" }, icon("mdi:radio-tower"), radioName(entry, dev.radio)) : null,
       ),
     );
   }
@@ -665,12 +807,13 @@ class Eq3MaxPanel extends HTMLElement {
     return [
       h("div", { class: "overlay", onclick: () => this._close() }),
       h("aside", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": dev.name },
-        h("header", {},
-          icon(TYPE_ICONS[dev.type] || "mdi:help"),
+        h("header", { class: `tone-${cardTone(dev)}` },
+          h("span", { class: "ic", style: `--tone:${TONE_COLORS[cardTone(dev)]}` }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
           h("div", { class: "t" },
-            h("div", {}, dev.name),
-            h("div", {}, `${dev.type_name} · ${dev.area_name || "Ohne Bereich"}`),
-            h("div", {}, `Seriennummer ${dev.serial} · Adresse ${dev.address}${dev.firmware ? " · Firmware " + dev.firmware : ""}`)),
+            h("div", { class: "n" }, dev.name),
+            h("div", { class: "tags" }, chip(dev.type_name), chip(dev.area_name || "Ohne Bereich"),
+              isMulti(entry) ? chip(`Funkmodul ${radioName(entry, dev.radio)}`, "info") : null),
+            h("div", { class: "meta" }, `Seriennummer ${dev.serial} · Adresse ${dev.address}${dev.firmware ? " · Firmware " + dev.firmware : ""}`)),
           h("button", { class: "close", title: "Schließen", "aria-label": "Schließen", onclick: () => this._close() }, "✕")),
         tabs,
         h("div", { class: "body" },

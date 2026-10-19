@@ -7,6 +7,13 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Geändert
 
+- Seite „eQ-3 MAX!“ neu gestaltet: Kopf mit Zustands-Pille und einer Kachel je Funkmodul,
+  Kennzahlen-Leiste (Thermostate, heizen gerade, Fenster offen, Batterie schwach, auffällig),
+  Bereichsüberschriften mit Anzahl, Karten mit farbigem Zustand (orange = Ventil bzw. Fenster
+  offen, rot = Problem), großer Ist-Temperatur, Sollwert als Pille und Fußzeile mit Symbolen;
+  Seitenfenster mit farbigem Gerätesymbol, Merkmalen als Chips und Reitern als Umschalter.
+  Farben aus dem HA-Theme (hell/dunkel), Bewegung abschaltbar über „weniger Bewegung“.
+
 - Neue Einträge starten mit eingeschalteter Sendezeit-Bremse (1 % = 36 s pro Stunde je Modul);
   bestehende Einträge ohne gespeicherte Option laufen unverändert weiter.
 

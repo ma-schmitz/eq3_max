@@ -7,9 +7,12 @@ Alles aus [Gerätekonfiguration](konfiguration.md) und [Verknüpfungen](verknuep
 Seitenleiste (nur Administratoren). Auf der Geräteseite des Funkmoduls und jedes Geräts führt
 **„Besuchen“** dorthin.
 
-**Kopfzeile** (je Funkmodul): verbunden/getrennt · USB-Pfad bzw. Netzwerkziel · Sendezeit der
-letzten Stunde als Balken (Grenze 36 s; gelb ab der Hälfte, rot ab 80 %) · Warteschlange ·
-Knopf **„Anlernen (60 s)“** mit Countdown.
+**Kopf:** Name der Zentrale mit Zustand (verbunden / getrennt) und Knopf **„Anlernen (60 s)“**
+mit Countdown. Darunter eine Kachel je Funkmodul: USB-Pfad bzw. Netzwerkziel, Warteschlange
+und Sendezeit der letzten Stunde als Balken (Grenze 36 s; gelb ab der Hälfte, rot ab 80 %).
+Eine Leiste mit Kennzahlen zählt Thermostate, gerade heizende Thermostate (Ventil offen),
+offene Fenster, schwache Batterien und auffällige Geräte (ausstehend, nicht quittiert,
+Funkfehler); was nicht null ist, ist farbig hinterlegt.
 
 **Gerätekarten**, nach HA-Bereich gruppiert („Ohne Bereich“ zuletzt):
 
@@ -20,7 +23,10 @@ Knopf **„Anlernen (60 s)“** mit Countdown.
 | Fensterkontakt | offen / geschlossen |
 | Eco-Taster | – |
 
-Dazu bei allen: Batterie, RSSI (Balken und dBm), „zuletzt gemeldet“, Zahl der Verknüpfungen.
+Dazu bei allen: Batterie, RSSI (Balken und dBm), „zuletzt gemeldet“, Zahl der Verknüpfungen
+(bei mehreren Funkmodulen auch das Modul). Farbe und Randstreifen zeigen den Zustand:
+**orange** = Ventil offen bzw. Fenster offen, **rot** = Batterie schwach, Funkfehler oder nicht
+quittiert, ohne Streifen = Ruhe.
 Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht quittiert),
 **nicht quittiert** (Versuche ausgeschöpft, geht beim nächsten Melden erneut raus),
 **Funkfehler**, **Batterie schwach**.
