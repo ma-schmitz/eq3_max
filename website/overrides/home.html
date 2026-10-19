@@ -1,0 +1,79 @@
+{% extends "main.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <style>
+    /* Nur Startseite: kein Abstand zwischen Kopfbereich und Inhalt. */
+    .md-main__inner { margin-top: 0; }
+    .md-content__inner { margin-top: 0; padding-top: 0; }
+    .md-content__inner::before { display: none; }
+  </style>
+{% endblock %}
+
+{#- Startseite: eigener Aufbau statt Doku-Spalten. -#}
+{% block tabs %}
+  {{ super() }}
+  <section class="e3-hero">
+    <div class="e3-hero__inner">
+      <div>
+        <div class="e3-hero__kicker">Home-Assistant-Integration · v{{ config.extra.version }}</div>
+        <h1>eQ-3 MAX! direkt in Home&nbsp;Assistant</h1>
+        <p>Heizkörper- und Wandthermostate, Fensterkontakte und Eco-Taster über einen CUL-Stick
+          oder einen geflashten MAX! Cube – ohne Homegear, ohne Cloud, ohne Umweg.</p>
+        <div class="e3-hero__buttons">
+          <a class="e3-btn e3-btn--primary" href="{{ 'loslegen/installation/' | url }}">Installieren</a>
+          <a class="e3-btn" href="{{ 'umstieg/homegear/' | url }}">Von Homegear umsteigen</a>
+        </div>
+      </div>
+      <div class="e3-hero__shot">
+        <img src="{{ 'assets/panel-hero.png' | url }}" alt="Seite „eQ-3 MAX!“ in Home Assistant: Funkmodule, Gerätekarten nach Bereich">
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block content %}
+  <div class="e3-section">
+    <h2>Was eq3_max kann</h2>
+    <p>Alles, was die Geräte per Funk können – in Home Assistant, mit Entitäten und eigener Seite.</p>
+    <div class="e3-grid">
+      <div class="e3-card"><div class="e3-card__icon">♻️</div><h3>Umstieg ohne Neuanlernen</h3>
+        <p>Kopplungen, Entity-IDs, Verlauf, Konfiguration und Verknüpfungen aus Homegear übernehmen.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">📡</div><h3>Mehrere Funkmodule</h3>
+        <p>Ein Stick oder Cube pro Etage. Geräte wechseln das Modul per Klick – am Gerät passiert nichts.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">🔗</div><h3>Verknüpfungen</h3>
+        <p>Fensterkontakt, Wandthermostat und Taster mit Thermostaten koppeln, direkt aus der Oberfläche.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">⚙️</div><h3>Gerätekonfiguration</h3>
+        <p>Komfort, Eco, Offset, Fenster-auf, Boost und Entkalkung als Entitäten – mit Herkunft je Wert.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">🖥️</div><h3>Eigene Seite in HA</h3>
+        <p>Alle Geräte nach Bereich, Funkmodule, Sendezeit und Anlernen auf einen Blick.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">🛟</div><h3>Selbstheilung</h3>
+        <p>Verlorene Befehle werden wiederholt, ein tauber Stick wird erkannt und neu geöffnet.</p></div>
+    </div>
+  </div>
+
+  <div class="e3-section">
+    <h2>So hängt es zusammen</h2>
+    <p>eq3_max spricht selbst MAX!-Funk. Dazwischen braucht es nur ein Funkmodul mit culfw.</p>
+    <div class="e3-flow">
+      <span class="box">Thermostate · Fensterkontakte · Taster</span><span class="arrow">⇄ 868&nbsp;MHz ⇄</span>
+      <span class="box">nanoCUL (USB) oder Cube mit a-culfw (LAN)</span><span class="arrow">⇄</span>
+      <span class="box">eq3_max in Home Assistant</span>
+    </div>
+  </div>
+
+  <div class="e3-section">
+    <h2>In drei Schritten</h2>
+    <p>Neu einrichten oder von Homegear umziehen – der Weg ist derselbe.</p>
+    <div class="e3-steps">
+      <div class="e3-step"><h3>Installieren</h3><p>Über HACS als benutzerdefiniertes Repository oder per Hand nach <code>custom_components</code>.</p></div>
+      <div class="e3-step"><h3>Funkmodul verbinden</h3><p>USB-Stick oder Netzwerk-CUL wählen, Zentralen-Adresse festlegen – bei Umzug die bisherige.</p></div>
+      <div class="e3-step"><h3>Geräte übernehmen</h3><p>Aus Homegear-Export oder per Anlernen. Entitäten erscheinen sofort.</p></div>
+    </div>
+  </div>
+
+  <div class="e3-footer-cta">
+    <a class="e3-btn e3-btn--primary" href="{{ 'handbuch/' | url }}">Zum Handbuch</a>
+    <p>Fragen und Fehler: <a href="{{ config.repo_url }}/issues">Issues auf GitHub</a></p>
+  </div>
+{% endblock %}

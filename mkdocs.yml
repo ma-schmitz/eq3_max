@@ -1,0 +1,106 @@
+# Projektseite (Material for MkDocs). Lokal: .venv-docs/bin/mkdocs serve
+# Veröffentlicht wird sie auf GitHub Pages (.github/workflows/pages.yml).
+site_name: eq3_max
+site_description: eQ-3 MAX! direkt in Home Assistant – über einen CUL-Stick oder geflashten Cube, ohne Homegear.
+# Account des öffentlichen Repos (setzt das Export-Skript).
+site_url: https://ma-schmitz.github.io/eq3_max/
+repo_url: https://github.com/ma-schmitz/eq3_max
+repo_name: eq3_max
+edit_uri: ""
+docs_dir: website
+exclude_docs: |
+  hooks.py
+  overrides/
+  __pycache__/
+copyright: eq3_max – Home-Assistant-Integration für eQ-3 MAX!
+
+theme:
+  name: material
+  language: de
+  custom_dir: website/overrides
+  logo: assets/icon.png
+  favicon: assets/icon.png
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dunkles Design
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Helles Design
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - navigation.instant
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+
+hooks:
+  - website/hooks.py
+
+extra_css:
+  - assets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+
+plugins:
+  - search:
+      lang: de
+  # Schriften und andere externe Dateien beim Bauen herunterladen und selbst ausliefern
+  # (keine Verbindung zu Google beim Besuch der Seite).
+  - privacy
+
+nav:
+  - Start: index.md
+  - Loslegen:
+      - Installation: loslegen/installation.md
+      - Einrichtung: loslegen/einrichtung.md
+      - Hardware: loslegen/hardware.md
+  - Umstieg:
+      - umstieg/index.md
+      - Von Homegear: umstieg/homegear.md
+      - Von max_cul: umstieg/max_cul.md
+  - Handbuch:
+      - handbuch/index.md
+      - Thermostat bedienen: handbuch/bedienung.md
+      - Gerätekonfiguration: handbuch/konfiguration.md
+      - Verknüpfungen: handbuch/verknuepfungen.md
+      - Seite „eQ-3 MAX!“: handbuch/seite.md
+      - Mehrere Funkmodule: handbuch/funkmodule.md
+      - Geräte anlernen: handbuch/anlernen.md
+      - Dienste: handbuch/dienste.md
+      - Betrieb und Störungen: handbuch/betrieb.md
+  - FAQ: faq.md
+  - Changelog: changelog.md

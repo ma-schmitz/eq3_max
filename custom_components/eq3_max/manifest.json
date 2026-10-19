@@ -1,0 +1,14 @@
+{
+  "domain": "eq3_max",
+  "name": "eQ-3 MAX!",
+  "codeowners": ["@ma-schmitz"],
+  "after_dependencies": ["frontend", "homematic", "max_cul", "panel_custom"],
+  "config_flow": true,
+  "dependencies": ["http", "websocket_api"],
+  "documentation": "https://ma-schmitz.github.io/eq3_max/",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/ma-schmitz/eq3_max/issues",
+  "requirements": ["pyserial-asyncio-fast>=0.13"],
+  "version": "0.4.0"
+}

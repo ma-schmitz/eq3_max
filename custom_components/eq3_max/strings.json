@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {"title": "Connection", "description": "How is the CUL connected?", "menu_options": {"usb": "USB stick", "network": "Network (CUN, flashed Cube)"}},
+      "usb": {"title": "CUL stick", "data": {"port": "Serial port (by-path)"}},
+      "network": {"title": "CUL on the network", "description": "a-culfw on a CUN or a flashed MAX! Cube, text protocol over TCP.", "data": {"host": "Host", "port": "Port"}},
+      "address": {"title": "Central address", "data": {"address": "Address (6 hex digits)"}},
+      "source": {"title": "Import devices", "data": {"source": "Source"}},
+      "json": {"title": "Import from JSON", "data": {"path": "Path to export file"}},
+      "homegear": {"title": "Import from Homegear", "data": {"host": "Host", "port": "Port"}},
+      "confirm": {"title": "Confirm import", "description": "{count} devices will be imported:\n{devices}"}
+    },
+    "error": {
+      "cannot_connect": "No culfw answered (no reply to V).",
+      "invalid_host": "Enter only a host name or IP address (no spaces, no http://, no path).",
+      "invalid_port": "The serial port must be a device path starting with /dev/.",
+      "invalid_address": "Address must be exactly 6 hex digits.",
+      "cannot_read": "The export could not be read.",
+      "homegear_unreachable": "Homegear could not be reached."
+    },
+    "abort": {
+      "already_configured": "This central address is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {"menu_options": {"settings": "Settings", "connection": "Change connection", "radios": "Radio modules"}},
+      "connection": {"title": "Change connection", "description": "Changing the connection restarts the integration.", "menu_options": {"connection_usb": "USB stick", "connection_network": "Network (CUN, flashed Cube)"}},
+      "connection_usb": {"title": "CUL stick", "description": "The connection currently in use is not probed (the integration holds it); saving it unchanged keeps it without a restart.", "data": {"port": "Serial port (by-path)"}},
+      "connection_network": {"title": "CUL on the network", "description": "The connection currently in use is not probed (the integration holds it); saving it unchanged keeps it without a restart.", "data": {"host": "Host", "port": "Port"}},
+      "settings": {"data": {"brake": "Limit airtime to 36 s per hour", "away_temperature": "Away temperature", "away_hours": "Away duration (hours)"}, "data_description": {"away_temperature": "Target temperature of the preset away.", "away_hours": "The preset away ends after this many hours, rounded up to the next half hour."}},
+      "radios": {"title": "Radio modules", "description": "More CUL sticks or flashed Cubes use the same central address. Every device sends through its assigned module; switching needs no re-pairing (page \"eQ-3 MAX!\" or the \"Funkmodul\" entity).", "menu_options": {"radio_add_usb": "Add USB stick", "radio_add_network": "Add network CUL (CUN, flashed Cube)", "radio_remove": "Remove radio module"}},
+      "radio_add_usb": {"title": "Add USB stick", "description": "The stick gets this entry's central address.", "data": {"name": "Name (e.g. upstairs)", "port": "Serial port (by-path)"}},
+      "radio_add_network": {"title": "Add network CUL", "description": "a-culfw on a CUN or a flashed MAX! Cube. It gets this entry's central address.", "data": {"name": "Name (e.g. upstairs)", "host": "Host", "port": "Port"}},
+      "radio_remove": {"title": "Remove radio module", "description": "Its devices send through the main module again.", "data": {"radio": "Radio module"}}
+    },
+    "error": {
+      "cannot_connect": "No culfw answered (no reply to V).",
+      "invalid_host": "Enter only a host name or IP address (no spaces, no http://, no path).",
+      "invalid_port": "The serial port must be a device path starting with /dev/.",
+      "name_missing": "Please enter a name.",
+      "name_taken": "A radio module already has this name.",
+      "radio_in_use": "This radio module is already configured."
+    },
+    "abort": {
+      "no_extra_radios": "There is no further radio module."
+    }
+  },
+  "issues": {
+    "homematic_active": {
+      "title": "Homematic integration still active",
+      "description": "Remove `homematic:` from configuration.yaml and restart before eQ-3 MAX! can take over the entities."
+    },
+    "max_cul_active": {
+      "title": "Old max_cul integration still active",
+      "description": "The predecessor max_cul is still loaded and holds the CUL stick. Remove `custom_components/max_cul` and restart Home Assistant, then eQ-3 MAX! takes over the entities."
+    },
+    "port_lost": {
+      "title": "CUL not reachable",
+      "description": "The CUL ({target}) has not been reachable for 15 minutes. USB: check the stick and the serial port. Network: check that the CUN or Cube is powered and reachable at this address."
+    },
+    "stick_deaf": {
+      "title": "CUL stick receives nothing",
+      "description": "The CUL sends but receives nothing even after two resets. USB: move the stick to another USB port. Network: restart the CUN or Cube (a reconnect does not reset its radio)."
+    }
+  },
+  "services": {
+    "set_away": {
+      "name": "Set away",
+      "description": "Holds the thermostats at a temperature until the given time (MAX! mode temporary), then they return to auto.",
+      "fields": {"temperature": {"name": "Temperature", "description": "Target temperature; empty uses the away temperature from the options."}, "until": {"name": "Until", "description": "End time (local time); rounded up to the next half hour, must be in the future."}}
+    },
+    "factory_reset": {
+      "name": "Factory reset",
+      "description": "Resets a MAX! device to factory settings over the air and removes it from Home Assistant. Afterwards it must be paired again.",
+      "fields": {"device_id": {"name": "Device", "description": "The MAX! device to reset."}}
+    },
+    "link": {
+      "name": "Link",
+      "description": "Links two MAX! devices in both directions (window contact or eco button with a thermostat, wall thermostat with radiator thermostat, radiator thermostats with each other). Returns right away; window contacts and eco buttons get their part after their next telegram (open and close the window or press the button once). Progress in the sensor Verknüpfungen.",
+      "fields": {"device_id": {"name": "Device", "description": "First MAX! device."}, "partner_device_id": {"name": "Partner", "description": "Second MAX! device."}}
+    },
+    "unlink": {
+      "name": "Unlink",
+      "description": "Removes the link between two MAX! devices in both directions. Returns right away; window contacts and eco buttons get their part after their next telegram.",
+      "fields": {"device_id": {"name": "Device", "description": "First MAX! device."}, "partner_device_id": {"name": "Partner", "description": "Second MAX! device."}}
+    }
+  }
+}

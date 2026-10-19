@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {"title": "Verbindung", "description": "Wie ist der CUL angeschlossen?", "menu_options": {"usb": "USB-Stick", "network": "Netzwerk (CUN, geflashter Cube)"}},
+      "usb": {"title": "CUL-Stick", "data": {"port": "Serieller Port (by-path)"}},
+      "network": {"title": "CUL im Netzwerk", "description": "a-culfw auf einem CUN oder geflashten MAX! Cube, Textprotokoll über TCP.", "data": {"host": "Host", "port": "Port"}},
+      "address": {"title": "Zentralen-Adresse", "data": {"address": "Adresse (6 Hex-Ziffern)"}},
+      "source": {"title": "Geräte übernehmen", "data": {"source": "Quelle"}},
+      "json": {"title": "Aus JSON übernehmen", "data": {"path": "Pfad zur Exportdatei"}},
+      "homegear": {"title": "Aus Homegear übernehmen", "data": {"host": "Host", "port": "Port"}},
+      "confirm": {"title": "Übernahme bestätigen", "description": "{count} Geräte werden übernommen:\n{devices}"}
+    },
+    "error": {
+      "cannot_connect": "Dort antwortet keine culfw (keine Antwort auf V).",
+      "invalid_host": "Nur Hostname oder IP-Adresse angeben (keine Leerzeichen, kein http://, kein Pfad).",
+      "invalid_port": "Der serielle Port muss ein Gerätepfad unter /dev/ sein.",
+      "invalid_address": "Die Adresse muss genau 6 Hex-Ziffern haben.",
+      "cannot_read": "Die Exportdatei konnte nicht gelesen werden.",
+      "homegear_unreachable": "Homegear ist nicht erreichbar."
+    },
+    "abort": {
+      "already_configured": "Diese Zentralen-Adresse ist schon eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {"menu_options": {"settings": "Einstellungen", "connection": "Verbindung ändern", "radios": "Funkmodule"}},
+      "connection": {"title": "Verbindung ändern", "description": "Eine geänderte Verbindung startet die Integration neu.", "menu_options": {"connection_usb": "USB-Stick", "connection_network": "Netzwerk (CUN, geflashter Cube)"}},
+      "connection_usb": {"title": "CUL-Stick", "description": "Die gerade genutzte Verbindung wird nicht geprüft (die Integration belegt sie); unverändert gespeichert bleibt sie ohne Neustart bestehen.", "data": {"port": "Serieller Port (by-path)"}},
+      "connection_network": {"title": "CUL im Netzwerk", "description": "Die gerade genutzte Verbindung wird nicht geprüft (die Integration belegt sie); unverändert gespeichert bleibt sie ohne Neustart bestehen.", "data": {"host": "Host", "port": "Port"}},
+      "settings": {"data": {"brake": "Sendezeit auf 36 s pro Stunde begrenzen", "away_temperature": "Urlaubstemperatur", "away_hours": "Urlaubsdauer (Stunden)"}, "data_description": {"away_temperature": "Solltemperatur des Presets Abwesend.", "away_hours": "Das Preset Abwesend endet nach so vielen Stunden, aufgerundet auf die nächste halbe Stunde."}},
+      "radios": {"title": "Funkmodule", "description": "Weitere CUL-Sticks oder geflashte Cubes arbeiten mit derselben Zentralen-Adresse. Jedes Gerät sendet über das ihm zugeordnete Modul; Umstellen geht ohne Neuanlernen (Seite „eQ-3 MAX!“ oder Entität „Funkmodul“).", "menu_options": {"radio_add_usb": "USB-Stick hinzufügen", "radio_add_network": "Netzwerk-CUL hinzufügen (CUN, geflashter Cube)", "radio_remove": "Funkmodul entfernen"}},
+      "radio_add_usb": {"title": "USB-Stick hinzufügen", "description": "Der Stick bekommt die Zentralen-Adresse dieses Eintrags.", "data": {"name": "Name (z. B. Obergeschoss)", "port": "Serieller Port (by-path)"}},
+      "radio_add_network": {"title": "Netzwerk-CUL hinzufügen", "description": "a-culfw auf einem CUN oder geflashten MAX! Cube. Er bekommt die Zentralen-Adresse dieses Eintrags.", "data": {"name": "Name (z. B. Obergeschoss)", "host": "Host", "port": "Port"}},
+      "radio_remove": {"title": "Funkmodul entfernen", "description": "Geräte dieses Moduls senden danach wieder über das Hauptmodul.", "data": {"radio": "Funkmodul"}}
+    },
+    "error": {
+      "cannot_connect": "Dort antwortet keine culfw (keine Antwort auf V).",
+      "invalid_host": "Nur Hostname oder IP-Adresse angeben (keine Leerzeichen, kein http://, kein Pfad).",
+      "invalid_port": "Der serielle Port muss ein Gerätepfad unter /dev/ sein.",
+      "name_missing": "Bitte einen Namen angeben.",
+      "name_taken": "Diesen Namen trägt schon ein Funkmodul.",
+      "radio_in_use": "Dieses Funkmodul ist schon eingetragen."
+    },
+    "abort": {
+      "no_extra_radios": "Es gibt kein weiteres Funkmodul."
+    }
+  },
+  "issues": {
+    "homematic_active": {
+      "title": "Homematic-Integration noch aktiv",
+      "description": "Erst `homematic:` aus der configuration.yaml entfernen und neu starten, dann kann eQ-3 MAX! die Entitäten übernehmen."
+    },
+    "max_cul_active": {
+      "title": "Alte Integration max_cul noch aktiv",
+      "description": "Der Vorgänger max_cul ist noch geladen und belegt den CUL-Stick. Erst `custom_components/max_cul` entfernen und Home Assistant neu starten, dann übernimmt eQ-3 MAX! die Entitäten."
+    },
+    "port_lost": {
+      "title": "CUL nicht erreichbar",
+      "description": "Der CUL ({target}) ist seit 15 Minuten nicht erreichbar. USB: Stick und seriellen Port prüfen. Netzwerk: prüfen, ob CUN bzw. Cube Strom hat und unter dieser Adresse erreichbar ist."
+    },
+    "stick_deaf": {
+      "title": "CUL-Stick empfängt nichts",
+      "description": "Der CUL sendet, empfängt aber auch nach zwei Neustarts nichts. USB: Stick an einen anderen USB-Port stecken. Netzwerk: CUN bzw. Cube neu starten (ein Neuverbinden setzt dessen Funkmodul nicht zurück)."
+    }
+  },
+  "services": {
+    "set_away": {
+      "name": "Abwesend setzen",
+      "description": "Hält die Thermostate bis zum angegebenen Zeitpunkt auf einer Temperatur (MAX!-Modus temporär), danach zurück in Auto.",
+      "fields": {"temperature": {"name": "Temperatur", "description": "Solltemperatur; leer nimmt die Urlaubstemperatur aus den Optionen."}, "until": {"name": "Bis", "description": "Ende (Ortszeit); wird auf die nächste halbe Stunde aufgerundet und muss in der Zukunft liegen."}}
+    },
+    "factory_reset": {
+      "name": "Werksreset",
+      "description": "Setzt ein MAX!-Gerät per Funk auf Werkseinstellungen zurück und entfernt es aus Home Assistant. Danach muss es neu angelernt werden.",
+      "fields": {"device_id": {"name": "Gerät", "description": "Das MAX!-Gerät, das zurückgesetzt wird."}}
+    },
+    "link": {
+      "name": "Verknüpfen",
+      "description": "Verknüpft zwei MAX!-Geräte in beide Richtungen (Fensterkontakt oder Eco-Taster mit Thermostat, Wandthermostat mit Heizkörperthermostat, Heizkörperthermostate untereinander). Kehrt sofort zurück; Fensterkontakte und Eco-Taster bekommen ihren Teil nach ihrem nächsten Telegramm (Fenster einmal öffnen und schließen bzw. Taster drücken). Fortschritt im Sensor Verknüpfungen.",
+      "fields": {"device_id": {"name": "Gerät", "description": "Erstes MAX!-Gerät."}, "partner_device_id": {"name": "Partner", "description": "Zweites MAX!-Gerät."}}
+    },
+    "unlink": {
+      "name": "Verknüpfung lösen",
+      "description": "Löst die Verknüpfung zweier MAX!-Geräte in beide Richtungen. Kehrt sofort zurück; Fensterkontakte und Eco-Taster bekommen ihren Teil nach ihrem nächsten Telegramm.",
+      "fields": {"device_id": {"name": "Gerät", "description": "Erstes MAX!-Gerät."}, "partner_device_id": {"name": "Partner", "description": "Zweites MAX!-Gerät."}}
+    }
+  }
+}
