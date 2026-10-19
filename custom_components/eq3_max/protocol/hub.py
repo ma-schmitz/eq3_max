@@ -250,6 +250,11 @@ class MaxHub:
             if spec.id in self._radios:
                 raise ValueError(f"duplicate radio module id {spec.id!r}")
             self._radios[spec.id] = self._make_radio(spec)
+        # "Stick deaf" or "device unreachable"? A device whose unacked command reopened a
+        # module is a suspect; once that module hears anyone else, the stick was fine and
+        # the device is silent: its commands no longer reopen the port until it is heard.
+        self._suspects: dict[int, str] = {}
+        self._silent: set[int] = set()
         # Cross-module duplicates: (src, counter, type, payload) -> (radio id, time).
         self._heard: dict[tuple[int, int, int, bytes], tuple[str, float]] = {}
         self._sleeper_debounce = sleeper_debounce
@@ -792,22 +797,55 @@ class MaxHub:
             dev.command_failed = True
             self._notify(dev)
 
+    @property
+    def silent_devices(self) -> list[int]:
+        """Devices found unreachable (not the stick); cleared when they are heard."""
+        return sorted(self._silent)
+
+    def _note_heard(self, src: int, radio: str) -> None:
+        if src == self.address:
+            return
+        if src in self._silent or src in self._suspects:
+            self._silent.discard(src)
+            self._suspects.pop(src, None)
+            dev = self.devices.get(src)
+            if dev is not None:
+                _LOGGER.info("MAX! %s (%s): heard again", dev.name or dev.serial, dev.serial)
+        for suspect, suspect_radio in list(self._suspects.items()):
+            if suspect_radio == radio:
+                # The module hears others: the suspect itself does not answer.
+                del self._suspects[suspect]
+                self._silent.add(suspect)
+                dev = self.devices.get(suspect)
+                _LOGGER.warning(
+                    "MAX! %s: antwortet nicht, der Funk funktioniert aber - Geraet pruefen (Reichweite, Batterie, \"InS\")",
+                    suspect if dev is None else f"{dev.name or dev.serial} ({dev.serial})",
+                )
+
     def _command_finished(self, cmd: Command, radio: _Radio) -> None:
         """A command sent but never acknowledged while nothing at all came in: the
         stick went deaf after sending. Reopen now instead of after the watchdog's
-        silence timeout; pending commands go out again on the reconnect."""
+        silence timeout; pending commands go out again on the reconnect. A device
+        already found silent says nothing about the stick."""
         if not cmd.deaf_probe or cmd.outcome is not Outcome.NO_ACK or cmd.first_sent_at is None:
+            return
+        if cmd.dst in self._silent:
+            _LOGGER.debug("no ack from silent device %06X: not blaming the stick", cmd.dst)
             return
         last_rx = radio.transport.last_frame_rx
         if last_rx is not None and last_rx >= cmd.first_sent_at:
             return
-        _LOGGER.warning("CUL empfaengt nach dem Senden nichts mehr - Port wird neu geoeffnet (%s)", radio.port)
-        radio.transport.request_reopen()
+        if radio.transport.request_reopen():
+            _LOGGER.warning("CUL empfaengt nach dem Senden nichts mehr - Port wird neu geoeffnet (%s)", radio.port)
+            self._suspects[cmd.dst] = radio.id
 
     def _on_connection(self, connected: bool) -> None:
         if connected:
-            # Commands that ran out of attempts (e.g. during the outage) go out again.
+            # Commands that ran out of attempts (e.g. during the outage) go out again;
+            # not to silent devices, they get theirs with their next status.
             for dev in self.devices.values():
+                if dev.address in self._silent:
+                    continue
                 if dev.has_pending and dev.command_failed:
                     dev.command_failed = False
                     self._submit_pending(dev)
@@ -823,6 +861,7 @@ class MaxHub:
         except FrameError as err:
             _LOGGER.debug("ignoring line: %s", err)
             return
+        self._note_heard(frame.src, radio)
         if self._heard_elsewhere(frame, radio):
             return
         try:

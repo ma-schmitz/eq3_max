@@ -14,6 +14,7 @@
 |---|---|
 | Stick abgezogen / Port weg / Netzwerk-CUL nicht erreichbar | Wiederverbindung alle 30 s; nach 15 min Reparaturmeldung „CUL nicht erreichbar“ |
 | Stick empfängt nach dem Senden nichts mehr | Port wird **sofort** neu geöffnet (höchstens einmal je Funkstille), ausstehende Befehle gehen danach erneut raus |
+| Ein einzelnes Gerät antwortet nicht, der Funk funktioniert aber (andere Geräte werden gehört) | Gerät gilt als **stumm**: kein weiteres Neuöffnen seinetwegen, Log-Warnung „antwortet nicht … Gerät prüfen“; sein Befehl geht mit seiner nächsten Meldung erneut raus |
 | 10 min gesendet, aber nichts empfangen | Wächter öffnet den Port neu; beim zweiten Mal Reparaturmeldung „Stick empfängt nichts“ |
 | HA-Neustart | alle Werte sofort wieder da; ausstehende Befehle werden erneut gesendet, abgelaufene „Abwesend“-Befehle verworfen |
 

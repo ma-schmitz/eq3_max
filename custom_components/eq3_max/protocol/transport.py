@@ -138,19 +138,21 @@ class CulTransport:
         """Clock time of the last received "Z" frame (None: none yet)."""
         return self._last_frame_rx
 
-    def request_reopen(self) -> None:
+    def request_reopen(self) -> bool:
         """Reopen the port now (stick deaf after sending), at most once per quiet episode.
+        Returns whether it reopened.
 
         Unlike a watchdog reopen it never counts toward stick_deaf: one unreachable
         device must not raise the repair issue. Further silence is the watchdog's job.
         """
         if not self._connected:
-            return
+            return False
         if self._fast_reopen_done:
             _LOGGER.debug("fast reopen already done in this quiet episode, left to the watchdog")
-            return
+            return False
         self._fast_reopen_done = True
         self._reopen()
+        return True
 
     async def wait_connected(self) -> None:
         """Return once the stick is connected and initialised."""

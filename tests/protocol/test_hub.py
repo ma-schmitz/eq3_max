@@ -729,7 +729,7 @@ def _count_reopens(h):
 
     def wrapped():
         calls.append(1)
-        orig()
+        return orig()
 
     h._transport.request_reopen = wrapped
     return calls
@@ -779,11 +779,14 @@ async def test_unreachable_device_gets_one_fast_reopen_per_quiet_episode():
         assert cul.opened == 2
         assert len(reopens) >= 2  # requested again, but ignored
         assert problems == []
-        # A frame arrives: the stick hears again, a new quiet episode may reopen once.
+        # Another device is heard: the stick works, HT itself is unreachable. Its
+        # commands no longer reopen the port until HT is heard again.
         cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
         await until(lambda: h.devices[FK].window_open is False)
         h.set_temperature(HT, 22.0, Mode.MANUAL)
-        await until(lambda: cul.opened == 3 and h.connected, timeout=1.0)
+        await until(lambda: h.devices[HT].command_failed, timeout=1.0)
+        await asyncio.sleep(0.05)
+        assert cul.opened == 2
         assert problems == []
     finally:
         await h.stop()
@@ -1576,3 +1579,100 @@ async def test_factory_log_lists_only_values_going_along(hub, caplog):
     h.set_config(HT, "boost_dauer", 10)
     logs = [r.getMessage() for r in caplog.records if "Werksvorgaben" in r.getMessage()]
     assert logs[-1].endswith(": boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset")
+
+
+
+# --- one unreachable device must not reopen the stick again and again ---
+
+
+def _all_sent(cul):
+    """Zs lines of all connections so far (all_written holds only the closed ones)."""
+    return [l for l in cul.all_written + cul.written if l.startswith("Zs")]
+
+
+async def test_unreachable_device_does_not_reopen_once_the_stick_proved_it_hears(caplog):
+    cul = FakeCul()
+    h = _make(cul)
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        h.set_temperature(HT, 21.0, Mode.MANUAL)
+        await until(lambda: cul.opened == 2 and h.connected, timeout=1.0)
+        # After the reopen the stick hears another device: it was never deaf.
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+        await until(lambda: h.devices[FK].window_open is False)
+        assert h.silent_devices == [HT]
+        caplog.clear()
+        h.set_temperature(HT, 22.0, Mode.MANUAL)
+        await until(lambda: h.devices[HT].command_failed, timeout=1.0)
+        await asyncio.sleep(0.05)
+        assert cul.opened == 2
+        assert "neu geoeffnet" not in caplog.text
+        # HT is heard again: it is no longer silent, a later failure may reopen once more.
+        cul.feed(line(5, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19302A00BE"))
+        await until(lambda: h.silent_devices == [])
+    finally:
+        await h.stop()
+
+
+async def test_failed_command_of_silent_device_is_not_resent_on_reconnect():
+    cul = FakeCul()
+    h = _make(cul)
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        h.set_temperature(HT, 21.0, Mode.MANUAL)
+        await until(lambda: cul.opened == 2 and h.connected, timeout=1.0)
+        await until(lambda: h.devices[HT].command_failed, timeout=1.0)
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+        await until(lambda: h.silent_devices == [HT])
+        before = len(_all_sent(cul))
+        # A reconnect (e.g. the watchdog) must not fire the silent device's command again.
+        h._transport.request_reopen = lambda: False
+        h._on_connection(True)
+        await asyncio.sleep(0.1)
+        assert len(_all_sent(cul)) == before
+        # Its next status (still 20.0 instead of 21.0) brings the command out again.
+        cul.feed(line(5, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19302800BE"))
+        await until(lambda: len(_all_sent(cul)) > before)
+    finally:
+        await h.stop()
+
+
+async def test_other_device_still_reopens_a_really_deaf_stick():
+    cul = FakeCul()
+    h = _make(cul)
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        h.set_temperature(HT, 21.0, Mode.MANUAL)
+        await until(lambda: cul.opened == 2 and h.connected, timeout=1.0)
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+        await until(lambda: h.silent_devices == [HT])
+        # A different, reachable device fails while nothing comes in: that is the stick.
+        h.set_temperature(WT, 21.0, Mode.MANUAL)
+        await until(lambda: cul.opened == 3 and h.connected, timeout=1.0)
+    finally:
+        await h.stop()
+
+
+async def test_reopen_warning_only_when_the_port_is_really_reopened(caplog):
+    cul = FakeCul()
+    h = _make(cul)
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        h.set_temperature(HT, 21.0, Mode.MANUAL)
+        await until(lambda: cul.opened == 2 and h.connected, timeout=1.0)
+        assert caplog.text.count("neu geoeffnet") == 1
+        caplog.clear()
+        # Same quiet episode: the transport refuses a second fast reopen.
+        await until(lambda: h.devices[HT].command_failed, timeout=1.0)
+        await asyncio.sleep(0.02)
+        h.set_temperature(HT, 21.5, Mode.MANUAL)
+        await until(lambda: h.devices[HT].command_failed and h.devices[HT].pending_target == 21.5, timeout=1.0)
+        await asyncio.sleep(0.05)
+        assert cul.opened == 2
+        assert "neu geoeffnet" not in caplog.text
+    finally:
+        await h.stop()

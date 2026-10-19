@@ -5,6 +5,18 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Ein einzelnes unerreichbares Gerät hielt die Taubheitserkennung für einen tauben Stick: Nach
+  jedem gehörten Telegramm eines anderen Geräts durfte der Port erneut „schnell“ neu geöffnet
+  werden, und nach jedem Neuverbinden ging der fehlgeschlagene Befehl wieder raus – eine
+  Schleife aus Senden, keiner Quittung und Neu-Öffnen (gesehen am 19.10.2026 mit einem
+  Thermostat bei −90 dBm). Hört das Modul nach dem Neu-Öffnen andere Geräte, gilt das Gerät
+  jetzt als stumm: seine Befehle öffnen den Port nicht mehr neu und gehen erst mit seiner
+  nächsten Meldung wieder raus; einmalige Warnung „antwortet nicht … Gerät prüfen“.
+- Die Warnung „Port wird neu geoeffnet“ erscheint nur noch, wenn der Port wirklich neu geöffnet
+  wird (vorher auch, wenn die Funkverbindung das Neu-Öffnen ablehnte).
+
 ### Geändert
 
 - Seite „eQ-3 MAX!“ neu gestaltet: Kopf mit Zustands-Pille und einer Kachel je Funkmodul,
