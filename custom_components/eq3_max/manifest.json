@@ -10,5 +10,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ma-schmitz/eq3_max/issues",
   "requirements": ["pyserial-asyncio-fast>=0.13"],
-  "version": "0.4.0"
+  "version": "0.5.0"
 }

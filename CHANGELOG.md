@@ -5,8 +5,13 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.5.0] – 2026-10-21
+
 ### Behoben
 
+- Integration nur über die Oberfläche einrichtbar, als `CONFIG_SCHEMA` erklärt (Hinweis von
+  hassfest); ein `eq3_max:`-Block in der `configuration.yaml` wird jetzt mit einer Warnung
+  übergangen.
 - Ein einzelnes unerreichbares Gerät hielt die Taubheitserkennung für einen tauben Stick: Nach
   jedem gehörten Telegramm eines anderen Geräts durfte der Port erneut „schnell“ neu geöffnet
   werden, und nach jedem Neuverbinden ging der fehlgeschlagene Befehl wieder raus – eine
@@ -34,6 +39,7 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- Prüfungen für HACS: GitHub-Workflow mit HACS-Action und hassfest; Manifest-Schlüssel sortiert.
 - MIT-Lizenz; README mit Markenhinweis, Hinweis zur 1-%-Grenze und Quellen der Anregungen.
 
 ### Dokumentation
