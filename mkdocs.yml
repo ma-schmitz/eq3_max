@@ -2,7 +2,7 @@
 # Veröffentlicht wird sie auf GitHub Pages (.github/workflows/pages.yml).
 site_name: eq3_max
 site_description: eQ-3 MAX! direkt in Home Assistant – über einen CUL-Stick oder geflashten Cube, ohne Homegear.
-# Account des öffentlichen Repos (setzt das Export-Skript).
+# Account des öffentlichen Repos (GitHub-Export: tools/github_export.py).
 site_url: https://ma-schmitz.github.io/eq3_max/
 repo_url: https://github.com/ma-schmitz/eq3_max
 repo_name: eq3_max
