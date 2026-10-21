@@ -2,6 +2,7 @@
   "domain": "eq3_max",
   "name": "eQ-3 MAX!",
   "after_dependencies": ["frontend", "homematic", "max_cul", "panel_custom"],
+  "categories": ["hubs_protocols.wireless_protocols", "climate.thermostats_heating"],
   "codeowners": ["@ma-schmitz"],
   "config_flow": true,
   "dependencies": ["http", "websocket_api"],

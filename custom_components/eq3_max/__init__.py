@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .const import PLATFORMS
+from homeassistant.helpers import config_validation as cv
+
+from .const import DOMAIN, PLATFORMS
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -12,6 +14,8 @@ if TYPE_CHECKING:
     from homeassistant.helpers.device_registry import DeviceEntry
 
 ACTIVE_PLATFORMS = PLATFORMS
+# Set up from config entries only; async_setup just registers services and websocket commands.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
