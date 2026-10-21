@@ -1,8 +1,8 @@
 {
   "domain": "eq3_max",
   "name": "eQ-3 MAX!",
-  "codeowners": ["@ma-schmitz"],
   "after_dependencies": ["frontend", "homematic", "max_cul", "panel_custom"],
+  "codeowners": ["@ma-schmitz"],
   "config_flow": true,
   "dependencies": ["http", "websocket_api"],
   "documentation": "https://ma-schmitz.github.io/eq3_max/",
