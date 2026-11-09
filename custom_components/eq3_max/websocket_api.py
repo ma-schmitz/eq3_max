@@ -32,10 +32,19 @@ from .connection import connection_target, connection_type
 from .const import CONF_ADDRESS, DOMAIN, SIGNAL_PANEL_UPDATE
 from .registry_compat import find_device
 from .migration import specs_for, unique_id
-from .protocol.devices import KIND_TEMP, KIND_VALVE, LINK_ADD, LINK_FAILED, LINK_PENDING, LINK_REJECTED, MaxDevice
+from .protocol.devices import (
+    KIND_TEMP,
+    KIND_VALVE,
+    LINK_ADD,
+    LINK_FAILED,
+    LINK_PENDING,
+    LINK_REJECTED,
+    WEEKDAYS,
+    MaxDevice,
+)
 from .protocol.hub import LINK_ONE_SIDED, plan_link
 from .protocol.hub import link_status as hub_link_status
-from .protocol.messages import DeviceType, FrameError
+from .protocol.messages import FACTORY_WEEK_PROFILE, DeviceType, FrameError, format_until
 from .radios import describe, radio_items, radio_names
 from .services import (
     async_copy_week_profile,
@@ -300,7 +309,15 @@ def build_overview(hass: HomeAssistant) -> dict[str, Any]:
                 (_device(ctx, dev) for dev in ctx.hub.devices.values()), key=lambda d: d["name"].lower()
             )
         entries.append(section)
-    return {"entries": entries}
+    return {"entries": entries, "factory_week_profile": factory_week_profile()}
+
+
+def factory_week_profile() -> dict[str, list[dict[str, Any]]]:
+    """The factory program by weekday name, points as the services take them."""
+    return {
+        WEEKDAYS[day]: [{"temperature": p.temperature, "until": format_until(p.until)} for p in points]
+        for day, points in FACTORY_WEEK_PROFILE.items()
+    }
 
 
 @websocket_api.require_admin

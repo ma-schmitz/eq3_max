@@ -646,3 +646,12 @@ def test_build_config_week_profile_frame():
     assert m.build_config_week_profile(1, 1, 2, day=0, part=0, words=words).payload[0] == 0x00
     with pytest.raises(ValueError):
         m.build_config_week_profile(1, 1, 2, day=7, part=0, words=words)
+
+
+def test_factory_week_profile_matches_fhem_default():
+    m = _wp()
+    weekend = "44485508" + "4520" * 5
+    weekday = "4448546C44CC5514" + "4520" * 3
+    for day in range(7):
+        [part] = m.encode_week_profile_day(m.FACTORY_WEEK_PROFILE[day])
+        assert part.hex().upper() == (weekend if day in (0, 1) else weekday), day

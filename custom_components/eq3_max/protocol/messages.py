@@ -587,6 +587,18 @@ class ProfilePoint:
     until: int  # minutes since midnight the temperature holds until (5-minute steps, 1440 = 24:00)
 
 
+# The program a thermostat runs after a factory reset (FHEM 10_MAX.pm $defaultWeekProfile):
+# weekdays 17 °C until 06:00, 21 °C until 09:00, 17 °C until 17:00, 21 °C until 23:00, 17 °C
+# until 24:00; Saturday and Sunday 17 °C until 06:00, 21 °C until 22:00, 17 °C until 24:00.
+_FACTORY_WEEKEND = (ProfilePoint(17.0, 360), ProfilePoint(21.0, 1320), ProfilePoint(17.0, 1440))
+_FACTORY_WEEKDAY = (
+    ProfilePoint(17.0, 360), ProfilePoint(21.0, 540), ProfilePoint(17.0, 1020), ProfilePoint(21.0, 1380), ProfilePoint(17.0, 1440),
+)
+FACTORY_WEEK_PROFILE: dict[int, tuple[ProfilePoint, ...]] = {
+    0: _FACTORY_WEEKEND, 1: _FACTORY_WEEKEND, **{day: _FACTORY_WEEKDAY for day in range(2, 7)}
+}
+
+
 def format_until(minutes: int) -> str:
     """Minutes since midnight as hh:mm, the day end as 24:00."""
     return f"{minutes // 60:02d}:{minutes % 60:02d}"

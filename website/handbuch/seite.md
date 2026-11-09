@@ -58,7 +58,10 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
   Programm nicht), „In den Editor“ übernimmt einen Tag. Darunter der Editor: Tage ankreuzen
   (oder „alle“), Punkte mit Temperatur und Bis-Uhrzeit (der letzte gilt bis 24:00, bis zu 13),
   **„Schreiben“** wartet auf die Quittungen des Geräts. Zuletzt „Auf andere Thermostate
-  kopieren“ mit dem gespeicherten Programm.
+  kopieren“ mit dem gespeicherten Programm. Unter **Löschen** zwei Knöpfe, beide mit Nachfrage und
+  für alle sieben Tage: **Werksprogramm schreiben** (das Programm ab Werk) und **Feste Temperatur
+  schreiben** (ein Punkt bis 24:00 mit der eingegebenen Temperatur) – ein Thermostat hat immer ein
+  Programm, löschen heißt ein neues schreiben.
 
 Nicht auf der Seite: Werksreset ([Dienste](dienste.md)), Namen und Bereiche (wie gewohnt in HA),
 Wochenprofile.

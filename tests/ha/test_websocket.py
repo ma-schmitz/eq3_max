@@ -418,3 +418,12 @@ async def test_copy_week_profile_over_websocket(hass, setup_entry, fake_hub, has
     assert reply["success"], reply
     assert hub.week_profiles == [(WT, {1: [ProfilePoint(19.0, 1440)]})]
     assert reply["result"]["targets"] == [SERIALS[WT]]
+
+
+async def test_overview_carries_the_factory_week_profile(hass, setup_entry, fake_hub, hass_ws_client):
+    client = await hass_ws_client(hass)
+    result = await overview(client)
+    factory = result["factory_week_profile"]
+    assert list(factory) == ["Samstag", "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
+    assert factory["Sonntag"] == [{"temperature": 17.0, "until": "06:00"}, {"temperature": 21.0, "until": "22:00"}, {"temperature": 17.0, "until": "24:00"}]
+    assert factory["Montag"][1] == {"temperature": 21.0, "until": "09:00"} and len(factory["Montag"]) == 5

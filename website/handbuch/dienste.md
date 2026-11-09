@@ -88,6 +88,45 @@ data:
 Die Quelle muss vorher mit `set_week_profile` beschrieben worden sein; ein Programm, das
 nur im Gerät steht (Cube, Homegear, am Gerät eingestellt), kennt die Integration nicht.
 
+### Programm „löschen“
+
+Ein Thermostat hat immer ein Programm. Löschen heißt deshalb ein neues schreiben – auf der Seite
+„eQ-3 MAX!“ mit den Knöpfen **Werksprogramm schreiben** und **Feste Temperatur schreiben**, per
+Dienst so:
+
+```yaml
+# Werksprogramm (wie ab Werk): zwei Aufrufe
+action: eq3_max.set_week_profile
+data:
+  device_id: <Geräte-ID>
+  weekday: [Montag, Dienstag, Mittwoch, Donnerstag, Freitag]
+  profile:
+    - {temperature: 17, until: "06:00"}
+    - {temperature: 21, until: "09:00"}
+    - {temperature: 17, until: "17:00"}
+    - {temperature: 21, until: "23:00"}
+    - {temperature: 17}
+---
+action: eq3_max.set_week_profile
+data:
+  device_id: <Geräte-ID>
+  weekday: [Samstag, Sonntag]
+  profile:
+    - {temperature: 17, until: "06:00"}
+    - {temperature: 21, until: "22:00"}
+    - {temperature: 17}
+```
+
+```yaml
+# feste Temperatur den ganzen Tag, jeden Tag
+action: eq3_max.set_week_profile
+data:
+  device_id: <Geräte-ID>
+  weekday: alle
+  profile:
+    - {temperature: 17}
+```
+
 ## Gerät löschen
 
 Auf der Geräteseite „Gerät löschen“ entfernt ein Gerät nur aus HA (kein Funkbefehl). Sinnvoll

@@ -5,6 +5,15 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.3] – 2026-11-09
+
+### Hinzugefügt
+
+- Reiter „Wochenprogramm“, Abschnitt **Löschen** mit zwei Knöpfen (je mit Nachfrage, alle sieben
+  Tage): **Werksprogramm schreiben** (das Programm ab Werk, wie in FHEM hinterlegt) und **Feste
+  Temperatur schreiben** (ein Punkt bis 24:00). Das Werksprogramm liefert die Übersicht als
+  `factory_week_profile` mit; die Dienste-Doku zeigt dieselben Programme als YAML.
+
 ## [0.6.2] – 2026-11-09
 
 ### Entfernt

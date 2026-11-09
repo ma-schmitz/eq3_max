@@ -879,6 +879,7 @@ class Eq3MaxPanel extends HTMLElement {
     const draft = this._wpDraft(dev);
     const key = `wp:${dev.serial}`;
     const busy = this._busy.has(key) || this._busy.has(`${key}:copy`);
+    if (draft.constant === undefined) draft.constant = "17";
     const stored = dev.week_profile || {};
     const fmt = (p) => `${plainNum(p.temperature)} °C bis ${p.until}`;
 
@@ -1008,6 +1009,61 @@ class Eq3MaxPanel extends HTMLElement {
       },
     }, busy ? "wird kopiert …" : "Kopieren");
 
+    // Löschen = ein bestimmtes Programm schreiben: das Werksprogramm oder eine feste Temperatur.
+    const factory = this._data.factory_week_profile || {};
+    const writeDays = async (groups, done) => {
+      for (const [weekday, profile] of groups) {
+        const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, weekday, profile }, null);
+        if (result === undefined) return;
+      }
+      this._showToast(done);
+      this._render();
+    };
+    const factoryKey = `${key}:factory`;
+    const constKey = `${key}:const`;
+    const constTemp = h("input", { type: "number", min: "4.5", max: "30.5", step: "0.5", inputmode: "decimal", "data-focus": constKey, "aria-label": "Feste Temperatur" });
+    constTemp.value = draft.constant || "17";
+    constTemp.addEventListener("input", () => { draft.constant = constTemp.value; });
+    const constValue = () => Number(String(constTemp.value).replace(",", "."));
+    const constOk = () => Number.isFinite(constValue()) && constValue() >= 4.5 && constValue() <= 30.5 && Math.round(constValue() * 2) === constValue() * 2;
+    const confirmBox = (text, onYes) => h("div", { class: "confirm" },
+      h("div", {}, text),
+      h("div", { class: "setfoot" },
+        h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, "Abbrechen"),
+        h("button", { class: "action danger", disabled: busy, onclick: () => { this._confirm = null; onYes(); } }, "Schreiben")));
+    const groupsFactory = () => {
+      const byProfile = new Map();
+      for (const day of WP_DAYS) {
+        const sig = JSON.stringify(factory[day] || []);
+        if (!byProfile.has(sig)) byProfile.set(sig, { days: [], profile: factory[day] });
+        byProfile.get(sig).days.push(day);
+      }
+      return [...byProfile.values()].map((g) => [g.days, g.profile.map((p, i) => (i === g.profile.length - 1 ? { temperature: p.temperature } : p))]);
+    };
+    const erase = h("fieldset", {},
+      h("legend", {}, "Löschen"),
+      h("div", { class: "sub", style: "margin-bottom:6px" },
+        "Ein Thermostat hat immer ein Programm. Löschen heißt deshalb: ein neues schreiben, auf alle sieben Tage."),
+      h("div", { class: "row" },
+        h("span", { class: "grow" }, "Werksprogramm", h("span", { class: "hint" },
+          "Mo–Fr 17 °C bis 06:00, 21 °C bis 09:00, 17 °C bis 17:00, 21 °C bis 23:00, 17 °C bis 24:00 · Sa/So 17 °C bis 06:00, 21 °C bis 22:00, 17 °C bis 24:00")),
+        h("button", { class: "action", disabled: busy || !dev.device_id || !Object.keys(factory).length,
+          onclick: () => { this._confirm = factoryKey; this._render(); } }, "Werksprogramm schreiben")),
+      this._confirm === factoryKey
+        ? confirmBox(`Werksprogramm auf ${dev.name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).`,
+          () => writeDays(groupsFactory(), `Werksprogramm auf ${dev.name} geschrieben.`))
+        : null,
+      h("div", { class: "row" },
+        h("span", { class: "grow" }, "Feste Temperatur", h("span", { class: "hint" }, "ein Punkt bis 24:00, jeden Tag dieselbe Temperatur")),
+        h("span", { class: "ctl" }, constTemp, h("span", { class: "sub" }, "°C")),
+        h("button", { class: "action", disabled: busy || !dev.device_id,
+          onclick: () => { if (!constOk()) { this._showToast("Temperatur 4,5 bis 30,5 °C in 0,5-Schritten", true); return; } this._confirm = constKey; this._render(); } },
+          "Feste Temperatur schreiben")),
+      this._confirm === constKey
+        ? confirmBox(`${plainNum(constValue())} °C den ganzen Tag auf ${dev.name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).`,
+          () => writeDays([[["alle"], [{ temperature: constValue() }]]], `${plainNum(constValue())} °C auf ${dev.name} geschrieben.`))
+        : null);
+
     return [
       h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
         "Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; "
@@ -1023,6 +1079,7 @@ class Eq3MaxPanel extends HTMLElement {
         h("div", { class: "setfoot" },
           h("span", { class: "sub" }, "Je Tag ein bis zwei Telegramme, der Dienst wartet auf die Quittungen."),
           write)),
+      erase,
       others.length
         ? h("fieldset", {},
           h("legend", {}, "Auf andere Thermostate kopieren"),
