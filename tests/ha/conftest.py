@@ -116,6 +116,19 @@ class FakeHub:
             ]
         self.on_update(dev)
 
+    def forget_week_profile(self, address, days=None):
+        from custom_components.eq3_max.protocol.devices import WEEKDAYS
+        from custom_components.eq3_max.protocol.messages import FrameError
+
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError("Ger\u00e4t ist dem Funkmodul nicht bekannt")
+        names = list(WEEKDAYS) if days is None else [WEEKDAYS[d] for d in days]
+        dropped = [n for n in names if dev.week_profile.pop(n, None) is not None]
+        if dropped:
+            self.on_update(dev)
+        return dropped
+
     def link(self, a, b):
         self._change_link("link", a, b, "add")
 

@@ -5,6 +5,21 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.1] – 2026-11-09
+
+### Hinzugefügt
+
+- Wochenprogramm vergessen: Dienst `eq3_max.forget_week_profile` und im Reiter „Wochenprogramm“
+  ein ✕ je gespeichertem Tag sowie „Alle vergessen“ – verwirft nur das Gedächtnis der
+  Integration, es wird nichts gesendet. Ein Thermostat hat immer ein Programm; „löschen“ am
+  Gerät heißt: einen einzigen Punkt schreiben (z. B. 17 °C bis 24:00).
+
+### Geändert
+
+- Reiter „Wochenprogramm“: Bis-Uhrzeit ohne Tastatur-Einschränkung, der Doppelpunkt kommt nach
+  zwei Ziffern von selbst (`06` → `06:`, `0600` → `06:00`), die Cursorposition übersteht einen
+  Neuaufbau der Seite; „Alle vergessen“ fragt vorher nach.
+
 ## [0.6.0] – 2026-11-09
 
 ### Hinzugefügt

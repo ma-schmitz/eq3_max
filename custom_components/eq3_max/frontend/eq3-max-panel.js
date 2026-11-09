@@ -570,6 +570,8 @@ class Eq3MaxPanel extends HTMLElement {
     const root = this.shadowRoot;
     const active = root.activeElement;
     const focusKey = active && active.dataset ? active.dataset.focus : undefined;
+    const caret = active && active.tagName === "INPUT" && typeof active.selectionStart === "number"
+      ? [active.selectionStart, active.selectionEnd] : null;
     const scroll = root.querySelector(".body");
     const scrollTop = scroll ? scroll.scrollTop : 0;
 
@@ -586,7 +588,12 @@ class Eq3MaxPanel extends HTMLElement {
     if (body) body.scrollTop = scrollTop;
     if (focusKey) {
       const el = root.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`);
-      if (el) el.focus();
+      if (el) {
+        el.focus();
+        if (caret && typeof el.setSelectionRange === "function") {
+          try { el.setSelectionRange(caret[0], caret[1]); } catch (_err) { /* not a text field */ }
+        }
+      }
     }
   }
 
@@ -857,8 +864,8 @@ class Eq3MaxPanel extends HTMLElement {
         return `Punkt ${i + 1}: Temperatur muss zwischen 4,5 und 30,5 °C in 0,5-Schritten liegen`;
       }
       if (i === points.length - 1) break;
-      const m = /^(\d{1,2}):(\d{2})$/.exec(points[i].until || "");
-      if (!m) return `Punkt ${i + 1}: Bis-Uhrzeit fehlt`;
+      const m = /^(\d{1,2}):?(\d{2})$/.exec(String(points[i].until || "").trim());
+      if (!m) return `Punkt ${i + 1}: Bis-Uhrzeit fehlt (hh:mm)`;
       const minutes = Number(m[1]) * 60 + Number(m[2]);
       if (minutes % 5) return `Punkt ${i + 1}: Bis-Uhrzeit in 5-Minuten-Schritten`;
       if (minutes <= last) return `Punkt ${i + 1}: Bis-Uhrzeiten müssen aufsteigend sein`;
@@ -871,7 +878,7 @@ class Eq3MaxPanel extends HTMLElement {
   _renderWeekProfile(entry, dev) {
     const draft = this._wpDraft(dev);
     const key = `wp:${dev.serial}`;
-    const busy = this._busy.has(key) || this._busy.has(`${key}:copy`);
+    const busy = this._busy.has(key) || this._busy.has(`${key}:copy`) || this._busy.has(`${key}:forget`);
     const stored = dev.week_profile || {};
     const fmt = (p) => `${plainNum(p.temperature)} °C bis ${p.until}`;
 
@@ -892,7 +899,37 @@ class Eq3MaxPanel extends HTMLElement {
             this._render();
           },
         }, "In den Editor")
+        : null,
+      stored[day]
+        ? h("button", {
+          class: "close", title: "Eintrag vergessen (nur das Gedächtnis der Integration, kein Funkbefehl)",
+          "aria-label": `${day} vergessen`, disabled: busy,
+          onclick: () => this._call(`${key}:forget`,
+            { type: "eq3_max/forget_week_profile", device_id: dev.device_id, weekday: [day] },
+            `${day} vergessen – das Gerät behält sein Programm.`),
+        }, "✕")
         : null));
+    const forgetKey = `${key}:forget`;
+    const forgetAll = Object.keys(stored).length > 1
+      ? (this._confirm === forgetKey
+        ? h("div", { class: "confirm" },
+          h("div", {}, `Alle gespeicherten Tage von ${dev.name} vergessen? Das Gerät behält sein Programm, `
+            + "nur die Integration weiß dann nicht mehr, was sie geschrieben hat."),
+          h("div", { class: "setfoot" },
+            h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, "Abbrechen"),
+            h("button", {
+              class: "action danger", disabled: busy,
+              onclick: () => {
+                this._confirm = null;
+                this._call(forgetKey, { type: "eq3_max/forget_week_profile", device_id: dev.device_id },
+                  "Alle gespeicherten Tage vergessen – das Gerät behält sein Programm.");
+              },
+            }, "Vergessen")))
+        : h("div", { class: "setfoot" }, h("button", {
+          class: "action", disabled: busy,
+          onclick: () => { this._confirm = forgetKey; this._render(); },
+        }, "Alle vergessen")))
+      : null;
 
     // Editor.
     const dayBoxes = WP_DAYS.map((day) => {
@@ -921,11 +958,22 @@ class Eq3MaxPanel extends HTMLElement {
         // Textfeld statt type=time: ein Zeitwähler verliert eine halb eingegebene Zeit, wenn
         // die Seite wegen eines Telegramms neu aufgebaut wird; der Entwurf hält jeden Tastendruck.
         until = h("input", {
-          type: "text", inputmode: "numeric", placeholder: "hh:mm", maxlength: "5", pattern: "[0-9]{1,2}:[0-9]{2}",
+          type: "text", placeholder: "hh:mm", maxlength: "5", autocomplete: "off",
           "data-focus": `${key}:u:${i}`, "aria-label": `Bis-Uhrzeit Punkt ${i + 1}`,
         });
         until.value = point.until || "";
-        until.addEventListener("input", () => { point.until = until.value; update(); });
+        until.addEventListener("input", (ev) => {
+          // Der Doppelpunkt kommt von selbst: "06" -> "06:", "0600" -> "06:00" (nicht beim Löschen).
+          let value = until.value.replace(/[^\d:]/g, "");
+          const deleting = typeof ev.inputType === "string" && ev.inputType.startsWith("delete");
+          if (!deleting) {
+            if (/^\d{2}$/.test(value)) value += ":";
+            else if (/^\d{3,4}$/.test(value)) value = `${value.slice(0, 2)}:${value.slice(2)}`;
+          }
+          if (value !== until.value) until.value = value;
+          point.until = value;
+          update();
+        });
       }
       return h("div", { class: "wp-point" },
         h("span", { class: "sub" }, `${i + 1}.`),
@@ -953,7 +1001,10 @@ class Eq3MaxPanel extends HTMLElement {
       const weekday = WP_DAYS.filter((d) => draft.days.has(d));
       const profile = draft.points.map((p, i) => {
         const item = { temperature: Number(String(p.temperature).replace(",", ".")) };
-        if (i < draft.points.length - 1) item.until = p.until;
+        if (i < draft.points.length - 1) {
+          const m = /^(\d{1,2}):?(\d{2})$/.exec(String(p.until).trim());
+          item.until = `${m[1].padStart(2, "0")}:${m[2]}`;
+        }
         return item;
       });
       const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, weekday, profile },
@@ -991,7 +1042,7 @@ class Eq3MaxPanel extends HTMLElement {
       h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
         "Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; "
         + "gezeigt werden die Tage, die es zuletzt quittiert hat."),
-      h("fieldset", {}, h("legend", {}, "Gespeichert"), storedRows),
+      h("fieldset", {}, h("legend", {}, "Gespeichert"), storedRows, forgetAll),
       h("fieldset", {},
         h("legend", {}, "Schreiben"),
         h("div", { class: "wp-days" }, dayBoxes, allButton),

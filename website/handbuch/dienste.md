@@ -88,6 +88,13 @@ data:
 Die Quelle muss vorher mit `set_week_profile` beschrieben worden sein; ein Programm, das
 nur im Gerät steht (Cube, Homegear, am Gerät eingestellt), kennt die Integration nicht.
 
+## `eq3_max.forget_week_profile`
+
+Verwirft die Tage, die sich die Integration für ein Thermostat gemerkt hat (`device_id`, Liste
+möglich; `weekday` Tage oder `alle`, Standard alle). Es wird nichts gesendet, das Gerät behält
+sein Programm. Ein Thermostat hat immer ein Programm – „löschen“ am Gerät heißt: mit
+`set_week_profile` einen einzigen Punkt schreiben, etwa 17 °C bis 24:00.
+
 ## Gerät löschen
 
 Auf der Geräteseite „Gerät löschen“ entfernt ein Gerät nur aus HA (kein Funkbefehl). Sinnvoll

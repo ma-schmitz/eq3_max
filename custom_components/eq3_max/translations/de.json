@@ -256,6 +256,20 @@
           "description": "Thermostate, die das Programm bekommen."
         }
       }
+    },
+    "forget_week_profile": {
+      "name": "Wochenprogramm vergessen",
+      "description": "Verwirft die Tage des Wochenprogramms, die sich die Integration für ein oder mehrere Thermostate gemerkt hat (nur das Gedächtnis, es wird nichts gesendet; das Gerät behält sein Programm).",
+      "fields": {
+        "device_id": {
+          "name": "Thermostat",
+          "description": "Ein oder mehrere Thermostate."
+        },
+        "weekday": {
+          "name": "Wochentag",
+          "description": "Zu vergessende Tage; Standard „alle“."
+        }
+      }
     }
   }
 }
