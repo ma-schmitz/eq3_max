@@ -5,6 +5,20 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Dokumentation
+
+- MAX! Cube mit a-culfw: in zwei weiteren Installationen mit geflashten Cubes bestätigt
+  (November 2026); die Hinweise „am echten Cube noch nicht getestet“ sind raus.
+
+## [0.5.1] – 2026-11-09
+
+### Behoben
+
+- Home Assistant 2026.11 meldete beim Start drei veraltete Climate-Angaben
+  (`_attr_temperature_unit`, `current_temperature`, `target_temperature`; Abschaltung mit
+  HA 2027.11). Die Thermostate liefern Ist- und Solltemperatur jetzt über die neuen
+  `native_*`-Angaben; die alten Namen bleiben als Alias für HA 2026.8 bis 2026.10.
+
 ## [0.5.0] – 2026-10-21
 
 ### Behoben

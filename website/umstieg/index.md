@@ -26,8 +26,8 @@ Erprobt ist der Weg von Homegear an einer Installation mit 24 Geräten.
 - Home Assistant **2026.8 oder neuer** (Logo im UI ab 2026.9).
 - Ein Funkmodul mit culfw, eins von beiden (Details unter [Hardware](../loslegen/hardware.md)):
   - **nanoCUL** per USB an der HA-Box (erprobt), oder
-  - **MAX! Cube mit a-culfw** im Netzwerk (Port 2323) oder per USB (am echten Cube noch
-    nicht getestet).
+  - **MAX! Cube mit a-culfw** im Netzwerk (Port 2323) oder per USB (in weiteren
+    Installationen im Einsatz).
 
   Für den Umstieg ist es gleich, welches: Entscheidend ist die Zentralen-Adresse, nicht
   das Modul.

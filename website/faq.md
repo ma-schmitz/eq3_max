@@ -20,7 +20,8 @@
 
 ??? question "Geht das auch mit einem geflashten MAX! Cube?"
     Ja. Mit a-culfw geflasht ist der Cube neben dem nanoCUL das zweite mögliche Funkmodul,
-    per Netzwerk (Port 2323) oder per USB. Am echten Cube noch nicht getestet. Ein Cube mit
+    per Netzwerk (Port 2323) oder per USB; geflashte Cubes laufen in zwei weiteren
+    Installationen. Ein Cube mit
     Original-Firmware geht nicht, dafür gibt es `maxcube`. Details:
     [Hardware](loslegen/hardware.md).
 

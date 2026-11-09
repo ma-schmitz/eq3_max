@@ -401,3 +401,29 @@ async def test_comfort_falls_back_to_config_komfort_then_default(hass, setup_ent
     await push(hass, hub, HT, target=18.0, mode=Mode.TEMPORARY, last_comfort=None)
     await hass.services.async_call("climate", "set_hvac_mode", {ATTR_ENTITY_ID: E, "hvac_mode": "heat"}, blocking=True)
     assert hub.commands[-1] == (HT, 21.0, Mode.MANUAL)
+
+
+async def test_native_temperature_members_without_deprecation(hass, setup_entry, fake_hub, caplog):
+    """HA 2026.11 reads temperatures from native_* members and logs a deprecation for classes
+    that only provide the old names (removal 2027.11). The old names stay as aliases for
+    HA < 2026.11; with both present, HA 2026.11 stays quiet."""
+    import logging
+
+    from homeassistant.components.climate import ClimateEntity
+    from homeassistant.const import UnitOfTemperature
+    from homeassistant.helpers.entity_component import DATA_INSTANCES
+
+    from custom_components.eq3_max.climate import MaxClimate
+
+    await push(hass, fake_hub.last, HT, target=21.0, measured=19.5, mode=Mode.MANUAL)
+    entity = hass.data[DATA_INSTANCES]["climate"].get_entity(E)
+    assert entity.native_current_temperature == 19.5
+    assert entity.native_target_temperature == 21.0
+    assert entity._attr_native_temperature_unit == UnitOfTemperature.CELSIUS
+    assert entity.current_temperature == 19.5
+    assert entity.target_temperature == 21.0
+    if hasattr(ClimateEntity, "native_current_temperature"):  # HA >= 2026.11
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            type("MaxClimateProbe", (MaxClimate,), {})
+        assert "deprecated" not in caplog.text

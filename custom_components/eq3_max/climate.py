@@ -54,6 +54,10 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
 
 class MaxClimate(MaxCulEntity, ClimateEntity):
+    # HA 2026.11 reads temperatures from the native_* members and logs a deprecation for
+    # classes that only provide the old names (removal in 2027.11). The old names stay as
+    # aliases for HA < 2026.11 (hacs.json); with both present, HA 2026.11 keeps quiet.
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 0.5
     _attr_min_temp = OFF_TEMPERATURE
@@ -71,12 +75,15 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         super().__init__(coordinator, device, "climate", None)
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return self.device.measured
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         return self.device.target
+
+    current_temperature = native_current_temperature  # HA < 2026.11
+    target_temperature = native_target_temperature  # HA < 2026.11
 
     @property
     def hvac_mode(self) -> HVACMode | None:

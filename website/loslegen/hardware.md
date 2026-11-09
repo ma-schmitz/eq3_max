@@ -8,7 +8,7 @@ eq3_max braucht ein **Funkmodul mit culfw** (868 MHz, MAX!-Unterstützung). Zwei
 | Firmware | culfw (z. B. `1.66 nanoCUL868`) | a-culfw für den Cube |
 | Einrichtung | Verbindung „USB-Stick“, Port aus `/dev/serial/by-path/` | Verbindung „Netzwerk“, Host und Port 2323 |
 | Funkbudget (1 %) | eq3_max bremst auf 36 s pro Stunde (Standard) | zusätzlich hält a-culfw es selbst ein (`LOVF`) |
-| Stand | im Dauerbetrieb erprobt | wählbar, am echten Cube **noch nicht getestet** |
+| Stand | im Dauerbetrieb erprobt | in zwei weiteren Installationen mit geflashten Cubes im Einsatz |
 
 !!! info "Beide sind austauschbar – und mischbar"
     Die Geräte merken sich nicht das Funkmodul, sondern die **Zentralen-Adresse**, und die
