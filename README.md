@@ -129,16 +129,18 @@ lösen sie (Telegramme 0x20 AddLinkPartner und 0x21 RemoveLinkPartner, wie FHEM
   den anderen als Partner und quittiert das einzeln. Eine Richtung, die schon
   besteht, wird nicht noch einmal gesendet.
 - Der Dienst kehrt nach dem Einreihen sofort zurück. Thermostate bekommen ihren
-  Teil gleich. Fensterkontakte und Eco-Taster schlafen und hören nur kurz nach
-  einem eigenen Telegramm an die Zentrale zu (Telegramme an ihre Thermostate
-  zählen nicht): Ihr Teil wartet, bis sie sich das nächste Mal melden, und geht
-  80 ms nach dem letzten Telegramm einer Folge ohne Weckpräambel (`Zf`) raus –
-  ein Versuch, höchstens 0,3 s nach dem Auslösen, 0,5 s Quittungswartezeit.
-  Kommt er nicht rechtzeitig dran oder bleibt unquittiert, wartet der Auftrag
-  wieder auf das nächste Telegramm; nach zwei unquittierten `Zf`-Versuchen geht
-  der nächste mit Präambel (`Zs`, wie FHEM) raus. Dafür das Fenster einmal
-  öffnen und schließen bzw. den Taster (oder die Anlerntaste) einmal drücken.
-  Wartende Aufträge überstehen Neustarts; ein Werksreset des Geräts verwirft sie.
+  Teil gleich. Fensterkontakte und Eco-Taster schlafen und hören nur einen Moment
+  nach eigenem Senden zu. Nach einem Fenster-Ereignis meldet sich ein Kontakt erst
+  bei der Zentrale, dann bei jedem Partner-Thermostat (40–110 ms Abstand), bei
+  unerreichbaren Partnern minutenlang immer wieder: Ihr Teil wartet, bis sie sich
+  melden, und geht 80 ms nach dem jeweils letzten Telegramm von oder zu ihnen ohne
+  Weckpräambel (`Zf`) raus – ein Versuch je Gelegenheit, 0,5 s Quittungswartezeit;
+  sendet das Gerät währenddessen selbst, wird der Versuch aufgegeben und nach dem
+  nächsten Telegramm wiederholt. Nie mit Präambel (`Zs`): die kommt nach 1 s immer
+  zu spät. Dafür das Fenster einmal öffnen und schließen bzw. den Taster (oder die
+  Anlerntaste) einmal drücken; die Anlerntaste geht bei beiden, auch wenn das
+  Gerät schon angelernt ist. Wartende Aufträge überstehen Neustarts; ein
+  Werksreset des Geräts verwirft sie.
 - Diagnosesensor `sensor.<basis>_verknuepfungen` an jedem Gerät: Zustand ist die
   Zahl der vollständigen Verknüpfungen (beide Richtungen quittiert), Attribut
   `partner` die Namen der Partner, Attribut `ausstehend` je unfertigem Paar

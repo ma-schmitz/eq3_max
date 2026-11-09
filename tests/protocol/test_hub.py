@@ -1380,44 +1380,95 @@ async def test_fast_send_blocked_behind_zs_expires_and_waits_again_without_airti
         await until(lambda: len(sent(cul)) == 4, timeout=2.0)  # the set command's attempts
         await asyncio.sleep(0.1)
         assert fast(cul) == [] and all(l[8:10] == "40" for l in sent(cul))
-        assert h._fast_misses == {}  # nothing went on air: no miss counted
     finally:
         await h.stop()
 
 
-async def test_fast_no_ack_waits_again_without_retries_then_zs_on_third_attempt():
+async def test_fast_no_ack_waits_again_without_retries_and_stays_fast():
+    """An unheard fast send is one attempt, no retries, and the next telegram brings the
+    next fast attempt: no Zs for a sleeper, its listening moment is over long before a
+    wake-up preamble ends."""
     cul = FakeCul()
     h = _fast_hub(cul)
     await _started(h, cul)
     waiting = "wartet auf Ger\u00e4t"
     try:
-        cul.feed(to_us(7))
-        await until(lambda: len(fast(cul)) == 1)
-        await until(lambda: h.devices[FK].link_op(HT_S)["state"] == waiting)
-        await asyncio.sleep(0.15)
-        assert len(fast(cul)) == 1 and sent(cul) == []  # one attempt, no retries
-        cul.feed(to_us(8))
-        await until(lambda: len(fast(cul)) == 2)
-        await until(lambda: h.devices[FK].link_op(HT_S)["state"] == waiting)
+        for counter in (7, 8):
+            cul.feed(to_us(counter))
+            await until(lambda: len(fast(cul)) == counter - 6)
+            await until(lambda: h.devices[FK].link_op(HT_S)["state"] == waiting)
+            await asyncio.sleep(0.15)
+            assert len(fast(cul)) == counter - 6 and sent(cul) == []  # one attempt each, no retries
         cul.feed(to_us(9))
-        await until(lambda: len(sent(cul)) == 1)
-        assert matches(sent(cul)[0], link_frame(FK, HT, 1)) and len(fast(cul)) == 2
-        ack(cul, FK, sent(cul)[0])
+        await until(lambda: len(fast(cul)) == 3)
+        assert matches(fast(cul)[2], link_frame(FK, HT, 1)) and sent(cul) == []
+        ack(cul, FK, fast(cul)[2])  # within the fast ack timeout
         await until(lambda: h.devices[FK].links == [HT_S])
-        assert h._fast_misses == {}
     finally:
         await h.stop()
 
 
-async def test_contact_frame_to_its_thermostat_does_not_trigger():
+async def test_contact_frame_to_its_thermostat_triggers_too():
+    """A contact retrying an unreachable partner (every 6-30 s in the trace of
+    09.11.2026) waits for that partner's answer after each attempt: as good a moment
+    as any to reach it, so every telegram of a sleeper arms the flush."""
     cul = FakeCul()
     h = _fast_hub(cul)
     await _started(h, cul)
     try:
         cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
         await until(lambda: h.devices[FK].window_open is True)
-        await asyncio.sleep(0.2)
-        assert fast(cul) == [] and h.devices[FK].link_op(HT_S)["state"] == "wartet auf Ger\u00e4t"
+        await until(lambda: len(fast(cul)) == 1)
+        assert matches(fast(cul)[0], link_frame(FK, HT, 1))
+    finally:
+        await h.stop()
+
+
+async def test_contact_talking_again_abandons_the_fast_attempt_on_air_and_retries_after():
+    """Trace of 09.11.2026: the partner telegram came 146 ms after the one to us, so the
+    fast send was already on air when the contact transmitted again – it cannot have heard
+    it. Such an attempt is given up at once (no miss counted) and the next flush after the
+    burst sends again instead of finding the operation still pending."""
+    cul = FakeCul()
+    h = _fast_hub(cul, fast_ack_timeout=0.4)
+    await _started(h, cul)
+    waiting = "wartet auf Ger\u00e4t"
+    try:
+        cul.feed(to_us(7))
+        await until(lambda: len(fast(cul)) == 1)
+        assert h.devices[FK].link_op(HT_S)["state"] == "ausstehend"
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        await until(lambda: h.devices[FK].link_op(HT_S)["state"] == waiting, timeout=0.2)  # long before the ack timeout
+        await until(lambda: len(fast(cul)) == 2)
+        ack(cul, FK, fast(cul)[1])
+        await until(lambda: h.devices[FK].links == [HT_S])
+    finally:
+        await h.stop()
+
+
+async def test_contact_burst_to_partners_delays_the_fast_send_until_the_burst_ends():
+    """GitHub #1, trace of 09.11.2026: after its telegram to us the contact talks to each
+    partner (40-110 ms apart) and listens only once the burst is over. A fast send 80 ms
+    after the telegram to us landed in the middle of it and was never acknowledged, so
+    every telegram from or to the sleeper restarts the debounce."""
+    cul = FakeCul()
+    h = _fast_hub(cul)
+    await _started(h, cul)
+    try:
+        cul.feed(to_us(7))
+        await asyncio.sleep(0.04)
+        cul.feed(line(7, 0x04, MsgType.SHUTTER_CONTACT_STATE, FK, 0xA1B00F, 0, "12"))  # partner unknown to us
+        await asyncio.sleep(0.04)
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        await asyncio.sleep(0.03)
+        cul.feed(line(7, 0x00, MsgType.ACK, HT, FK, 0, "0012"))  # the thermostat answers the contact
+        assert fast(cul) == []  # 110 ms in: a flush 80 ms after the first telegram would be out already
+        await until(lambda: len(fast(cul)) == 1)
+        assert matches(fast(cul)[0], link_frame(FK, HT, 1))
+        ack(cul, FK, fast(cul)[0])
+        await until(lambda: h.devices[FK].links == [HT_S])
+        await asyncio.sleep(0.15)
+        assert len(fast(cul)) == 1  # one flush for the whole burst
     finally:
         await h.stop()
 
@@ -1511,18 +1562,16 @@ async def test_push_button_waiting_text(hub):
     ]
 
 
-async def test_zs_fallback_to_contact_without_ack_never_reopens_stick():
+async def test_fast_attempts_to_contact_without_ack_never_reopen_stick():
     cul = FakeCul()
     h = _fast_hub(cul)
     await _started(h, cul)
     reopens = _count_reopens(h)
     try:
-        h._fast_misses[(FK, HT_S)] = 2  # two unheard Zf sends before
-        cul.feed(to_us(7))
-        await until(lambda: len(sent(cul)) == 1)
-        assert matches(sent(cul)[0], link_frame(FK, HT, 1))
-        # no ack, nothing received: all attempts run out
-        await until(lambda: h.devices[FK].link_op(HT_S)["state"] == "wartet auf Ger\u00e4t", timeout=2.0)
+        for counter in (7, 8, 9):
+            cul.feed(to_us(counter))
+            await until(lambda: len(fast(cul)) == counter - 6)
+            await until(lambda: h.devices[FK].link_op(HT_S)["state"] == "wartet auf Ger\u00e4t", timeout=2.0)
         await asyncio.sleep(0.1)
         assert reopens == [] and cul.opened == 1
     finally:
@@ -1698,3 +1747,90 @@ async def test_restored_failed_command_goes_out_once_at_start():
         assert len({l[4:6] for l in sent}) == 2
     finally:
         await h.stop()
+
+
+# --- Week profile (0x10 ConfigWeekProfile) ---
+
+from custom_components.eq3_max.protocol.messages import ProfilePoint as _P  # noqa: E402
+
+FHEM_DAY = [_P(17.0, 360), _P(21.0, 1320), _P(17.0, 1440)]
+FHEM_DAY_STORED = [
+    {"temperature": 17.0, "until": "06:00"},
+    {"temperature": 21.0, "until": "22:00"},
+    {"temperature": 17.0, "until": "24:00"},
+]
+
+
+def wp_frame(dst, day, part, words_hex, msg_type=0x10):
+    body = f"{part << 4 | day:02X}{words_hex}"
+    return f"{(10 + len(body) // 2):02X}??00{msg_type:02X}C0FFEE{dst:06X}00{body}"
+
+
+async def test_set_week_profile_sends_day_and_stores_it_on_ack(hub):
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    assert matches(sent(cul)[0], wp_frame(HT, 2, 0, "444855084520" + "4520" * 4))
+    assert h.devices[HT].week_profile == {}
+    ack(cul, HT, sent(cul)[0])
+    await asyncio.wait_for(task, 1.0)
+    assert h.devices[HT].week_profile == {"Montag": FHEM_DAY_STORED}
+    assert rec.updates[-1].address == HT
+
+
+async def test_set_week_profile_two_parts_then_next_day_in_order(hub):
+    h, cul, rec = hub
+    long_day = [_P(16.0 + i * 0.5, 60 * (i + 1)) for i in range(7)] + [_P(22.0, 1440)]
+    task = asyncio.create_task(h.set_week_profile(HT, {6: FHEM_DAY, 1: long_day}))
+    await until(lambda: len(sent(cul)) == 1)
+    assert matches(sent(cul)[0], wp_frame(HT, 1, 0, "400C" + "4218" + "4424" + "4630" + "483C" + "4A48" + "4C54"))
+    ack(cul, HT, sent(cul)[0])
+    await until(lambda: len(sent(cul)) == 2)
+    assert matches(sent(cul)[1], wp_frame(HT, 1, 1, "5920" * 6))
+    assert h.devices[HT].week_profile == {}  # a day counts once all its parts are acknowledged
+    ack(cul, HT, sent(cul)[1])
+    await until(lambda: "Sonntag" in h.devices[HT].week_profile)
+    await until(lambda: len(sent(cul)) == 3)
+    assert matches(sent(cul)[2], wp_frame(HT, 6, 0, "444855084520" + "4520" * 4))
+    ack(cul, HT, sent(cul)[2])
+    await asyncio.wait_for(task, 1.0)
+    assert list(h.devices[HT].week_profile) == ["Sonntag", "Freitag"]
+    assert h.devices[HT].week_profile["Sonntag"][0] == {"temperature": 16.0, "until": "01:00"}
+
+
+async def test_set_week_profile_nak_raises_and_keeps_the_stored_day(hub):
+    h, cul, rec = hub
+    h.devices[HT].week_profile = {"Montag": FHEM_DAY_STORED}
+    task = asyncio.create_task(h.set_week_profile(HT, {2: [_P(20.0, 1440)], 3: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, HT, sent(cul)[0], ok=False)
+    with pytest.raises(FrameError, match="Montag.*abgelehnt"):
+        await asyncio.wait_for(task, 1.0)
+    await asyncio.sleep(0.1)
+    assert len(sent(cul)) == 1  # Tuesday is not sent any more
+    assert h.devices[HT].week_profile == {"Montag": FHEM_DAY_STORED}
+
+
+async def test_set_week_profile_without_ack_raises_after_the_attempts(hub):
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_week_profile(WT, {0: FHEM_DAY}))
+    with pytest.raises(FrameError, match="Samstag.*nicht quittiert"):
+        await asyncio.wait_for(task, 2.0)
+    # Four unheard attempts count as a deaf stick: the port was reopened meanwhile.
+    lines = [l for l in (cul.all_written + cul.written) if l.startswith("Zs")]
+    assert len(lines) == 4 and all(l[8:10] == "10" for l in lines)
+    assert h.devices[WT].week_profile == {}
+
+
+async def test_set_week_profile_refuses_unknown_sleepers_and_bad_points(hub):
+    h, cul, rec = hub
+    with pytest.raises(FrameError, match="nicht bekannt"):
+        await h.set_week_profile(0x999999, {0: FHEM_DAY})
+    with pytest.raises(FrameError, match="Thermostat"):
+        await h.set_week_profile(FK, {0: FHEM_DAY})
+    with pytest.raises(FrameError, match="24:00"):
+        await h.set_week_profile(HT, {0: [_P(20.0, 600)]})
+    with pytest.raises(FrameError, match="Wochentag"):
+        await h.set_week_profile(HT, {7: FHEM_DAY})
+    await asyncio.sleep(0.05)
+    assert sent(cul) == []

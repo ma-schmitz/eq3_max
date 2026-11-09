@@ -137,6 +137,9 @@ class MaxDevice:
     # Link operations not acknowledged yet: dicts with partner (serial), address,
     # device_type, op (add/remove) and state (ausstehend/wartet auf Geraet/fehlgeschlagen).
     pending_links: list[dict[str, Any]] = field(default_factory=list)
+    # Last acknowledged week profile by weekday name (WEEKDAYS): points as dicts with
+    # temperature and until (hh:mm, 24:00 = day end). Devices cannot report it.
+    week_profile: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     # Radio module the commands to this device go through ("" = the main module).
     radio: str = ""
     # Last RSSI per radio module that heard the device ("" = the main module).
@@ -447,6 +450,11 @@ class MaxDevice:
             )
         values["device_type"] = DeviceType(values["device_type"])
         values["radio"] = str(values.get("radio") or "")
+        values["week_profile"] = {
+            str(day): [dict(point) for point in points]
+            for day, points in (values.get("week_profile") or {}).items()
+            if day in WEEKDAYS and isinstance(points, list)
+        }
         values["rssi_by_radio"] = {str(k): float(v) for k, v in (values.get("rssi_by_radio") or {}).items()}
         for key in ("mode", "pending_mode"):
             if values.get(key) is not None:

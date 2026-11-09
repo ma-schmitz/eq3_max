@@ -51,3 +51,46 @@ unlink:
       selector:
         device:
           integration: eq3_max
+
+set_week_profile:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: eq3_max
+          multiple: true
+    weekday:
+      required: true
+      example: "Montag"
+      selector:
+        select:
+          multiple: true
+          options:
+            - Samstag
+            - Sonntag
+            - Montag
+            - Dienstag
+            - Mittwoch
+            - Donnerstag
+            - Freitag
+            - alle
+    profile:
+      required: true
+      example: "[{temperature: 17, until: '06:00'}, {temperature: 21, until: '22:00'}, {temperature: 17}]"
+      selector:
+        object:
+
+copy_week_profile:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: eq3_max
+    target_device_id:
+      required: true
+      selector:
+        device:
+          integration: eq3_max
+          multiple: true

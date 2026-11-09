@@ -15,8 +15,13 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   ```
 - **Fensterkontakte und Eco-Taster schlafen.** Aufträge an sie warten, bis sie sich melden:
   Zustand „wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen“ (Taster:
-  einmal drücken). Gesendet wird dann sofort ohne Weckpräambel; nach zwei Fehlversuchen mit
-  Präambel.
+  einmal drücken; bei beiden geht auch die Anlerntaste, das Gerät bleibt angelernt). Gesendet
+  wird ohne Weckpräambel, 80 ms nach dem letzten Telegramm des Geräts – ein Versuch je
+  Gelegenheit, denn ein Kontakt hört nach eigenem Senden nur einen Moment zu. Mehrere
+  Gelegenheiten je Ereignis sind normal: Der Kontakt meldet sich bei der Zentrale, dann bei
+  jedem Partner und bei unerreichbaren Partnern minutenlang immer wieder. Bleibt der Auftrag
+  mehrere Ereignisse lang „wartet auf …“, hilft der Telegramm-Trace
+  ([Betrieb](betrieb.md#diagnose)).
 - Zustände in `ausstehend`: ausstehend · wartet auf … · fehlgeschlagen (wird wiederholt) ·
   **fehlgeschlagen (abgelehnt)** (Gerät hat abgelehnt, keine automatische Wiederholung) ·
   einseitig (nur eine Seite kennt die andere).

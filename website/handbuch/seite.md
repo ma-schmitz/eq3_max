@@ -53,6 +53,12 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
     den Satz, als **ein** Telegramm. „Verwerfen“ setzt das Formular zurück.
 - Die Seite aktualisiert sich von selbst. Während man in ein Feld tippt, wartet die
   Aktualisierung, bis man es verlässt.
+- **Wochenprogramm** (nur Thermostate, ab 0.6.0): oben die zuletzt quittierten Tage („nicht
+  geschrieben“, solange die Integration den Tag nie geschrieben hat; die Geräte melden ihr
+  Programm nicht), „In den Editor“ übernimmt einen Tag. Darunter der Editor: Tage ankreuzen
+  (oder „alle“), Punkte mit Temperatur und Bis-Uhrzeit (der letzte gilt bis 24:00, bis zu 13),
+  **„Schreiben“** wartet auf die Quittungen des Geräts. Zuletzt „Auf andere Thermostate
+  kopieren“ mit dem gespeicherten Programm.
 
 Nicht auf der Seite: Werksreset ([Dienste](dienste.md)), Namen und Bereiche (wie gewohnt in HA),
 Wochenprofile.

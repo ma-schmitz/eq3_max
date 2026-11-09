@@ -45,6 +45,8 @@ def by_serial(section):
         {"type": "eq3_max/unlink", "device_id": "x", "partner_device_id": "y"},
         {"type": "eq3_max/pair", "entry_id": "x"},
         {"type": "eq3_max/set_config", "device_id": "x", "kind": "temp", "values": {"komfort": 21}},
+        {"type": "eq3_max/set_week_profile", "device_id": "x", "weekday": ["Montag"], "profile": [{"temperature": 21}]},
+        {"type": "eq3_max/copy_week_profile", "device_id": "x", "target_device_id": ["y"]},
     ],
 )
 async def test_commands_require_admin(hass, setup_entry, fake_hub, hass_ws_client, hass_read_only_access_token, msg):
@@ -368,3 +370,51 @@ async def test_set_config_protocol_error_german_without_detail(hass, setup_entry
     reply = await call(client, type="eq3_max/set_config", device_id=device_id(hass, HT), kind="temp", values={"komfort": 21})
     assert not reply["success"] and reply["error"]["message"] == "Ung\u00fcltiger Wert"
     assert "comfort must be" in caplog.text
+
+
+# --- Week profile ---
+
+
+async def test_set_week_profile_over_websocket(hass, setup_entry, fake_hub, hass_ws_client):
+    from custom_components.eq3_max.protocol.messages import ProfilePoint
+
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(
+        client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Montag", "alle"],
+        profile=[{"temperature": 17, "until": "06:00"}, {"temperature": 21}],
+    )
+    assert reply["success"], reply
+    [(address, plan)] = hub.week_profiles
+    assert address == HT and sorted(plan) == [0, 1, 2, 3, 4, 5, 6]
+    assert plan[2] == [ProfilePoint(17.0, 360), ProfilePoint(21.0, 1440)]
+    assert reply["result"]["week_profile"]["Montag"][0] == {"temperature": 17.0, "until": "06:00"}
+
+    reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, FK), weekday=["Montag"], profile=[{"temperature": 21}])
+    assert not reply["success"] and reply["error"]["code"] == "invalid" and "Thermostat" in reply["error"]["message"]
+    reply = await call(
+        client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Montag"],
+        profile=[{"temperature": 21, "until": "06:07"}, {"temperature": 21}],
+    )
+    assert not reply["success"] and "5-Minuten" in reply["error"]["message"]
+    reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Blursday"], profile=[{"temperature": 21}])
+    assert not reply["success"] and "Wochentag" in reply["error"]["message"]
+    assert len(hub.week_profiles) == 1
+
+    hub.week_profile_error = "ht-bad-unten: Wochenprogramm Montag nicht quittiert (no_ack)"
+    reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Montag"], profile=[{"temperature": 21}])
+    assert not reply["success"] and reply["error"]["code"] == "failed" and "nicht quittiert" in reply["error"]["message"]
+
+
+async def test_copy_week_profile_over_websocket(hass, setup_entry, fake_hub, hass_ws_client):
+    from custom_components.eq3_max.protocol.messages import ProfilePoint
+
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(client, type="eq3_max/copy_week_profile", device_id=device_id(hass, HT), target_device_id=[device_id(hass, WT)])
+    assert not reply["success"] and "kein Wochenprogramm" in reply["error"]["message"]
+    hub.devices[HT].week_profile = {"Sonntag": [{"temperature": 19.0, "until": "24:00"}]}
+    reply = await call(client, type="eq3_max/copy_week_profile", device_id=device_id(hass, HT), target_device_id=[device_id(hass, WT)])
+    assert reply["success"], reply
+    assert hub.week_profiles == [(WT, {1: [ProfilePoint(19.0, 1440)]})]
+    assert reply["result"]["targets"] == [SERIALS[WT]]

@@ -7,7 +7,7 @@ import contextlib
 import logging
 import time
 from collections import deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -21,6 +21,7 @@ from .devices import (
     LINK_REJECTED,
     LINK_REMOVE,
     LINK_WAITING,
+    WEEKDAYS,
     MaxDevice,
 )
 from .messages import (
@@ -29,9 +30,12 @@ from .messages import (
     FrameError,
     Mode,
     MsgType,
+    ProfilePoint,
+    WEEK_PROFILE_DAYS,
     build_add_link_partner,
     build_config_temperatures,
     build_config_valve,
+    build_config_week_profile,
     build_pair_pong,
     build_remove_link_partner,
     build_reset,
@@ -47,11 +51,13 @@ from .messages import (
     decode_until,
     decode_wall_thermostat_control,
     decode_wall_thermostat_state,
+    encode_week_profile_day,
+    format_until,
     link_allowed,
     normalize_temperature,
 )
 from .scheduler import PRIO_COMMAND, PRIO_REPLY, Command, Outcome, RadioScheduler
-from .transport import CulTransport
+from .transport import TRACE, CulTransport
 
 _LOGGER = logging.getLogger(__name__)
 DUPLICATE_WINDOW_S = 5.0
@@ -62,7 +68,6 @@ RESET_MARGIN_S = 5.0
 SLEEPER_DEBOUNCE_S = 0.08
 FAST_DEADLINE_S = 0.3
 FAST_ACK_TIMEOUT_S = 0.5
-FAST_MISSES_BEFORE_ZS = 2
 
 
 # What a link waiting for a sleeping device shows, by the sleeper's type.
@@ -256,13 +261,12 @@ class MaxHub:
         self._suspects: dict[int, str] = {}
         self._silent: set[int] = set()
         # Cross-module duplicates: (src, counter, type, payload) -> (radio id, time).
-        self._heard: dict[tuple[int, int, int, bytes], tuple[str, float]] = {}
+        self._heard: dict[tuple[int, int, int, int, bytes], tuple[str, float]] = {}
         self._sleeper_debounce = sleeper_debounce
         self._fast_deadline = fast_deadline
         self._fast_ack_timeout = fast_ack_timeout
         self._flush_handles: dict[int, asyncio.TimerHandle] = {}
         # Unheard fast sends per (device address, partner serial) in a row.
-        self._fast_misses: dict[tuple[int, str], int] = {}
 
     # --- radio modules ---------------------------------------------------------
 
@@ -455,6 +459,59 @@ class MaxHub:
         self._notify(dev)
         self._submit_config(dev, kind, dict(dev.pending_config[kind]), dev.assumed_factory(kind, (key,)))
 
+    async def _await_command(self, cmd: Command) -> Outcome:
+        """Submit and wait for the command's outcome."""
+        done: asyncio.Future[Outcome] = asyncio.get_running_loop().create_future()
+
+        def finish(_ok: bool) -> None:
+            if not done.done():
+                done.set_result(cmd.outcome or Outcome.NOT_SENT)
+
+        cmd.on_done = finish
+        self._submit(cmd)
+        return await done
+
+    async def set_week_profile(self, address: int, days: Mapping[int, Sequence[ProfilePoint]]) -> None:
+        """Write whole days of the week profile (0 = Saturday ... 6 = Friday) to a
+        thermostat: one telegram per part, acknowledged one after the other. The stored
+        profile follows each acknowledged day. Raises FrameError (German) when the device
+        refuses or stays silent; the remaining days are then not sent."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError("Ger\u00e4t ist dem Funkmodul nicht bekannt")
+        if not dev.is_climate:
+            raise FrameError("Nur Thermostate haben ein Wochenprogramm")
+        encoded: dict[int, list[bytes]] = {}
+        for day, points in days.items():
+            if not 0 <= day < WEEK_PROFILE_DAYS:
+                raise FrameError(f"Wochentag muss 0 (Samstag) bis 6 (Freitag) sein, nicht {day}")
+            try:
+                encoded[day] = encode_week_profile_day(points)
+            except ValueError as err:
+                raise FrameError(f"{WEEKDAYS[day]}: {err}") from err
+        name = dev.name or dev.serial
+        for day in sorted(encoded):
+            for part, words in enumerate(encoded[day]):
+                outcome = await self._await_command(
+                    Command(
+                        dst=address,
+                        build=lambda c, d=day, p=part, w=words: build_config_week_profile(
+                            c, self.address, address, day=d, part=p, words=w
+                        ),
+                        key=f"wp:{address}:{day}:{part}",
+                        deaf_probe=True,
+                    )
+                )
+                if outcome is Outcome.NAK:
+                    raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} abgelehnt")
+                if outcome is not Outcome.ACKED:
+                    raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} nicht quittiert ({outcome.value})")
+            dev.week_profile[WEEKDAYS[day]] = [
+                {"temperature": point.temperature, "until": format_until(point.until)} for point in days[day]
+            ]
+            _LOGGER.info("MAX! %s (%s): week profile %s acknowledged", name, dev.serial, WEEKDAYS[day])
+            self._notify(dev)
+
     def set_config_set(self, address: int, kind: str, values: dict[str, Any]) -> list[str]:
         """Change several values of one set: one telegram with the whole set. Returns
         the keys sent along as assumed factory settings."""
@@ -526,7 +583,6 @@ class MaxHub:
     def _change_link(self, a: int, b: int, op: str) -> None:
         for target, partner in plan_link(self.devices, a, b, op):
             current = target.link_op(partner.serial)
-            self._fast_misses.pop((target.address, partner.serial), None)
             if (
                 op == LINK_REMOVE
                 and current is not None
@@ -589,14 +645,26 @@ class MaxHub:
         if dev is not None:
             self._flush_sleeper(dev)
 
+    def _abandon_fast_attempts(self, dev: MaxDevice) -> None:
+        """Give up fast link attempts for a sleeper that just transmitted (queued ones
+        and the one on air): the next flush after its burst sends afresh."""
+        scheduler = self._scheduler_for(dev.address)
+        for entry in dev.pending_links:
+            if entry["state"] != LINK_PENDING:
+                continue
+            key = self._link_key(dev, entry["address"])
+            if scheduler.cancel_key(key) or scheduler.abandon_inflight(key):
+                entry["state"] = LINK_WAITING
+                TRACE.info("sleeper %06X transmits: fast attempt %s given up", dev.address, key)
+
     def _flush_sleeper(self, dev: MaxDevice) -> None:
-        """The sleeper just talked to us and listens briefly: send what waits for it.
-        Fast (Zf, no preamble) first; after FAST_MISSES_BEFORE_ZS unheard fast sends of
-        an operation with the preamble (Zs) like FHEM."""
+        """The sleeper just talked and listens briefly: send what waits for it, fast (Zf,
+        no preamble). Never with the 1 s wake-up preamble: a contact listens only for a
+        moment after its own telegram, a Zs frame arrives after that moment every time
+        (twelve unheard Zs attempts on 09.11.2026) and blocks the next chances meanwhile."""
         for entry in list(dev.pending_links):
             if entry["state"] in (LINK_WAITING, LINK_FAILED):
-                misses = self._fast_misses.get((dev.address, entry["partner"]), 0)
-                self._submit_link(dev, entry, awake=True, fast=misses < FAST_MISSES_BEFORE_ZS)
+                self._submit_link(dev, entry, awake=True, fast=True)
 
     def _submit_link(
         self, dev: MaxDevice, entry: dict[str, Any], *, awake: bool = False, fast: bool = False
@@ -626,10 +694,8 @@ class MaxHub:
 
     def _link_done(self, dev: MaxDevice, partner: str, op: str, cmd: Command) -> None:
         name = dev.name or dev.serial
-        key = (dev.address, partner)
         if cmd.outcome is Outcome.ACKED:
             dev.commit_link(partner, op)
-            self._fast_misses.pop(key, None)
             _LOGGER.info("MAX! %s (%s): link %s %s acknowledged", name, dev.serial, op, partner)
             self._notify_pair(dev, partner)
             return
@@ -639,13 +705,10 @@ class MaxHub:
         if cmd.outcome is Outcome.NAK:
             # The device refused: no automatic resend, only a new request.
             dev.set_link_state(partner, op, LINK_REJECTED)
-            self._fast_misses.pop(key, None)
             _LOGGER.warning("MAX! %s (%s): link %s %s rejected", name, dev.serial, op, partner)
         elif dev.is_sleeper:
             # Asleep again (or never reached): the next telegram is the next chance.
             dev.set_link_state(partner, op, LINK_WAITING)
-            if cmd.fast and cmd.outcome is Outcome.NO_ACK:
-                self._fast_misses[key] = self._fast_misses.get(key, 0) + 1
             _LOGGER.info(
                 "MAX! %s (%s): link %s %s not acknowledged (%s), waiting for the next telegram",
                 name, dev.serial, op, partner, cmd.outcome.value if cmd.outcome else "?",
@@ -689,9 +752,6 @@ class MaxHub:
                     self._cancel_key(f"{prefix}:{dev.address}")
                 for entry in dev.pending_links:
                     self._cancel_key(self._link_key(dev, entry["address"]))
-                self._fast_misses = {
-                    k: v for k, v in self._fast_misses.items() if k[0] != dev.address and k[1] != dev.serial
-                }
                 # The reset device is gone: drop it from what the others show and have
                 # pending. Partners that have it in their radio link table get a
                 # RemoveLinkPartner (address/type captured from the removed device).
@@ -897,7 +957,7 @@ class MaxHub:
             return False
         now = self._now()
         self._heard = {k: v for k, v in self._heard.items() if now - v[1] < CROSS_RADIO_WINDOW_S}
-        key = (frame.src, frame.counter, frame.msg_type, bytes(frame.payload))
+        key = (frame.src, frame.dst, frame.counter, frame.msg_type, bytes(frame.payload))
         first = self._heard.get(key)
         if first is not None and first[0] != radio:
             dev = self.devices.get(frame.src)
@@ -980,12 +1040,26 @@ class MaxHub:
         if status and dev.failed_config_kinds():
             self._submit_pending_config(dev, dev.failed_config_kinds())
         if dev.is_sleeper:
-            # Only telegrams to us (status, acks) keep the sleeper listening for an
-            # answer; not those to its linked thermostats.
-            if frame.dst == self.address:
-                self._schedule_flush(dev)
+            if not (kind == MsgType.ACK and frame.dst == self.address):
+                # It transmits instead of listening: a fast attempt on air is moot.
+                self._abandon_fast_attempts(dev)
+            # A sleeper listens once its burst is over: the telegram to us, then one to
+            # each partner (40-110 ms apart, trace of 09.11.2026) and their answers. Every
+            # telegram from it restarts the debounce, so the flush lands after the last one;
+            # a retry towards an unreachable partner is a chance of its own.
+            if dev.pending_links:
+                TRACE.info(
+                    "sleeper %06X talked to %s (type %02X): flush of its link operations %.0f ms after its last telegram",
+                    dev.address, "us" if frame.dst == self.address else f"{frame.dst:06X}", kind,
+                    self._sleeper_debounce * 1000,
+                )
+            self._schedule_flush(dev)
         elif status:
             self._resubmit_failed_links(dev)
+        partner = self.devices.get(frame.dst)
+        if partner is not None and partner is not dev and partner.is_sleeper:
+            # A partner's answer belongs to the sleeper's burst as well.
+            self._schedule_flush(partner)
         self._notify(dev)
 
     @staticmethod

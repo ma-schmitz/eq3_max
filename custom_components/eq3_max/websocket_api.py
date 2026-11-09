@@ -19,8 +19,9 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
@@ -36,7 +37,7 @@ from .protocol.hub import LINK_ONE_SIDED, plan_link
 from .protocol.hub import link_status as hub_link_status
 from .protocol.messages import DeviceType, FrameError
 from .radios import describe, radio_items, radio_names
-from .services import change_link, resolve_max_device
+from .services import async_copy_week_profile, async_set_week_profile, change_link, resolve_max_device
 
 _LOGGER = logging.getLogger(__name__)
 PAIRING_SECONDS = 60
@@ -65,7 +66,10 @@ TYPE_NAMES = {
 
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
-    for command in (ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_radio):
+    for command in (
+        ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_radio,
+        ws_set_week_profile, ws_copy_week_profile,
+    ):
         websocket_api.async_register_command(hass, command)
 
 
@@ -228,6 +232,7 @@ def _device(ctx: _Context, dev: MaxDevice) -> dict[str, Any]:
         "links": links,
         "candidates": _candidates(ctx, dev),
         "config": _config(dev),
+        "week_profile": dev.week_profile,
     }
 
 
@@ -447,3 +452,51 @@ def ws_set_radio(hass: HomeAssistant, connection: websocket_api.ActiveConnection
         _error(connection, msg, err)
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eq3_max/set_week_profile",
+        vol.Required("device_id"): vol.All(cv.ensure_list, [str]),
+        vol.Required("weekday"): vol.All(cv.ensure_list, [str]),
+        vol.Required("profile"): [dict],
+    }
+)
+@websocket_api.async_response
+async def ws_set_week_profile(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Write a week profile; waits for the acknowledgements (seconds to minutes)."""
+    try:
+        devices = await async_set_week_profile(hass, msg["device_id"], msg["weekday"], msg["profile"])
+    except (ServiceValidationError, ValueError) as err:
+        _error(connection, msg, err)
+        return
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], ERR_FAILED, str(err))
+        return
+    connection.send_result(msg["id"], {"week_profile": devices[0].week_profile if devices else {}})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eq3_max/copy_week_profile",
+        vol.Required("device_id"): str,
+        vol.Required("target_device_id"): vol.All(cv.ensure_list, [str]),
+    }
+)
+@websocket_api.async_response
+async def ws_copy_week_profile(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    try:
+        targets = await async_copy_week_profile(hass, msg["device_id"], msg["target_device_id"])
+    except (ServiceValidationError, ValueError) as err:
+        _error(connection, msg, err)
+        return
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], ERR_FAILED, str(err))
+        return
+    connection.send_result(msg["id"], {"targets": [t.serial for t in targets]})

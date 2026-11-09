@@ -37,6 +37,7 @@ class Outcome(Enum):
     SENT = "sent"  # sent, no ack expected
     NOT_SENT = "not_sent"  # the stick did not take the frame (last attempt)
     EXPIRED = "expired"  # deadline passed or stale before sending
+    ABANDONED = "abandoned"  # on air, but given up: the device transmitted instead of listening
     ERROR = "error"  # encoding or unexpected failure
 
 
@@ -102,6 +103,8 @@ class RadioScheduler:
         # ACK can never match commands of two modules at once.
         self._next_counter = next_counter
         self._inflight: tuple[int, int] | None = None
+        self._inflight_cmd: Command | None = None
+        self._abandoned = False
         self._ack_event = asyncio.Event()
         self._acked: bool | None = None
         self._lovf = False
@@ -131,6 +134,17 @@ class RadioScheduler:
     def now(self) -> float:
         """Current time on the scheduler clock (the reference for Command.deadline)."""
         return self._clock()
+
+    def abandon_inflight(self, key: str) -> bool:
+        """Give up the fast command with this key while it waits for its acknowledgement
+        (the device started transmitting, so it cannot have listened). Returns whether
+        there was one."""
+        cmd = self._inflight_cmd
+        if cmd is None or cmd.key != key or not cmd.fast:
+            return False
+        self._abandoned = True
+        self._ack_event.set()
+        return True
 
     def cancel_key(self, key: str) -> int:
         """Drop waiting commands with this key (no on_done call); returns how many."""
@@ -211,7 +225,9 @@ class RadioScheduler:
         ack_timeout = self._ack_timeout if cmd.ack_timeout is None else cmd.ack_timeout
         self._acked = None
         self._lovf = False
+        self._abandoned = False
         self._ack_event.clear()
+        self._inflight_cmd = cmd
         try:
             while True:
                 if self._wait_ready is not None:
@@ -251,6 +267,9 @@ class RadioScheduler:
                 except TimeoutError:
                     if self._acked is not None:
                         return self._ack_result(cmd)
+                    if self._abandoned:
+                        cmd.outcome = Outcome.ABANDONED
+                        return False
                     attempts += 1
                     if attempts > retries:
                         _LOGGER.warning("no ack from %06X for counter %02X", frame.dst, frame.counter)
@@ -259,11 +278,15 @@ class RadioScheduler:
                     continue
                 if self._acked is not None:
                     return self._ack_result(cmd)
+                if self._abandoned:
+                    cmd.outcome = Outcome.ABANDONED
+                    return False
                 # LOVF: wait, then resend the same frame without counting an attempt.
                 # An ack arriving during this delay is caught by the check at the loop top.
                 await asyncio.sleep(self._lovf_delay)
         finally:
             self._inflight = None
+            self._inflight_cmd = None
 
     def _ack_result(self, cmd: Command) -> bool:
         ok = bool(self._acked)

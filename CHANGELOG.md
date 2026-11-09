@@ -5,6 +5,44 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.0] – 2026-11-09
+
+### Hinzugefügt
+
+- **Wochenprogramme schreiben** (GitHub #2): Dienst `eq3_max.set_week_profile` schreibt ganze
+  Tage (bis zu 13 Punkte „Temperatur bis Uhrzeit“, 5-Minuten-Schritte, letzter Punkt bis
+  24:00) auf ein oder mehrere Thermostate und wartet auf die Quittungen (Telegramm 0x10
+  `ConfigWeekProfile`, je Tag ein oder zwei Teile, wie FHEM). `eq3_max.copy_week_profile`
+  überträgt das für ein Thermostat gespeicherte Programm auf andere. Die Geräte melden ihr
+  Programm nicht; die Integration merkt sich die zuletzt quittierten Tage je Gerät
+  (Diagnose, Seite „eQ-3 MAX!“ als `week_profile`).
+- Seite „eQ-3 MAX!“: Reiter **Wochenprogramm** im Seitenfenster eines Thermostats mit den
+  gespeicherten Tagen, einem Editor (Tage ankreuzen, Punkte mit Temperatur und Bis-Uhrzeit,
+  „In den Editor“ übernimmt einen gespeicherten Tag) und „Auf andere Thermostate kopieren“;
+  WebSocket-Befehle `eq3_max/set_week_profile` und `eq3_max/copy_week_profile`.
+- Telegramm-Trace: der Logger `custom_components.eq3_max.trace` protokolliert auf Stufe
+  `info` jede Zeile zum und vom Funkmodul (`-> Zs…`, `<- Z…`) und das Sendefenster schlafender
+  Geräte – das Log, das bei „Gerät reagiert nicht“ gebraucht wird. Einschalten mit
+  `logger: logs: custom_components.eq3_max: debug` (oder nur den Trace-Logger auf `info`).
+  Bewusst `info`, weil Home Assistant OS keine `debug`-Zeilen in `home-assistant.log` schreibt.
+
+### Geändert
+
+- Verknüpfung mit Fensterkontakt oder Taster (GitHub #1): Der schnelle Sendeversuch (`Zf`)
+  ging 80 ms nach dem Telegramm des Kontakts an uns raus – mitten in dessen Burst, denn der
+  Kontakt meldet sich danach noch bei jedem Partner-Thermostat (40–110 ms Abstand, Mitschnitt
+  vom 09.11.2026) und hört erst danach zu. Jetzt startet jedes Telegramm vom oder zum Kontakt
+  die Wartezeit neu, der Versuch geht also nach dem letzten Telegramm des Bursts raus; auch ein
+  Wiederholungsversuch des Kontakts bei einem unerreichbaren Partner ist eine Gelegenheit.
+  Sendet der Kontakt, während unser schneller Versuch noch auf Quittung wartet, wird der
+  Versuch sofort aufgegeben (er kann nicht gehört worden sein) und nach dem Burst neu
+  gesendet. Kein Rückfall auf die Weckpräambel (`Zs`) mehr: Ein Kontakt hört nach eigenem
+  Senden nur einen Moment zu, ein `Zs`-Telegramm kommt nach seiner 1-s-Präambel immer zu
+  spät (zwölf Versuche am 09.11.2026 ohne Quittung) und blockiert dabei die nächsten
+  Gelegenheiten. Am Haus bestätigt: Verknüpfung nach einem Fenster-Ereignis quittiert.
+- Ein zweites Funkmodul erkennt dieselbe Aussendung jetzt auch am Ziel (Kontakt an zwei
+  Partner mit gleichem Zähler und Inhalt sind zwei Telegramme).
+
 ### Dokumentation
 
 - MAX! Cube mit a-culfw: in zwei weiteren Installationen mit geflashten Cubes bestätigt

@@ -69,6 +69,7 @@ async def test_full_flow_with_json(hass, tmp_path):
         "config": FACTORY_CONFIG, "config_source": {key: "werksvorgabe" for key in FACTORY_CONFIG},
         # Links from the export (none here); pending link operations stay out.
         "links": [],
+        "week_profile": {},
     }
     assert r["result"].unique_id == "C0FFEE"
 

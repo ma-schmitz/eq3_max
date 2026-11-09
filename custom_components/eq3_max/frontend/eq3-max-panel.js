@@ -18,6 +18,7 @@ const HVAC_LABELS = { off: "Aus" };
 const TONE_COLORS = {
   heat: "var(--e3-heat)", open: "var(--e3-open)", alert: "var(--e3-error)", off: "var(--e3-muted)", idle: "var(--e3-accent)",
 };
+const WP_DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const SOURCE_LABELS = { homegear: "Homegear", werksvorgabe: "Werksvorgabe", gesetzt: "gesetzt" };
 const LINK_LABELS = {
   pending: "ausstehend",
@@ -253,6 +254,14 @@ const STYLE = `
   .setfoot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
   .confirm { border: 1px solid var(--e3-warn); border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
   .confirm ul { margin: 6px 0; padding-left: 20px; }
+  .wp-day { display: flex; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--e3-divider); font-size: 14px; }
+  .wp-day .wp-name { width: 92px; font-weight: 500; }
+  .wp-days { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 4px 0; }
+  .wp-check { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; cursor: pointer; }
+  .wp-point { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--e3-divider); flex-wrap: wrap; }
+  .wp-point .ctl { display: flex; align-items: center; gap: 6px; }
+  .wp-point input[type=number] { width: 80px; text-align: right; }
+  .wp-point input[type=text] { width: 68px; text-align: center; }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; max-width: 90%;
     background: var(--e3-card); color: var(--primary-text-color); border-radius: 10px; padding: 10px 16px;
@@ -377,6 +386,7 @@ class Eq3MaxPanel extends HTMLElement {
     this._pairingUntil = {}; // entry_id -> ms
     this._toast = null;
     this._narrow = false;
+    this._wpDrafts = {}; // serial -> {days, points, targets}
   }
 
   set hass(hass) {
@@ -792,6 +802,7 @@ class Eq3MaxPanel extends HTMLElement {
     const entry = this._data.entries.find((e) => e.entry_id === this._selected.entryId);
     const available = [["links", "Verknüpfungen"]];
     if (dev.config.length > 0) available.push(["config", "Konfiguration"]);
+    if (dev.type === "heating_thermostat" || dev.type === "wall_thermostat") available.push(["week", "Wochenprogramm"]);
     if (isMulti(entry)) available.push(["radio", "Funkmodul"]);
     if (!available.some(([key]) => key === this._tab)) this._tab = "links";
     const tabs = available.length > 1
@@ -818,9 +829,186 @@ class Eq3MaxPanel extends HTMLElement {
         tabs,
         h("div", { class: "body" },
           this._tab === "config" ? this._renderConfig(dev)
-            : this._tab === "radio" ? this._renderRadio(entry, dev)
+            : this._tab === "week" ? this._renderWeekProfile(entry, dev)
+              : this._tab === "radio" ? this._renderRadio(entry, dev)
               : this._renderLinks(dev)),
       ),
+    ];
+  }
+
+  // --- Wochenprogramm ---
+
+  _wpDraft(dev) {
+    if (!this._wpDrafts[dev.serial]) {
+      this._wpDrafts[dev.serial] = {
+        days: new Set(),
+        points: [{ temperature: "17", until: "06:00" }, { temperature: "21", until: "22:00" }, { temperature: "17", until: "" }],
+        targets: new Set(),
+      };
+    }
+    return this._wpDrafts[dev.serial];
+  }
+
+  _wpValidate(points) {
+    let last = -1;
+    for (let i = 0; i < points.length; i++) {
+      const t = Number(String(points[i].temperature).replace(",", "."));
+      if (!Number.isFinite(t) || t < 4.5 || t > 30.5 || Math.round(t * 2) !== t * 2) {
+        return `Punkt ${i + 1}: Temperatur muss zwischen 4,5 und 30,5 °C in 0,5-Schritten liegen`;
+      }
+      if (i === points.length - 1) break;
+      const m = /^(\d{1,2}):(\d{2})$/.exec(points[i].until || "");
+      if (!m) return `Punkt ${i + 1}: Bis-Uhrzeit fehlt`;
+      const minutes = Number(m[1]) * 60 + Number(m[2]);
+      if (minutes % 5) return `Punkt ${i + 1}: Bis-Uhrzeit in 5-Minuten-Schritten`;
+      if (minutes <= last) return `Punkt ${i + 1}: Bis-Uhrzeiten müssen aufsteigend sein`;
+      if (minutes >= 24 * 60) return `Punkt ${i + 1}: nur der letzte Punkt gilt bis 24:00`;
+      last = minutes;
+    }
+    return null;
+  }
+
+  _renderWeekProfile(entry, dev) {
+    const draft = this._wpDraft(dev);
+    const key = `wp:${dev.serial}`;
+    const busy = this._busy.has(key) || this._busy.has(`${key}:copy`);
+    const stored = dev.week_profile || {};
+    const fmt = (p) => `${plainNum(p.temperature)} °C bis ${p.until}`;
+
+    // Stored days (what the device acknowledged last).
+    const storedRows = WP_DAYS.map((day) => h("div", { class: "wp-day" },
+      h("span", { class: "wp-name" }, day),
+      stored[day]
+        ? h("span", { class: "grow" }, stored[day].map(fmt).join(" · "))
+        : h("span", { class: "grow sub" }, "nicht geschrieben"),
+      stored[day]
+        ? h("button", {
+          class: "action", disabled: busy,
+          onclick: () => {
+            draft.points = stored[day].map((p, i) => ({
+              temperature: plainNum(p.temperature), until: i === stored[day].length - 1 ? "" : p.until,
+            }));
+            draft.days = new Set([day]);
+            this._render();
+          },
+        }, "In den Editor")
+        : null));
+
+    // Editor.
+    const dayBoxes = WP_DAYS.map((day) => {
+      const box = h("input", { type: "checkbox", "data-focus": `${key}:d:${day}` });
+      box.checked = draft.days.has(day);
+      box.addEventListener("change", () => { box.checked ? draft.days.add(day) : draft.days.delete(day); update(); });
+      return h("label", { class: "wp-check" }, box, day.slice(0, 2));
+    });
+    const allButton = h("button", {
+      class: "action", type: "button",
+      onclick: () => { draft.days = draft.days.size === WP_DAYS.length ? new Set() : new Set(WP_DAYS); this._render(); },
+    }, draft.days.size === WP_DAYS.length ? "keinen" : "alle");
+
+    const pointRows = draft.points.map((point, i) => {
+      const lastPoint = i === draft.points.length - 1;
+      const temp = h("input", {
+        type: "number", min: "4.5", max: "30.5", step: "0.5", inputmode: "decimal",
+        "data-focus": `${key}:t:${i}`, "aria-label": `Temperatur Punkt ${i + 1}`,
+      });
+      temp.value = String(point.temperature);
+      temp.addEventListener("input", () => { point.temperature = temp.value; update(); });
+      let until;
+      if (lastPoint) {
+        until = h("span", { class: "sub" }, "bis 24:00");
+      } else {
+        // Textfeld statt type=time: ein Zeitwähler verliert eine halb eingegebene Zeit, wenn
+        // die Seite wegen eines Telegramms neu aufgebaut wird; der Entwurf hält jeden Tastendruck.
+        until = h("input", {
+          type: "text", inputmode: "numeric", placeholder: "hh:mm", maxlength: "5", pattern: "[0-9]{1,2}:[0-9]{2}",
+          "data-focus": `${key}:u:${i}`, "aria-label": `Bis-Uhrzeit Punkt ${i + 1}`,
+        });
+        until.value = point.until || "";
+        until.addEventListener("input", () => { point.until = until.value; update(); });
+      }
+      return h("div", { class: "wp-point" },
+        h("span", { class: "sub" }, `${i + 1}.`),
+        h("span", { class: "ctl" }, temp, h("span", { class: "sub" }, "°C")),
+        h("span", { class: "ctl" }, lastPoint ? null : h("span", { class: "sub" }, "bis"), until),
+        draft.points.length > 1
+          ? h("button", {
+            class: "close", title: "Punkt entfernen", "aria-label": `Punkt ${i + 1} entfernen`,
+            onclick: () => { draft.points.splice(i, 1); draft.points[draft.points.length - 1].until = ""; this._render(); },
+          }, "✕")
+          : null);
+    });
+    const addPoint = h("button", {
+      class: "action", type: "button", disabled: draft.points.length >= 13,
+      onclick: () => {
+        const last = draft.points[draft.points.length - 1];
+        draft.points.splice(draft.points.length - 1, 0, { temperature: last.temperature, until: "" });
+        this._render();
+      },
+    }, "Punkt hinzufügen");
+
+    const error = h("div", { style: "color:var(--e3-error);font-size:13px;min-height:18px" });
+    const write = h("button", { class: "action primary" }, busy ? "wird geschrieben …" : "Schreiben");
+    write.addEventListener("click", async () => {
+      const weekday = WP_DAYS.filter((d) => draft.days.has(d));
+      const profile = draft.points.map((p, i) => {
+        const item = { temperature: Number(String(p.temperature).replace(",", ".")) };
+        if (i < draft.points.length - 1) item.until = p.until;
+        return item;
+      });
+      const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, weekday, profile },
+        `Wochenprogramm von ${dev.name} geschrieben: ${weekday.join(", ")}.`);
+      if (result !== undefined) this._render();
+    });
+    const update = () => {
+      const problem = this._wpValidate(draft.points);
+      error.textContent = problem || "";
+      write.disabled = busy || !dev.device_id || !!problem || draft.days.size === 0;
+    };
+    update();
+
+    // Copy to other thermostats of the same radio module.
+    const others = entry.devices.filter((d) => d.serial !== dev.serial && (d.type === "heating_thermostat" || d.type === "wall_thermostat"));
+    const hasStored = Object.keys(stored).length > 0;
+    const targetBoxes = others.map((d) => {
+      const box = h("input", { type: "checkbox", "data-focus": `${key}:c:${d.serial}` });
+      box.checked = draft.targets.has(d.serial);
+      box.addEventListener("change", () => { box.checked ? draft.targets.add(d.serial) : draft.targets.delete(d.serial); copyButton.disabled = busy || !draft.targets.size; });
+      return h("label", { class: "wp-check" }, box, d.name);
+    });
+    const copyButton = h("button", {
+      class: "action", disabled: busy || !draft.targets.size,
+      onclick: async () => {
+        const targets = others.filter((d) => draft.targets.has(d.serial));
+        const result = await this._call(`${key}:copy`,
+          { type: "eq3_max/copy_week_profile", device_id: dev.device_id, target_device_id: targets.map((d) => d.device_id) },
+          `Wochenprogramm von ${dev.name} kopiert auf ${targets.map((d) => d.name).join(", ")}.`);
+        if (result !== undefined) { draft.targets = new Set(); this._render(); }
+      },
+    }, busy ? "wird kopiert …" : "Kopieren");
+
+    return [
+      h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
+        "Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; "
+        + "gezeigt werden die Tage, die es zuletzt quittiert hat."),
+      h("fieldset", {}, h("legend", {}, "Gespeichert"), storedRows),
+      h("fieldset", {},
+        h("legend", {}, "Schreiben"),
+        h("div", { class: "wp-days" }, dayBoxes, allButton),
+        h("div", { class: "sub", style: "margin:6px 0" }, "Jeder Punkt gilt bis zu seiner Uhrzeit (5-Minuten-Schritte), der letzte bis 24:00. Bis zu 13 Punkte je Tag."),
+        pointRows,
+        h("div", { class: "add", style: "margin-top:6px" }, addPoint),
+        error,
+        h("div", { class: "setfoot" },
+          h("span", { class: "sub" }, "Je Tag ein bis zwei Telegramme, der Dienst wartet auf die Quittungen."),
+          write)),
+      others.length
+        ? h("fieldset", {},
+          h("legend", {}, "Auf andere Thermostate kopieren"),
+          hasStored
+            ? [h("div", { class: "wp-days" }, targetBoxes), h("div", { class: "setfoot" }, copyButton)]
+            : h("div", { class: "empty" }, "Erst ein Programm schreiben, dann lässt es sich kopieren."))
+        : null,
     ];
   }
 

@@ -1,14 +1,57 @@
 {
   "config": {
     "step": {
-      "user": {"title": "Verbindung", "description": "Wie ist der CUL angeschlossen?", "menu_options": {"usb": "USB-Stick", "network": "Netzwerk (CUN, geflashter Cube)"}},
-      "usb": {"title": "CUL-Stick", "data": {"port": "Serieller Port (by-path)"}},
-      "network": {"title": "CUL im Netzwerk", "description": "a-culfw auf einem CUN oder geflashten MAX! Cube, Textprotokoll über TCP.", "data": {"host": "Host", "port": "Port"}},
-      "address": {"title": "Zentralen-Adresse", "data": {"address": "Adresse (6 Hex-Ziffern)"}},
-      "source": {"title": "Geräte übernehmen", "data": {"source": "Quelle"}},
-      "json": {"title": "Aus JSON übernehmen", "data": {"path": "Pfad zur Exportdatei"}},
-      "homegear": {"title": "Aus Homegear übernehmen", "data": {"host": "Host", "port": "Port"}},
-      "confirm": {"title": "Übernahme bestätigen", "description": "{count} Geräte werden übernommen:\n{devices}"}
+      "user": {
+        "title": "Verbindung",
+        "description": "Wie ist der CUL angeschlossen?",
+        "menu_options": {
+          "usb": "USB-Stick",
+          "network": "Netzwerk (CUN, geflashter Cube)"
+        }
+      },
+      "usb": {
+        "title": "CUL-Stick",
+        "data": {
+          "port": "Serieller Port (by-path)"
+        }
+      },
+      "network": {
+        "title": "CUL im Netzwerk",
+        "description": "a-culfw auf einem CUN oder geflashten MAX! Cube, Textprotokoll über TCP.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "address": {
+        "title": "Zentralen-Adresse",
+        "data": {
+          "address": "Adresse (6 Hex-Ziffern)"
+        }
+      },
+      "source": {
+        "title": "Geräte übernehmen",
+        "data": {
+          "source": "Quelle"
+        }
+      },
+      "json": {
+        "title": "Aus JSON übernehmen",
+        "data": {
+          "path": "Pfad zur Exportdatei"
+        }
+      },
+      "homegear": {
+        "title": "Aus Homegear übernehmen",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "confirm": {
+        "title": "Übernahme bestätigen",
+        "description": "{count} Geräte werden übernommen:\n{devices}"
+      }
     },
     "error": {
       "cannot_connect": "Dort antwortet keine culfw (keine Antwort auf V).",
@@ -24,15 +67,80 @@
   },
   "options": {
     "step": {
-      "init": {"menu_options": {"settings": "Einstellungen", "connection": "Verbindung ändern", "radios": "Funkmodule"}},
-      "connection": {"title": "Verbindung ändern", "description": "Eine geänderte Verbindung startet die Integration neu.", "menu_options": {"connection_usb": "USB-Stick", "connection_network": "Netzwerk (CUN, geflashter Cube)"}},
-      "connection_usb": {"title": "CUL-Stick", "description": "Die gerade genutzte Verbindung wird nicht geprüft (die Integration belegt sie); unverändert gespeichert bleibt sie ohne Neustart bestehen.", "data": {"port": "Serieller Port (by-path)"}},
-      "connection_network": {"title": "CUL im Netzwerk", "description": "Die gerade genutzte Verbindung wird nicht geprüft (die Integration belegt sie); unverändert gespeichert bleibt sie ohne Neustart bestehen.", "data": {"host": "Host", "port": "Port"}},
-      "settings": {"data": {"brake": "Sendezeit auf 36 s pro Stunde begrenzen", "away_temperature": "Urlaubstemperatur", "away_hours": "Urlaubsdauer (Stunden)"}, "data_description": {"away_temperature": "Solltemperatur des Presets Abwesend.", "away_hours": "Das Preset Abwesend endet nach so vielen Stunden, aufgerundet auf die nächste halbe Stunde."}},
-      "radios": {"title": "Funkmodule", "description": "Weitere CUL-Sticks oder geflashte Cubes arbeiten mit derselben Zentralen-Adresse. Jedes Gerät sendet über das ihm zugeordnete Modul; Umstellen geht ohne Neuanlernen (Seite „eQ-3 MAX!“ oder Entität „Funkmodul“).", "menu_options": {"radio_add_usb": "USB-Stick hinzufügen", "radio_add_network": "Netzwerk-CUL hinzufügen (CUN, geflashter Cube)", "radio_remove": "Funkmodul entfernen"}},
-      "radio_add_usb": {"title": "USB-Stick hinzufügen", "description": "Der Stick bekommt die Zentralen-Adresse dieses Eintrags.", "data": {"name": "Name (z. B. Obergeschoss)", "port": "Serieller Port (by-path)"}},
-      "radio_add_network": {"title": "Netzwerk-CUL hinzufügen", "description": "a-culfw auf einem CUN oder geflashten MAX! Cube. Er bekommt die Zentralen-Adresse dieses Eintrags.", "data": {"name": "Name (z. B. Obergeschoss)", "host": "Host", "port": "Port"}},
-      "radio_remove": {"title": "Funkmodul entfernen", "description": "Geräte dieses Moduls senden danach wieder über das Hauptmodul.", "data": {"radio": "Funkmodul"}}
+      "init": {
+        "menu_options": {
+          "settings": "Einstellungen",
+          "connection": "Verbindung ändern",
+          "radios": "Funkmodule"
+        }
+      },
+      "connection": {
+        "title": "Verbindung ändern",
+        "description": "Eine geänderte Verbindung startet die Integration neu.",
+        "menu_options": {
+          "connection_usb": "USB-Stick",
+          "connection_network": "Netzwerk (CUN, geflashter Cube)"
+        }
+      },
+      "connection_usb": {
+        "title": "CUL-Stick",
+        "description": "Die gerade genutzte Verbindung wird nicht geprüft (die Integration belegt sie); unverändert gespeichert bleibt sie ohne Neustart bestehen.",
+        "data": {
+          "port": "Serieller Port (by-path)"
+        }
+      },
+      "connection_network": {
+        "title": "CUL im Netzwerk",
+        "description": "Die gerade genutzte Verbindung wird nicht geprüft (die Integration belegt sie); unverändert gespeichert bleibt sie ohne Neustart bestehen.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "settings": {
+        "data": {
+          "brake": "Sendezeit auf 36 s pro Stunde begrenzen",
+          "away_temperature": "Urlaubstemperatur",
+          "away_hours": "Urlaubsdauer (Stunden)"
+        },
+        "data_description": {
+          "away_temperature": "Solltemperatur des Presets Abwesend.",
+          "away_hours": "Das Preset Abwesend endet nach so vielen Stunden, aufgerundet auf die nächste halbe Stunde."
+        }
+      },
+      "radios": {
+        "title": "Funkmodule",
+        "description": "Weitere CUL-Sticks oder geflashte Cubes arbeiten mit derselben Zentralen-Adresse. Jedes Gerät sendet über das ihm zugeordnete Modul; Umstellen geht ohne Neuanlernen (Seite „eQ-3 MAX!“ oder Entität „Funkmodul“).",
+        "menu_options": {
+          "radio_add_usb": "USB-Stick hinzufügen",
+          "radio_add_network": "Netzwerk-CUL hinzufügen (CUN, geflashter Cube)",
+          "radio_remove": "Funkmodul entfernen"
+        }
+      },
+      "radio_add_usb": {
+        "title": "USB-Stick hinzufügen",
+        "description": "Der Stick bekommt die Zentralen-Adresse dieses Eintrags.",
+        "data": {
+          "name": "Name (z. B. Obergeschoss)",
+          "port": "Serieller Port (by-path)"
+        }
+      },
+      "radio_add_network": {
+        "title": "Netzwerk-CUL hinzufügen",
+        "description": "a-culfw auf einem CUN oder geflashten MAX! Cube. Er bekommt die Zentralen-Adresse dieses Eintrags.",
+        "data": {
+          "name": "Name (z. B. Obergeschoss)",
+          "host": "Host",
+          "port": "Port"
+        }
+      },
+      "radio_remove": {
+        "title": "Funkmodul entfernen",
+        "description": "Geräte dieses Moduls senden danach wieder über das Hauptmodul.",
+        "data": {
+          "radio": "Funkmodul"
+        }
+      }
     },
     "error": {
       "cannot_connect": "Dort antwortet keine culfw (keine Antwort auf V).",
@@ -68,22 +176,86 @@
     "set_away": {
       "name": "Abwesend setzen",
       "description": "Hält die Thermostate bis zum angegebenen Zeitpunkt auf einer Temperatur (MAX!-Modus temporär), danach zurück in Auto.",
-      "fields": {"temperature": {"name": "Temperatur", "description": "Solltemperatur; leer nimmt die Urlaubstemperatur aus den Optionen."}, "until": {"name": "Bis", "description": "Ende (Ortszeit); wird auf die nächste halbe Stunde aufgerundet und muss in der Zukunft liegen."}}
+      "fields": {
+        "temperature": {
+          "name": "Temperatur",
+          "description": "Solltemperatur; leer nimmt die Urlaubstemperatur aus den Optionen."
+        },
+        "until": {
+          "name": "Bis",
+          "description": "Ende (Ortszeit); wird auf die nächste halbe Stunde aufgerundet und muss in der Zukunft liegen."
+        }
+      }
     },
     "factory_reset": {
       "name": "Werksreset",
       "description": "Setzt ein MAX!-Gerät per Funk auf Werkseinstellungen zurück und entfernt es aus Home Assistant. Danach muss es neu angelernt werden.",
-      "fields": {"device_id": {"name": "Gerät", "description": "Das MAX!-Gerät, das zurückgesetzt wird."}}
+      "fields": {
+        "device_id": {
+          "name": "Gerät",
+          "description": "Das MAX!-Gerät, das zurückgesetzt wird."
+        }
+      }
     },
     "link": {
       "name": "Verknüpfen",
       "description": "Verknüpft zwei MAX!-Geräte in beide Richtungen (Fensterkontakt oder Eco-Taster mit Thermostat, Wandthermostat mit Heizkörperthermostat, Heizkörperthermostate untereinander). Kehrt sofort zurück; Fensterkontakte und Eco-Taster bekommen ihren Teil nach ihrem nächsten Telegramm (Fenster einmal öffnen und schließen bzw. Taster drücken). Fortschritt im Sensor Verknüpfungen.",
-      "fields": {"device_id": {"name": "Gerät", "description": "Erstes MAX!-Gerät."}, "partner_device_id": {"name": "Partner", "description": "Zweites MAX!-Gerät."}}
+      "fields": {
+        "device_id": {
+          "name": "Gerät",
+          "description": "Erstes MAX!-Gerät."
+        },
+        "partner_device_id": {
+          "name": "Partner",
+          "description": "Zweites MAX!-Gerät."
+        }
+      }
     },
     "unlink": {
       "name": "Verknüpfung lösen",
       "description": "Löst die Verknüpfung zweier MAX!-Geräte in beide Richtungen. Kehrt sofort zurück; Fensterkontakte und Eco-Taster bekommen ihren Teil nach ihrem nächsten Telegramm.",
-      "fields": {"device_id": {"name": "Gerät", "description": "Erstes MAX!-Gerät."}, "partner_device_id": {"name": "Partner", "description": "Zweites MAX!-Gerät."}}
+      "fields": {
+        "device_id": {
+          "name": "Gerät",
+          "description": "Erstes MAX!-Gerät."
+        },
+        "partner_device_id": {
+          "name": "Partner",
+          "description": "Zweites MAX!-Gerät."
+        }
+      }
+    },
+    "set_week_profile": {
+      "name": "Wochenprogramm schreiben",
+      "description": "Schreibt ganze Tage des Wochenprogramms auf ein oder mehrere Thermostate (Heizkörper- oder Wandthermostat): bis zu 13 Punkte je Tag, jeweils eine Temperatur, die bis zu einer Uhrzeit gilt (5-Minuten-Schritte, der letzte bis 24:00). Das Thermostat folgt ihm im Modus Automatik. Wartet auf die Quittungen; je Telegramm etwa 1,2 s Sendezeit, eine ganze Woche sind 7 bis 14 Telegramme je Gerät.",
+      "fields": {
+        "device_id": {
+          "name": "Thermostat",
+          "description": "Ein oder mehrere Thermostate."
+        },
+        "weekday": {
+          "name": "Wochentag",
+          "description": "Tage, für die das Programm gilt, oder „alle“ für alle sieben."
+        },
+        "profile": {
+          "name": "Programm",
+          "description": "Liste von Punkten: temperature und until (hh:mm). Beim letzten Punkt darf until fehlen (24:00)."
+        }
+      }
+    },
+    "copy_week_profile": {
+      "name": "Wochenprogramm kopieren",
+      "description": "Schreibt das für ein Thermostat gespeicherte Wochenprogramm (seine zuletzt quittierten Tage) auf andere Thermostate.",
+      "fields": {
+        "device_id": {
+          "name": "Quelle",
+          "description": "Thermostat, dessen gespeichertes Programm kopiert wird."
+        },
+        "target_device_id": {
+          "name": "Ziele",
+          "description": "Thermostate, die das Programm bekommen."
+        }
+      }
     }
   }
 }

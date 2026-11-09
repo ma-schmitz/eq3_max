@@ -34,8 +34,23 @@ Wert — Automationen kippen dadurch nicht.
 Geräteseite des Funkmoduls → „Diagnose herunterladen“: Verbindungsart und -ziel, Stick-Version, Verbindung, Sendezeit,
 Warteschlange, alle Gerätezustände und die letzten Rohtelegramme je Gerät.
 
+**Telegramm-Trace.** Der Logger `custom_components.eq3_max.trace` schreibt auf Stufe `info`
+jede Zeile zum (`-> Zs…`) und vom Funkmodul (`<- Z…`) sowie das Sendefenster schlafender
+Geräte ins `home-assistant.log`. Einschalten in der `configuration.yaml`:
+
+```yaml
+logger:
+  logs:
+    custom_components.eq3_max: debug
+```
+
+oder zur Laufzeit mit dem Dienst `logger.set_level`. Das ist das Log, das bei „Gerät reagiert
+nicht“ weiterhilft (etwa ein Fensterkontakt, der seine Verknüpfung nicht annimmt). Bewusst
+`info` statt `debug`: Home Assistant OS schreibt keine `debug`-Zeilen in die Logdatei.
+
 ## Grenzen
 
-- Wochenprogramme der Geräte werden nicht bearbeitet (Planung macht HA).
+- Wochenprogramme lassen sich schreiben ([Dienste](dienste.md)), aber nicht aus den Geräten
+  auslesen; die Integration kennt nur, was sie selbst geschrieben hat.
 - Konfiguration wird nicht vom Gerät gelesen (die Geräte können das nicht).
 - CUL über Netzwerk (CUN, geflashter Cube per LAN) ist noch nicht offiziell unterstützt.

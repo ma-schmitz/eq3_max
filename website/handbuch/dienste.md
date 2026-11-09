@@ -34,6 +34,60 @@ Antworten: Erfolg → Gerät entfernt. „Werksreset nicht gesendet“ → Stick
 30-s-Fenster verstrichen. „nicht quittiert – eventuell trotzdem zurückgesetzt“ → am Gerät
 prüfen.
 
+## `eq3_max.set_week_profile`
+
+Schreibt ganze Tage des Wochenprogramms auf ein oder mehrere Thermostate (Heizkörper- oder
+Wandthermostat). Das Gerät folgt dem Programm im Modus **Automatik**.
+
+```yaml
+action: eq3_max.set_week_profile
+data:
+  device_id:
+    - <Geräte-ID Thermostat>
+  weekday:
+    - Montag
+    - Dienstag
+  profile:
+    - temperature: 17
+      until: "06:00"
+    - temperature: 21
+      until: "22:00"
+    - temperature: 17
+```
+
+- `weekday`: ein oder mehrere Wochentage (`Samstag` … `Freitag`) oder `alle`.
+- `profile`: bis zu 13 Punkte je Tag, jeder gilt **bis** zu seiner Uhrzeit (5-Minuten-Schritte,
+  aufsteigend). Beim letzten Punkt darf `until` fehlen, er gilt bis 24:00. Temperaturen
+  4,5 bis 30,5 °C in 0,5-Schritten (4,5 = aus, 30,5 = an).
+- Der Dienst wartet auf die Quittungen des Geräts und meldet einen Fehler, wenn es ablehnt
+  oder nicht antwortet; die restlichen Tage gehen dann nicht mehr raus. Je Tag sind das ein
+  oder zwei Telegramme (ab acht Punkten zwei), eine ganze Woche also 7 bis 14 Telegramme à
+  rund 1,2 s Sendezeit. Mit eingeschalteter Sendezeit-Bremse kann das dauern.
+- Auslesen kann die Integration das Programm nicht (die Geräte melden es nicht). Sie merkt
+  sich die zuletzt quittierten Tage je Gerät; sie stehen in der Diagnose und in der
+  Seite „eQ-3 MAX!“ (Datenbasis `week_profile`).
+
+!!! tip "Unquotierte Uhrzeiten"
+    YAML liest `until: 06:00` ohne Anführungszeichen als Zahl (360 Minuten). Der Dienst
+    nimmt beides.
+
+## `eq3_max.copy_week_profile`
+
+Schreibt das für ein Thermostat gespeicherte Wochenprogramm (seine zuletzt quittierten
+Tage) auf andere Thermostate.
+
+```yaml
+action: eq3_max.copy_week_profile
+data:
+  device_id: <Geräte-ID Quelle>
+  target_device_id:
+    - <Geräte-ID Ziel 1>
+    - <Geräte-ID Ziel 2>
+```
+
+Die Quelle muss vorher mit `set_week_profile` beschrieben worden sein; ein Programm, das
+nur im Gerät steht (Cube, Homegear, am Gerät eingestellt), kennt die Integration nicht.
+
 ## Gerät löschen
 
 Auf der Geräteseite „Gerät löschen“ entfernt ein Gerät nur aus HA (kein Funkbefehl). Sinnvoll

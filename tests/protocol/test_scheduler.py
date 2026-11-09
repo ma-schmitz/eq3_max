@@ -445,3 +445,20 @@ async def test_per_command_retries_and_ack_timeout(setup):
 def test_per_command_limits_default_to_scheduler():
     cmd = Command(dst=DEV, build=frame)
     assert cmd.retries is None and cmd.ack_timeout is None
+
+
+async def test_abandon_inflight_fast_command(setup):
+    """A fast command on air can be given up (the device started transmitting instead
+    of listening): outcome abandoned at once, no retry, nothing else touched."""
+    from custom_components.eq3_max.protocol.scheduler import Outcome
+
+    sched, sender, clock = setup
+    done = []
+    cmd = Command(dst=DEV, build=frame, key="link:x", fast=True, retries=0, ack_timeout=1.0, on_done=done.append)
+    sched.submit(cmd)
+    await until(lambda: len(sender.lines) == 1)
+    assert sched.abandon_inflight("other") is False
+    assert sched.abandon_inflight("link:x") is True
+    await until(lambda: done == [False])
+    assert cmd.outcome is Outcome.ABANDONED and cmd.sent == 1
+    assert sched.abandon_inflight("link:x") is False  # nothing on air any more

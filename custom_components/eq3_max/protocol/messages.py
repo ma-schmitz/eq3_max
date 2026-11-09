@@ -6,9 +6,11 @@ Field layout follows FHEM 14_CUL_MAX.pm / 10_MAX.pm.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import IntEnum
+from typing import Any
 
 OFF_TEMPERATURE = 4.5
 MAX_TEMPERATURE = 30.5
@@ -25,6 +27,7 @@ class MsgType(IntEnum):
     PAIR_PONG = 0x01
     ACK = 0x02
     TIME_INFORMATION = 0x03
+    CONFIG_WEEK_PROFILE = 0x10
     CONFIG_TEMPERATURES = 0x11
     CONFIG_VALVE = 0x12
     ADD_LINK_PARTNER = 0x20
@@ -565,3 +568,97 @@ def build_remove_link_partner(counter: int, src: int, dst: int, partner: int, pa
     return Frame(
         counter & 0xFF, 0x00, MsgType.REMOVE_LINK_PARTNER, src, dst, 0, encode_link_partner(partner, partner_type)
     )
+
+
+# --- Week profile (0x10 ConfigWeekProfile, FHEM 10_MAX.pm "set weekProfile"): per day up to 13
+# points "temperature until hh:mm" as 16-bit words (temperature in half steps << 9 | minutes / 5),
+# sent in two parts: part 0 holds 7 points, part 1 the remaining 6. The device reads a day up
+# to the first point ending at 24:00; unused points are padded with that one. First payload
+# byte: part << 4 | day with 0 = Saturday ... 6 = Friday (like the decalcification weekday). ---
+WEEK_PROFILE_POINTS = 13
+WEEK_PROFILE_PART_POINTS = 7
+WEEK_PROFILE_DAYS = 7
+DAY_END_MINUTES = 24 * 60
+
+
+@dataclass(frozen=True)
+class ProfilePoint:
+    temperature: float
+    until: int  # minutes since midnight the temperature holds until (5-minute steps, 1440 = 24:00)
+
+
+def format_until(minutes: int) -> str:
+    """Minutes since midnight as hh:mm, the day end as 24:00."""
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def parse_until(value: Any) -> int:
+    """hh:mm (or hh:mm:00) as minutes since midnight; 24:00 and 00:00 both mean the day
+    end. An int is taken as minutes (YAML reads an unquoted 06:00 as 360)."""
+    if isinstance(value, bool):
+        raise ValueError(f"time must be hh:mm, got {value!r}")
+    if isinstance(value, int):
+        total = value
+    else:
+        try:
+            fields = [int(x) for x in str(value).strip().split(":")]
+        except ValueError:
+            raise ValueError(f"time must be hh:mm, got {value!r}") from None
+        if len(fields) == 3 and fields[2] == 0:
+            fields = fields[:2]
+        if len(fields) != 2:
+            raise ValueError(f"time must be hh:mm, got {value!r}")
+        hours, minutes = fields
+        if not (0 <= hours <= 24 and 0 <= minutes < 60):
+            raise ValueError(f"time must be 00:00..24:00, got {value!r}")
+        total = hours * 60 + minutes
+    if not 0 <= total <= DAY_END_MINUTES:
+        raise ValueError(f"time must be 00:00..24:00, got {value!r}")
+    return DAY_END_MINUTES if total == 0 else total
+
+
+def _profile_word(point: ProfilePoint) -> int:
+    temp = _half_steps(point.temperature, OFF_TEMPERATURE, MAX_TEMPERATURE, "temperature")
+    if not 0 < point.until <= DAY_END_MINUTES or point.until % 5:
+        raise ValueError(f"end time must be a 5-minute step between 00:05 and 24:00, got {point.until} min")
+    return (temp << 9) | (point.until // 5)
+
+
+def encode_week_profile_day(points: Sequence[ProfilePoint]) -> list[bytes]:
+    """Word payloads (without the day byte) of the parts a day needs: one for up to seven
+    points, two beyond. Raises ValueError for anything the device would not take."""
+    if not 1 <= len(points) <= WEEK_PROFILE_POINTS:
+        raise ValueError(f"1 to {WEEK_PROFILE_POINTS} points per day, got {len(points)}")
+    words = [_profile_word(p) for p in points]
+    for earlier, later in zip(points, points[1:]):
+        if later.until <= earlier.until:
+            raise ValueError("end times must increase")
+    if points[-1].until != DAY_END_MINUTES:
+        raise ValueError("the last point must end at 24:00")
+    padded = words + [words[-1]] * (WEEK_PROFILE_POINTS - len(words))
+    parts = [padded[:WEEK_PROFILE_PART_POINTS]]
+    if len(words) > WEEK_PROFILE_PART_POINTS:
+        parts.append(padded[WEEK_PROFILE_PART_POINTS:])
+    return [b"".join(w.to_bytes(2, "big") for w in part) for part in parts]
+
+
+def decode_week_profile_part(words: bytes) -> list[ProfilePoint]:
+    """Points of one part up to and including the first one ending at 24:00."""
+    if len(words) % 2:
+        raise FrameError("odd week profile length")
+    points = []
+    for i in range(0, len(words), 2):
+        word = int.from_bytes(words[i : i + 2], "big")
+        point = ProfilePoint(((word >> 9) & 0x3F) / 2, (word & 0x1FF) * 5)
+        points.append(point)
+        if point.until >= DAY_END_MINUTES:
+            break
+    return points
+
+
+def build_config_week_profile(counter: int, src: int, dst: int, *, day: int, part: int, words: bytes) -> Frame:
+    if not 0 <= day < WEEK_PROFILE_DAYS:
+        raise ValueError(f"day must be 0 (Saturday) to 6 (Friday), got {day}")
+    if part not in (0, 1):
+        raise ValueError(f"part must be 0 or 1, got {part}")
+    return Frame(counter & 0xFF, 0x00, MsgType.CONFIG_WEEK_PROFILE, src, dst, 0, bytes([(part << 4) | day]) + words)

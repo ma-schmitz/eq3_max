@@ -10,6 +10,10 @@ import time
 from collections.abc import Awaitable, Callable
 
 _LOGGER = logging.getLogger(__name__)
+# Every line to (->) and from (<-) the stick, at INFO so it reaches home-assistant.log
+# (Home Assistant OS drops DEBUG records there). Off unless this logger or
+# custom_components.eq3_max is set to info/debug.
+TRACE = logging.getLogger("custom_components.eq3_max.trace")
 
 OpenConnection = Callable[[str], Awaitable[tuple[asyncio.StreamReader, asyncio.StreamWriter]]]
 
@@ -181,6 +185,7 @@ class CulTransport:
             raise ConnectionError(str(err)) from err
         if line.startswith(("Zs", "Zf")):
             self._last_tx = self._clock()
+        TRACE.info("-> %s", line)
 
     async def _run(self) -> None:
         while True:
@@ -242,6 +247,7 @@ class CulTransport:
             if not text:
                 continue
             if text.startswith("Z"):
+                TRACE.info("<- %s", text)
                 self._last_rx = self._clock()
                 self._last_frame_rx = self._last_rx
                 self._deaf_resets = 0

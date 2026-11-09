@@ -568,3 +568,81 @@ def test_link_allowed_pairs_both_ways(a, b):
 )
 def test_link_disallowed_pairs(a, b):
     assert not link_allowed(a, b) and not link_allowed(b, a)
+
+
+# --- Week profile (0x10 ConfigWeekProfile) ---
+
+
+def _wp():
+    from custom_components.eq3_max.protocol import messages as m
+
+    return m
+
+
+def test_week_profile_day_matches_fhem_default_encoding():
+    m = _wp()
+    # FHEM's default day: 17 °C until 06:00, 21 °C until 22:00, 17 °C until 24:00 → 4448 5508 4520,
+    # the unused points padded with the last point (temperature until 24:00).
+    parts = m.encode_week_profile_day(
+        [m.ProfilePoint(17.0, 360), m.ProfilePoint(21.0, 1320), m.ProfilePoint(17.0, 1440)]
+    )
+    assert [p.hex().upper() for p in parts] == ["444855084520" + "4520" * 4]
+
+
+def test_week_profile_day_single_point_and_boundaries():
+    m = _wp()
+    assert m.encode_week_profile_day([m.ProfilePoint(4.5, 1440)]) == [bytes.fromhex("1320" * 7)]
+    assert m.encode_week_profile_day([m.ProfilePoint(30.5, 1440)]) == [bytes.fromhex("7B20" * 7)]
+    assert m.encode_week_profile_day([m.ProfilePoint(20.0, 5), m.ProfilePoint(21.0, 1440)])[0][:4] == bytes.fromhex("50015520")
+
+
+def test_week_profile_day_splits_into_two_parts_after_seven_points():
+    m = _wp()
+    points = [m.ProfilePoint(16.0 + i * 0.5, 60 * (i + 1)) for i in range(7)] + [m.ProfilePoint(22.0, 1440)]
+    parts = m.encode_week_profile_day(points)
+    assert len(parts) == 2 and len(parts[0]) == 14 and len(parts[1]) == 12
+    assert parts[0][:2].hex().upper() == "400C"  # 16 °C until 01:00
+    assert parts[1].hex().upper() == "5920" * 6  # 22 °C until 24:00, padded
+    thirteen = [m.ProfilePoint(18.0, 60 * (i + 1)) for i in range(12)] + [m.ProfilePoint(18.0, 1440)]
+    assert len(m.encode_week_profile_day(thirteen)) == 2
+
+
+@pytest.mark.parametrize(
+    "points",
+    [
+        [],
+        [(18.0, 60 * (i + 1)) for i in range(13)] + [(18.0, 1440)],  # 14 points
+        [(18.0, 1200)],  # last not 24:00
+        [(18.0, 600), (19.0, 600), (18.0, 1440)],  # not increasing
+        [(18.0, 603), (18.0, 1440)],  # not a 5-minute step
+        [(18.0, 0), (18.0, 1440)],  # 00:00 is no end
+        [(4.0, 1440)],  # below off
+        [(31.0, 1440)],  # above max
+        [(18.25, 1440)],  # not a half step
+    ],
+)
+def test_week_profile_day_rejects_bad_points(points):
+    m = _wp()
+    with pytest.raises(ValueError):
+        m.encode_week_profile_day([m.ProfilePoint(t, u) for t, u in points])
+
+
+def test_week_profile_part_roundtrip_and_terminator():
+    m = _wp()
+    points = [m.ProfilePoint(17.0, 360), m.ProfilePoint(21.0, 1320), m.ProfilePoint(17.0, 1440)]
+    part = m.encode_week_profile_day(points)[0]
+    # Decoding stops at the first point ending at 24:00 (the padding is invisible).
+    assert m.decode_week_profile_part(part) == points
+
+
+def test_build_config_week_profile_frame():
+    m = _wp()
+    words = bytes.fromhex("4448" + "4520" * 6)
+    frame = m.build_config_week_profile(0x2B, 0x123456, 0xABCDEF, day=6, part=1, words=words)
+    assert frame.msg_type == m.MsgType.CONFIG_WEEK_PROFILE == 0x10
+    assert frame.counter == 0x2B and frame.flags == 0 and frame.group == 0
+    assert frame.src == 0x123456 and frame.dst == 0xABCDEF
+    assert frame.payload == bytes([0x16]) + words
+    assert m.build_config_week_profile(1, 1, 2, day=0, part=0, words=words).payload[0] == 0x00
+    with pytest.raises(ValueError):
+        m.build_config_week_profile(1, 1, 2, day=7, part=0, words=words)

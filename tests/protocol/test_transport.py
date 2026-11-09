@@ -287,3 +287,28 @@ async def test_request_reopen_when_disconnected_does_nothing():
     await asyncio.sleep(0.02)
     assert ev["problems"] == [] and ev["conn"] == []
     await t.stop()
+
+
+async def test_telegrams_are_traced_at_debug_level(caplog):
+    """Every line to and from the stick appears on the trace logger at INFO (-> sent,
+    <- received): the log to ask for when a device does not react (GitHub #1). INFO, because
+    Home Assistant OS writes no DEBUG records into home-assistant.log."""
+    import logging
+
+    from .fakes import FakeCul
+    from .test_hub import _make, HT, sent, until
+    from custom_components.eq3_max.protocol.messages import Mode
+
+    caplog.set_level(logging.INFO, logger="custom_components.eq3_max.trace")
+    cul = FakeCul()
+    h = _make(cul)
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        h.set_temperature(HT, 21.0, Mode.MANUAL)
+        await until(lambda: len(sent(cul)) == 1)
+        assert f"-> {sent(cul)[0]}" in caplog.text
+        cul.feed("Z0E0004 60A1B005C0FFEE00 19302800BE 3F".replace(" ", ""))
+        await until(lambda: "<- Z0E000460A1B005C0FFEE0019302800BE3F" in caplog.text)
+    finally:
+        await h.stop()

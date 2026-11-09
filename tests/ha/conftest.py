@@ -46,6 +46,8 @@ class FakeHub:
         self.started = False
         self.raw_history = {}
         self.resets = []
+        self.week_profiles = []
+        self.week_profile_error = None
         self.reset_result = ResetResult.ACKED
         self.reset_error = None
         self.kwargs = _kw
@@ -99,6 +101,20 @@ class FakeHub:
                 if other.forget_partner(dev.serial):
                     self.on_update(other)
         return self.reset_result
+
+    async def set_week_profile(self, address, days):
+        from custom_components.eq3_max.protocol.devices import WEEKDAYS
+        from custom_components.eq3_max.protocol.messages import FrameError, format_until
+
+        if self.week_profile_error is not None:
+            raise FrameError(self.week_profile_error)
+        self.week_profiles.append((address, days))
+        dev = self.devices[address]
+        for day, points in days.items():
+            dev.week_profile[WEEKDAYS[day]] = [
+                {"temperature": p.temperature, "until": format_until(p.until)} for p in points
+            ]
+        self.on_update(dev)
 
     def link(self, a, b):
         self._change_link("link", a, b, "add")

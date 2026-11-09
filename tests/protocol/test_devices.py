@@ -591,3 +591,16 @@ def test_stage_config_set_valve_not_on_wall_thermostat():
         d.stage_config_set("valve", {"boost_dauer": 10})
     assert d.stage_config_set("temp", {"offset": -1.0})
     assert d.pending_config["temp"]["offset"] == -1.0
+
+
+def test_week_profile_survives_store_roundtrip_and_ignores_junk():
+    dev = MaxDevice(0xA1B005, "MEQ9000007", DeviceType.HEATING_THERMOSTAT)
+    assert dev.week_profile == {}
+    dev.week_profile = {"Montag": [{"temperature": 21.0, "until": "24:00"}]}
+    data = dev.to_dict()
+    data["week_profile"]["Blursday"] = [{"temperature": 1.0, "until": "x"}]
+    data["week_profile"]["Dienstag"] = "nicht eine Liste"
+    back = MaxDevice.from_dict(data)
+    assert back.week_profile == {"Montag": [{"temperature": 21.0, "until": "24:00"}]}
+    data.pop("week_profile")
+    assert MaxDevice.from_dict(data).week_profile == {}
