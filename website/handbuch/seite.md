@@ -58,8 +58,7 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
   Programm nicht), „In den Editor“ übernimmt einen Tag. Darunter der Editor: Tage ankreuzen
   (oder „alle“), Punkte mit Temperatur und Bis-Uhrzeit (der letzte gilt bis 24:00, bis zu 13),
   **„Schreiben“** wartet auf die Quittungen des Geräts. Zuletzt „Auf andere Thermostate
-  kopieren“ mit dem gespeicherten Programm. Das ✕ an einem gespeicherten Tag und „Alle
-  vergessen“ verwerfen nur das Gedächtnis der Integration (kein Funkbefehl).
+  kopieren“ mit dem gespeicherten Programm.
 
 Nicht auf der Seite: Werksreset ([Dienste](dienste.md)), Namen und Bereiche (wie gewohnt in HA),
 Wochenprofile.

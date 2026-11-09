@@ -41,7 +41,6 @@ from .services import (
     async_copy_week_profile,
     async_set_week_profile,
     change_link,
-    forget_week_profile,
     resolve_max_device,
 )
 
@@ -74,7 +73,7 @@ TYPE_NAMES = {
 def async_register_commands(hass: HomeAssistant) -> None:
     for command in (
         ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_radio,
-        ws_set_week_profile, ws_copy_week_profile, ws_forget_week_profile,
+        ws_set_week_profile, ws_copy_week_profile,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -506,22 +505,3 @@ async def ws_copy_week_profile(
         connection.send_error(msg["id"], ERR_FAILED, str(err))
         return
     connection.send_result(msg["id"], {"targets": [t.serial for t in targets]})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "eq3_max/forget_week_profile",
-        vol.Required("device_id"): vol.All(cv.ensure_list, [str]),
-        vol.Optional("weekday", default=["alle"]): vol.All(cv.ensure_list, [str]),
-    }
-)
-@callback
-def ws_forget_week_profile(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Drop stored week profile days (memory only, nothing on air)."""
-    try:
-        dropped = forget_week_profile(hass, msg["device_id"], msg["weekday"])
-    except (HomeAssistantError, ValueError) as err:
-        _error(connection, msg, err)
-        return
-    connection.send_result(msg["id"], {"forgotten": dropped})

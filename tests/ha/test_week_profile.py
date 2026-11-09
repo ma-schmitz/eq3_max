@@ -122,19 +122,3 @@ async def test_week_profile_is_part_of_the_panel_overview(hass, setup_entry, fak
     devices = {d["serial"]: d for d in msg["result"]["entries"][0]["devices"]}
     assert devices[HT_S]["week_profile"] == {"Montag": [{"temperature": 19.0, "until": "24:00"}]}
     assert devices[WT_S]["week_profile"] == {}
-
-
-async def test_forget_week_profile_service_and_websocket(hass, setup_entry, fake_hub, hass_ws_client):
-    hub = fake_hub.last
-    stored = {"Montag": [{"temperature": 19.0, "until": "24:00"}], "Dienstag": [{"temperature": 20.0, "until": "24:00"}]}
-    hub.devices[HT].week_profile = dict(stored)
-    await call(hass, "forget_week_profile", {"device_id": device_id(hass, HT_S), "weekday": "Dienstag"})
-    assert list(hub.devices[HT].week_profile) == ["Montag"]
-    assert hub.week_profiles == []  # nothing on air
-    client = await hass_ws_client(hass)
-    await client.send_json({"id": 1, "type": "eq3_max/forget_week_profile", "device_id": device_id(hass, HT_S)})
-    msg = await client.receive_json()
-    assert msg["success"] and msg["result"] == {"forgotten": ["Montag"]}
-    assert hub.devices[HT].week_profile == {}
-    with pytest.raises(ServiceValidationError, match="Thermostat"):
-        await call(hass, "forget_week_profile", {"device_id": device_id(hass, FK_S)})

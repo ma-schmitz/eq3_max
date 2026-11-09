@@ -45,7 +45,6 @@ FACTORY_RESET_SCHEMA = vol.Schema({vol.Required(ATTR_DEVICE_ID): cv.string})
 LINK_SCHEMA = vol.Schema({vol.Required(ATTR_DEVICE_ID): cv.string, vol.Required(ATTR_PARTNER_DEVICE_ID): cv.string})
 SERVICE_SET_WEEK_PROFILE = "set_week_profile"
 SERVICE_COPY_WEEK_PROFILE = "copy_week_profile"
-SERVICE_FORGET_WEEK_PROFILE = "forget_week_profile"
 ATTR_WEEKDAY = "weekday"
 ATTR_PROFILE = "profile"
 ATTR_TARGET_DEVICE_ID = "target_device_id"
@@ -59,12 +58,6 @@ SET_WEEK_PROFILE_SCHEMA = vol.Schema(
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
         vol.Required(ATTR_WEEKDAY): vol.All(cv.ensure_list, [vol.In((*WEEKDAYS, ALL_DAYS))]),
         vol.Required(ATTR_PROFILE): vol.All(cv.ensure_list, [POINT_SCHEMA]),
-    }
-)
-FORGET_WEEK_PROFILE_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional(ATTR_WEEKDAY, default=[ALL_DAYS]): vol.All(cv.ensure_list, [vol.In((*WEEKDAYS, ALL_DAYS))]),
     }
 )
 COPY_WEEK_PROFILE_SCHEMA = vol.Schema(
@@ -87,7 +80,6 @@ def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_UNLINK, _async_unlink, schema=LINK_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_SET_WEEK_PROFILE, _async_set_week_profile, schema=SET_WEEK_PROFILE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_COPY_WEEK_PROFILE, _async_copy_week_profile, schema=COPY_WEEK_PROFILE_SCHEMA)
-    hass.services.async_register(DOMAIN, SERVICE_FORGET_WEEK_PROFILE, _async_forget_week_profile, schema=FORGET_WEEK_PROFILE_SCHEMA)
 
 
 async def _async_factory_reset(call: ServiceCall) -> None:
@@ -292,24 +284,6 @@ async def async_copy_week_profile(hass: HomeAssistant, device_id: str, target_id
     for target_entry, target in targets:
         await write_week_profile(target_entry.runtime_data.hub, target, plan)
     return [target for _, target in targets]
-
-
-def forget_week_profile(hass: HomeAssistant, device_ids: list[str], weekdays: list[str]) -> list[str]:
-    """Drop stored days of the given thermostats (services and the panel); nothing on
-    air. Returns the day names dropped (over all devices, each once)."""
-    days = None if ALL_DAYS in weekdays else _days_from_names(weekdays)
-    targets = [_thermostat_for_profile(hass, device_id) for device_id in device_ids]
-    dropped: list[str] = []
-    for entry, device in targets:
-        try:
-            dropped.extend(entry.runtime_data.hub.forget_week_profile(device.address, days))
-        except FrameError as err:
-            raise ServiceValidationError(str(err)) from err
-    return list(dict.fromkeys(dropped))
-
-
-async def _async_forget_week_profile(call: ServiceCall) -> None:
-    forget_week_profile(call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_WEEKDAY])
 
 
 async def _async_set_week_profile(call: ServiceCall) -> None:

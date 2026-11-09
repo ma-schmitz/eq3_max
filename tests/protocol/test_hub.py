@@ -1834,18 +1834,3 @@ async def test_set_week_profile_refuses_unknown_sleepers_and_bad_points(hub):
         await h.set_week_profile(HT, {7: FHEM_DAY})
     await asyncio.sleep(0.05)
     assert sent(cul) == []
-
-
-async def test_forget_week_profile_drops_stored_days_without_radio(hub):
-    h, cul, rec = hub
-    h.devices[HT].week_profile = {"Montag": FHEM_DAY_STORED, "Dienstag": FHEM_DAY_STORED, "Freitag": FHEM_DAY_STORED}
-    assert h.forget_week_profile(HT, [3, 6]) == ["Dienstag", "Freitag"]
-    assert list(h.devices[HT].week_profile) == ["Montag"]
-    assert rec.updates[-1].address == HT
-    assert h.forget_week_profile(HT, [3]) == []  # nothing stored for Tuesday any more
-    assert h.forget_week_profile(HT) == ["Montag"]
-    assert h.devices[HT].week_profile == {}
-    await asyncio.sleep(0.05)
-    assert sent(cul) == []
-    with pytest.raises(FrameError, match="nicht bekannt"):
-        h.forget_week_profile(0x999999)

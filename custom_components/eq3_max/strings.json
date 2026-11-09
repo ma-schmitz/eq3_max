@@ -256,20 +256,6 @@
           "description": "Thermostats that get the profile."
         }
       }
-    },
-    "forget_week_profile": {
-      "name": "Forget week profile",
-      "description": "Drops the week profile days the integration stored for one or more thermostats (memory only, nothing is sent; the device keeps its program).",
-      "fields": {
-        "device_id": {
-          "name": "Thermostat",
-          "description": "One or more thermostats."
-        },
-        "weekday": {
-          "name": "Weekday",
-          "description": "Days to forget; default “alle” for all."
-        }
-      }
     }
   }
 }

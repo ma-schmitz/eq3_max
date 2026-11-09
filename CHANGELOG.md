@@ -5,6 +5,15 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.2] – 2026-11-09
+
+### Entfernt
+
+- „Wochenprogramm vergessen“ aus 0.6.1 (Dienst `eq3_max.forget_week_profile`, ✕ je Tag und „Alle
+  vergessen“ im Reiter) wieder entfernt: Es leerte nur das Gedächtnis der Integration und sah
+  nach Löschen aus, obwohl das Gerät sein Programm behielt. Ein Thermostat hat immer ein
+  Programm; wer es „löschen“ will, schreibt ein neues.
+
 ## [0.6.1] – 2026-11-09
 
 ### Hinzugefügt

@@ -47,7 +47,6 @@ def by_serial(section):
         {"type": "eq3_max/set_config", "device_id": "x", "kind": "temp", "values": {"komfort": 21}},
         {"type": "eq3_max/set_week_profile", "device_id": "x", "weekday": ["Montag"], "profile": [{"temperature": 21}]},
         {"type": "eq3_max/copy_week_profile", "device_id": "x", "target_device_id": ["y"]},
-        {"type": "eq3_max/forget_week_profile", "device_id": "x"},
     ],
 )
 async def test_commands_require_admin(hass, setup_entry, fake_hub, hass_ws_client, hass_read_only_access_token, msg):

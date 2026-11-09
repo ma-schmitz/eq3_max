@@ -94,27 +94,3 @@ copy_week_profile:
         device:
           integration: eq3_max
           multiple: true
-
-forget_week_profile:
-  fields:
-    device_id:
-      required: true
-      selector:
-        device:
-          integration: eq3_max
-          multiple: true
-    weekday:
-      required: false
-      example: "alle"
-      selector:
-        select:
-          multiple: true
-          options:
-            - Samstag
-            - Sonntag
-            - Montag
-            - Dienstag
-            - Mittwoch
-            - Donnerstag
-            - Freitag
-            - alle

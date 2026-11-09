@@ -471,18 +471,6 @@ class MaxHub:
         self._submit(cmd)
         return await done
 
-    def forget_week_profile(self, address: int, days: Iterable[int] | None = None) -> list[str]:
-        """Drop the stored week profile days (all when None): memory only, nothing on air.
-        Returns the names of the days dropped."""
-        dev = self.devices.get(address)
-        if dev is None:
-            raise FrameError("Ger\u00e4t ist dem Funkmodul nicht bekannt")
-        names = list(WEEKDAYS) if days is None else [WEEKDAYS[d] for d in days]
-        dropped = [name for name in names if dev.week_profile.pop(name, None) is not None]
-        if dropped:
-            self._notify(dev)
-        return dropped
-
     async def set_week_profile(self, address: int, days: Mapping[int, Sequence[ProfilePoint]]) -> None:
         """Write whole days of the week profile (0 = Saturday ... 6 = Friday) to a
         thermostat: one telegram per part, acknowledged one after the other. The stored
