@@ -5,6 +5,13 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Zusätzliche Funkmodule wurden beim Anlegen noch mit dem veralteten Parameter `via_device`
+  verknüpft; Home Assistant meldete bei jedem Start „deprecated `via_device` parameter … stops
+  working in 2027.8.0“. Das Funkmodul wird jetzt direkt mit `via_device_id` unter das Hauptmodul
+  gehängt.
+
 ## [0.6.3] – 2026-11-09
 
 ### Hinzugefügt

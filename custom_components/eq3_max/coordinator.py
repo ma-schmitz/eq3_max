@@ -138,7 +138,7 @@ class MaxCulCoordinator:
                 manufacturer="busware / culfw",
                 model="culfw (Netzwerk)" if connection_type(item) == CONNECTION_NETWORK else "nanoCUL868",
                 name=f"eQ-3 MAX! Funkmodul {item['name']}",
-                via_device=(DOMAIN, self.address_hex),
+                via_device_id=hub_device.id,
                 configuration_url=CONFIGURATION_URL,
             )
             self._radio_device_ids[item["id"]] = radio_device.id
