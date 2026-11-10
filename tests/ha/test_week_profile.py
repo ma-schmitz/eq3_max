@@ -122,3 +122,30 @@ async def test_week_profile_is_part_of_the_panel_overview(hass, setup_entry, fak
     devices = {d["serial"]: d for d in msg["result"]["entries"][0]["devices"]}
     assert devices[HT_S]["week_profile"] == {"Montag": [{"temperature": 19.0, "until": "24:00"}]}
     assert devices[WT_S]["week_profile"] == {}
+
+
+async def test_set_week_profile_has_no_deadline_of_its_own(hass, setup_entry, fake_hub, monkeypatch):
+    """With an empty airtime budget a whole week takes far longer than ten minutes;
+    the write must not be given up half way by a deadline of the service."""
+    import asyncio
+
+    from custom_components.eq3_max import services
+
+    monkeypatch.setattr(services, "WEEK_PROFILE_TIMEOUT_S", 0.01, raising=False)
+    hub = fake_hub.last
+    release = asyncio.Event()
+    original = hub.set_week_profile
+
+    async def slow(address, days):
+        await release.wait()
+        await original(address, days)
+
+    hub.set_week_profile = slow
+    task = asyncio.ensure_future(
+        services.async_set_week_profile(hass, [device_id(hass, HT_S)], ["Montag"], [{"temperature": 21}])
+    )
+    await asyncio.sleep(0.1)
+    assert not task.done()
+    release.set()
+    await task
+    assert len(hub.week_profiles) == 1

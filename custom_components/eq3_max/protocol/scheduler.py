@@ -20,6 +20,10 @@ PRIO_COMMAND = 1
 PREAMBLE_S = 1.0
 PER_BYTE_S = 0.008
 BUDGET_S = 36.0
+# culfw answers LOVF while its own budget is empty. It refills 10 ms per second (a-culfw:
+# at most 9 s in store, 4.5 s after a reset), so a telegram with preamble needs up to
+# about 110 s; asking again every second only fills the log.
+LOVF_RETRY_S = 10.0
 WINDOW_S = 3600.0
 
 
@@ -76,7 +80,7 @@ class RadioScheduler:
         *,
         ack_timeout: float = 3.0,
         retries: int = 3,
-        lovf_delay: float = 1.0,
+        lovf_delay: float = LOVF_RETRY_S,
         brake: bool = False,
         clock: Callable[[], float] = time.monotonic,
         budget_poll: float = 5.0,
@@ -108,6 +112,7 @@ class RadioScheduler:
         self._ack_event = asyncio.Event()
         self._acked: bool | None = None
         self._lovf = False
+        self._waiting_budget = False
         self._airtime: deque[tuple[float, float]] = deque()
 
     @property
@@ -120,6 +125,12 @@ class RadioScheduler:
         while self._airtime and self._airtime[0][0] < cutoff:
             self._airtime.popleft()
         return sum(cost for _, cost in self._airtime)
+
+    @property
+    def waiting_for_budget(self) -> bool:
+        """The command in turn waits for airtime: held by the brake or refused by the
+        stick (LOVF)."""
+        return self._waiting_budget
 
     def submit(self, cmd: Command) -> None:
         """Queue a command. A newer command with the same key replaces the waiting one;
@@ -228,6 +239,7 @@ class RadioScheduler:
         self._abandoned = False
         self._ack_event.clear()
         self._inflight_cmd = cmd
+        lovf_reported = False
         try:
             while True:
                 if self._wait_ready is not None:
@@ -254,10 +266,12 @@ class RadioScheduler:
                         return False
                     await asyncio.sleep(ack_timeout)
                     continue
-                if cmd.first_sent_at is None:
+                first_attempt = cmd.first_sent_at is None
+                if first_attempt:
                     cmd.first_sent_at = self._clock()
                 cmd.sent += 1
-                self._airtime.append((self._clock(), cost))
+                booked = (self._clock(), cost)
+                self._airtime.append(booked)
                 self._changed()
                 if not cmd.expects_ack:
                     cmd.outcome = Outcome.SENT
@@ -281,9 +295,28 @@ class RadioScheduler:
                 if self._abandoned:
                     cmd.outcome = Outcome.ABANDONED
                     return False
-                # LOVF: wait, then resend the same frame without counting an attempt.
-                # An ack arriving during this delay is caught by the check at the loop top.
-                await asyncio.sleep(self._lovf_delay)
+                # LOVF: the stick did not transmit. Take the attempt back, wait for its
+                # budget to refill, then send the same frame again. An ack arriving during
+                # this delay is caught by the check at the loop top.
+                if self._airtime and self._airtime[-1] is booked:
+                    self._airtime.pop()
+                cmd.sent -= 1
+                if first_attempt:
+                    cmd.first_sent_at = None
+                if not lovf_reported:
+                    lovf_reported = True
+                    _LOGGER.warning(
+                        "culfw refused to send to %06X (LOVF): its airtime budget is used up, "
+                        "the command waits until the stick sends again",
+                        cmd.dst,
+                    )
+                self._waiting_budget = True
+                self._changed()
+                try:
+                    await asyncio.sleep(self._lovf_delay)
+                finally:
+                    self._waiting_budget = False
+                self._changed()
         finally:
             self._inflight = None
             self._inflight_cmd = None
@@ -294,8 +327,16 @@ class RadioScheduler:
         return ok
 
     async def _wait_budget(self, cost: float) -> None:
-        while self.airtime_last_hour + cost > BUDGET_S:
-            await asyncio.sleep(self._budget_poll)
+        if self.airtime_last_hour + cost <= BUDGET_S:
+            return
+        self._waiting_budget = True
+        self._changed()
+        try:
+            while self.airtime_last_hour + cost > BUDGET_S:
+                await asyncio.sleep(self._budget_poll)
+        finally:
+            self._waiting_budget = False
+        self._changed()
 
     def _done(self, cmd: Command, ok: bool) -> None:
         if cmd.on_done is not None:

@@ -14,7 +14,8 @@ USB-Sticks und geflashte Cubes (Netzwerk) lassen sich mischen.
       einmal ausgewertet. Die Empfangsstärke merkt sich die Integration je Modul.
     - **Umstellen ist eine reine Einstellung.** Es geht nichts an das Gerät, wartende Befehle
       wechseln mit auf das neue Modul.
-    - Jedes Modul hat **sein eigenes Funkbudget** (1 % = 36 s pro Stunde).
+    - Jedes Modul hat **sein eigenes Funkbudget** (1 % = 36 s pro Stunde). Wartet ein Modul
+      auf Sendezeit, steht das an seiner Kachel.
 
 **Modul hinzufügen:** Konfigurieren → „Funkmodule“ → „USB-Stick hinzufügen“ oder
 „Netzwerk-CUL hinzufügen“, mit einem Namen (z. B. „Obergeschoss“). Das Modul wird mit `V`

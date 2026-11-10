@@ -45,5 +45,5 @@ Erprobt ist der Weg von Homegear an einer Installation mit 24 Geräten.
 | Konfiguration steht überall auf `werksvorgabe` | Export ohne Werte → Export bei laufendem Homegear wiederholen oder Werte in eq3_max setzen |
 | Verknüpfungen fehlen | Export ohne `links` → auf der Seite „eQ-3 MAX!“ oder mit `eq3_max.link` nachtragen |
 | Befehle bleiben „ausstehend“, Funkfehler | Stick wird nach dem Senden taub (USB-Port). Die Integration öffnet den Port dann selbst neu. Dauerhafte Abhilfe: anderer Port, kurzes Verlängerungskabel oder aktiver Hub |
-| Cube: Befehle verzögert, im Log `LOVF` | a-culfw hat das Funkbudget erreicht → in den Optionen „Sendezeit auf 36 s pro Stunde begrenzen“ einschalten |
+| Befehle verzögert, im Log `LOVF`, am Funkmodul „wartet auf Sendezeit“ | Der Sendezeit-Vorrat der Firmware ist leer (a-culfw: höchstens 9 s am Stück, 10 ms je Sekunde kommen nach). eq3_max wartet und sendet von selbst weiter; nichts tun. Viele Befehle hintereinander (Wochenprogramme, Konfiguration vieler Geräte) brauchen dann entsprechend lange |
 | Neuer Code wirkt nicht | Neuladen der Integration lädt keinen neuen Python-Code → HA neu starten |

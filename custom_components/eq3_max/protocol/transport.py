@@ -255,7 +255,8 @@ class CulTransport:
                 self._stick_deaf_reported = False
                 self._emit(self._on_frame, text)
             elif text.startswith("LOVF"):
-                _LOGGER.warning("culfw refused to send (LOVF)")
+                # The scheduler reports it once per command.
+                _LOGGER.debug("culfw refused to send (LOVF)")
                 self._emit(self._on_lovf)
             else:
                 _LOGGER.debug("culfw: %s", text)

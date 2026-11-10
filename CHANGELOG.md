@@ -5,12 +5,40 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.4] – 2026-11-10
+
 ### Behoben
 
+- **Wochenprogramm brach nach einigen Tagen ab** (GitHub #2). culfw/a-culfw lässt höchstens
+  9 s Sendezeit am Stück zu und lehnt danach mit `LOVF` ab, bis wieder Zeit nachgelaufen ist
+  (10 ms je Sekunde). Eine ganze Woche braucht mehr; der Dienst gab nach 10 Minuten auf und
+  ließ die restlichen Tage weg. Jetzt gibt es keine Frist mehr: Das Schreiben läuft als Auftrag
+  der Integration weiter, auch wenn die Seite geschlossen wird oder der Aufrufer nicht mehr
+  wartet, und dauert bei leerem Vorrat eben eine Viertelstunde und mehr.
+- Bei `LOVF` fragte die Integration jede Sekunde neu an und schrieb jedes Mal eine Warnung ins
+  Log. Jetzt wartet sie 10 s und meldet es einmal je Befehl. Ein abgelehntes Telegramm zählt
+  nicht mehr als Sendezeit und nicht mehr als Sendeversuch.
+- „Werksprogramm schreiben“ schickte Werktage und Wochenende als zwei Aufträge nacheinander
+  von der Seite aus; wurde sie dazwischen geschlossen, fehlte das Wochenende. Jetzt ist es ein
+  Auftrag.
 - Zusätzliche Funkmodule wurden beim Anlegen noch mit dem veralteten Parameter `via_device`
   verknüpft; Home Assistant meldete bei jedem Start „deprecated `via_device` parameter … stops
   working in 2027.8.0“. Das Funkmodul wird jetzt direkt mit `via_device_id` unter das Hauptmodul
-  gehängt.
+  gehängt. (Danke an BSass, GitHub #3.)
+
+### Hinzugefügt
+
+- Reiter „Wochenprogramm“: zeigt ein laufendes Schreiben (noch offene Tage, auch nach dem
+  Wiederöffnen der Seite) und den Grund, wenn das letzte Schreiben abgebrochen ist.
+- Funkmodul-Kachel: „wartet auf Sendezeit“, solange ein Befehl wegen der 1-%-Regel zurückgehalten
+  wird (Bremse der Integration oder `LOVF` der Firmware).
+- Übersicht (WebSocket): `week_profile_writing`, `week_profile_error` je Gerät, `waiting_budget`
+  je Funkmodul; `eq3_max/set_week_profile` nimmt mit `days` ein eigenes Programm je Wochentag.
+
+### Geändert
+
+- Solange ein Wochenprogramm auf ein Thermostat geschrieben wird, wird ein zweites Schreiben
+  für dasselbe Gerät abgelehnt („wird gerade geschrieben“).
 
 ## [0.6.3] – 2026-11-09
 

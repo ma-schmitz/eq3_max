@@ -604,3 +604,16 @@ def test_week_profile_survives_store_roundtrip_and_ignores_junk():
     assert back.week_profile == {"Montag": [{"temperature": 21.0, "until": "24:00"}]}
     data.pop("week_profile")
     assert MaxDevice.from_dict(data).week_profile == {}
+
+
+def test_running_week_profile_write_is_not_stored():
+    from custom_components.eq3_max.protocol.devices import MaxDevice
+    from custom_components.eq3_max.protocol.messages import DeviceType
+
+    dev = MaxDevice(address=0xA1B005, serial="NEQ9000010", device_type=DeviceType.HEATING_THERMOSTAT)
+    dev.week_profile_writing = ["Montag"]
+    dev.week_profile_error = "abgelehnt"
+    data = dev.to_dict()
+    assert "week_profile_writing" not in data and "week_profile_error" not in data
+    back = MaxDevice.from_dict({**data, "week_profile_writing": ["Montag"], "week_profile_error": "x"})
+    assert back.week_profile_writing == [] and back.week_profile_error is None

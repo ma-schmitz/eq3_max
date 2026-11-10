@@ -48,6 +48,7 @@ class FakeHub:
         self.resets = []
         self.week_profiles = []
         self.week_profile_error = None
+        self.waiting_budget = False
         self.reset_result = ResetResult.ACKED
         self.reset_error = None
         self.kwargs = _kw
@@ -152,7 +153,8 @@ class FakeHub:
 
     def radio_status(self):
         main = {"id": "", "target": self.port, "connected": self.connected, "version": self.version,
-                "airtime": self.airtime_last_hour, "queue": self.queue_length}
+                "airtime": self.airtime_last_hour, "queue": self.queue_length,
+                "waiting_budget": self.waiting_budget}
         return [main, *({"id": r.id, "target": r.port, "connected": self.radio_connected[r.id],
                          "version": "V 1.26.08 a-culfw CUBE", "airtime": 0.0, "queue": 0} for r in self.radios)]
 

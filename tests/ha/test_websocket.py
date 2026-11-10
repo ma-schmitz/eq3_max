@@ -427,3 +427,52 @@ async def test_overview_carries_the_factory_week_profile(hass, setup_entry, fake
     assert list(factory) == ["Samstag", "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     assert factory["Sonntag"] == [{"temperature": 17.0, "until": "06:00"}, {"temperature": 21.0, "until": "22:00"}, {"temperature": 17.0, "until": "24:00"}]
     assert factory["Montag"][1] == {"temperature": 21.0, "until": "09:00"} and len(factory["Montag"]) == 5
+
+
+async def test_set_week_profile_days_with_different_programs_is_one_write(hass, setup_entry, fake_hub, hass_ws_client):
+    """The factory program differs between weekdays and weekend: one request and one
+    write of the hub, so it does not depend on the page staying open in between."""
+    from custom_components.eq3_max.protocol.messages import ProfilePoint
+
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(
+        client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT),
+        days={
+            "Montag": [{"temperature": 17, "until": "06:00"}, {"temperature": 21}],
+            "Samstag": [{"temperature": 19}],
+        },
+    )
+    assert reply["success"], reply
+    [(address, plan)] = hub.week_profiles
+    assert address == HT
+    assert plan == {0: [ProfilePoint(19.0, 1440)], 2: [ProfilePoint(17.0, 360), ProfilePoint(21.0, 1440)]}
+
+    for bad in (
+        {"days": {"Blursday": [{"temperature": 21}]}},
+        {"days": {}},
+        {"days": {"Montag": [{"temperature": 21}]}, "weekday": ["Montag"], "profile": [{"temperature": 21}]},
+        {"weekday": ["Montag"]},
+        {},
+    ):
+        reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), **bad)
+        assert not reply["success"], bad
+    assert len(hub.week_profiles) == 1
+
+
+async def test_overview_shows_a_running_week_profile_write_and_the_budget_wait(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    result = (await call(client, type="eq3_max/overview"))["result"]["entries"][0]
+    dev = next(d for d in result["devices"] if d["serial"] == "MEQ9000007")
+    assert dev["week_profile_writing"] == [] and dev["week_profile_error"] is None
+    assert result["hub"]["radios"][0]["waiting_budget"] is False
+
+    hub.devices[HT].week_profile_writing = ["Dienstag", "Mittwoch"]
+    hub.devices[HT].week_profile_error = "abgelehnt"
+    hub.waiting_budget = True
+    result = (await call(client, type="eq3_max/overview"))["result"]["entries"][0]
+    dev = next(d for d in result["devices"] if d["serial"] == "MEQ9000007")
+    assert dev["week_profile_writing"] == ["Dienstag", "Mittwoch"] and dev["week_profile_error"] == "abgelehnt"
+    assert dev["pending"] is True
+    assert result["hub"]["radios"][0]["waiting_budget"] is True

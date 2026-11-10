@@ -1834,3 +1834,105 @@ async def test_set_week_profile_refuses_unknown_sleepers_and_bad_points(hub):
         await h.set_week_profile(HT, {7: FHEM_DAY})
     await asyncio.sleep(0.05)
     assert sent(cul) == []
+
+
+# --- week profile as a job of the hub: progress, no deadline, survives its caller ---
+
+
+async def test_week_profile_shows_outstanding_days_while_writing(hub):
+    h, cul, rec = hub
+    dev = h.devices[HT]
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY, 3: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    assert dev.week_profile_writing == ["Montag", "Dienstag"]
+    ack(cul, HT, sent(cul)[0])
+    await until(lambda: len(sent(cul)) == 2)
+    assert dev.week_profile_writing == ["Dienstag"]
+    ack(cul, HT, sent(cul)[1])
+    await asyncio.wait_for(task, 1.0)
+    assert dev.week_profile_writing == [] and dev.week_profile_error is None
+
+
+async def test_week_profile_goes_on_when_the_caller_gives_up(hub):
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY, 3: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    ack(cul, HT, sent(cul)[0])
+    await until(lambda: len(sent(cul)) == 2)
+    ack(cul, HT, sent(cul)[1])
+    await until(lambda: list(h.devices[HT].week_profile) == ["Montag", "Dienstag"])
+    await until(lambda: h.devices[HT].week_profile_writing == [])
+
+
+async def test_week_profile_second_write_while_one_runs_is_refused(hub):
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    with pytest.raises(FrameError, match="wird gerade geschrieben"):
+        await h.set_week_profile(HT, {3: FHEM_DAY})
+    ack(cul, HT, sent(cul)[0])
+    await asyncio.wait_for(task, 1.0)
+
+
+async def test_week_profile_failure_is_kept_until_the_next_write(hub):
+    h, cul, rec = hub
+    dev = h.devices[HT]
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY, 3: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, HT, sent(cul)[0], ok=False)
+    with pytest.raises(FrameError, match="abgelehnt"):
+        await asyncio.wait_for(task, 1.0)
+    assert dev.week_profile_writing == []
+    assert "Montag" in dev.week_profile_error and "Dienstag" in dev.week_profile_error
+    assert rec.updates[-1].address == HT
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 2)
+    assert dev.week_profile_error is None
+    ack(cul, HT, sent(cul)[1])
+    await asyncio.wait_for(task, 1.0)
+
+
+async def test_week_profile_waits_through_lovf_without_a_deadline():
+    cul = FakeCul()
+    rec = Recorder()
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, devices(),
+        on_update=rec.updates.append,
+        on_button=lambda d, t: None,
+        on_device_added=rec.added.append,
+        on_problem=rec.problems.append,
+        open_connection=cul.open,
+        ack_timeout=0.05,
+        lovf_delay=0.2,
+    )
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        await _lovf_week_profile(h, cul)
+    finally:
+        await h.stop()
+
+
+async def _lovf_week_profile(h, cul):
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    cul.feed("LOVF")
+    await until(lambda: h.radio_status()[0]["waiting_budget"])
+    await until(lambda: len(sent(cul)) == 2, timeout=3.0)
+    assert not h.radio_status()[0]["waiting_budget"]
+    ack(cul, HT, sent(cul)[1])
+    await asyncio.wait_for(task, 1.0)
+    assert h.devices[HT].week_profile == {"Montag": FHEM_DAY_STORED}
+
+
+async def test_stop_ends_a_running_week_profile_write(hub):
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+    await until(lambda: len(sent(cul)) == 1)
+    await h.stop()
+    with pytest.raises(FrameError, match="abgebrochen"):
+        await asyncio.wait_for(task, 1.0)
+    assert h.devices[HT].week_profile_writing == []

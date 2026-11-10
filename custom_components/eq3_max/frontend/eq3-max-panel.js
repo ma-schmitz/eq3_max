@@ -101,6 +101,8 @@ const STYLE = `
   .air .meter { flex: 1; }
   .meter { width: 120px; height: 6px; border-radius: 3px; background: var(--e3-divider); overflow: hidden; }
   .meter > span { display: block; height: 100%; border-radius: 3px; background: var(--e3-accent); transition: width .3s; }
+  .wp-note { margin: 8px 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; background: color-mix(in srgb, var(--e3-accent) 12%, transparent); }
+  .wp-note.bad { background: color-mix(in srgb, var(--e3-error) 12%, transparent); color: var(--e3-error); }
   .meter.warn > span { background: var(--e3-warn); }
   .meter.alarm > span { background: var(--e3-error); }
   .stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
@@ -683,7 +685,10 @@ class Eq3MaxPanel extends HTMLElement {
         h("div", { class: "top" },
           h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? "verbunden" : "getrennt" }),
           h("span", { class: "name" }, radio.name),
-          multi ? h("span", { class: "sub" }, `Warteschlange ${radio.queue}`) : null),
+          multi ? h("span", { class: "sub" }, `Warteschlange ${radio.queue}`) : null,
+          radio.waiting_budget
+            ? h("span", { class: "pill bad", title: "Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist." }, "wartet auf Sendezeit")
+            : null),
         h("div", { class: "conn", title: radio.version || "" },
           icon(radio.connection === "network" ? "mdi:lan" : "mdi:usb"),
           h("span", {}, `${radio.connection === "network" ? "Netzwerk" : "USB"} · ${radio.target}`)),
@@ -878,7 +883,23 @@ class Eq3MaxPanel extends HTMLElement {
   _renderWeekProfile(entry, dev) {
     const draft = this._wpDraft(dev);
     const key = `wp:${dev.serial}`;
-    const busy = this._busy.has(key) || this._busy.has(`${key}:copy`);
+    // A write belongs to the integration and outlives this page: its state comes from the device.
+    const writing = dev.week_profile_writing || [];
+    const busy = this._busy.has(key) || this._busy.has(`${key}:copy`) || writing.length > 0;
+    const radio = entry.hub.radios.find((r) => r.id === (dev.radio || "")) || entry.hub.radios[0];
+    const waitingBudget = !!(radio && radio.waiting_budget);
+    const progress = writing.length
+      ? h("div", { class: "wp-note" },
+        h("b", {}, `Wird geschrieben – noch offen: ${writing.join(", ")}.`),
+        waitingBudget
+          ? " Das Funkmodul wartet gerade auf Sendezeit (1-%-Regel); je Telegramm kann das zwei Minuten dauern, "
+            + "eine ganze Woche eine Viertelstunde und mehr."
+          : "",
+        " Die Seite muss dafür nicht offen bleiben.")
+      : null;
+    const failure = !writing.length && dev.week_profile_error
+      ? h("div", { class: "wp-note bad" }, h("b", {}, "Letztes Schreiben abgebrochen: "), dev.week_profile_error)
+      : null;
     if (draft.constant === undefined) draft.constant = "17";
     const stored = dev.week_profile || {};
     const fmt = (p) => `${plainNum(p.temperature)} °C bis ${p.until}`;
@@ -886,6 +907,7 @@ class Eq3MaxPanel extends HTMLElement {
     // Stored days (what the device acknowledged last).
     const storedRows = WP_DAYS.map((day) => h("div", { class: "wp-day" },
       h("span", { class: "wp-name" }, day),
+      writing.includes(day) ? h("span", { class: "sub" }, "wird geschrieben …") : null,
       stored[day]
         ? h("span", { class: "grow" }, stored[day].map(fmt).join(" · "))
         : h("span", { class: "grow sub" }, "nicht geschrieben"),
@@ -1012,10 +1034,11 @@ class Eq3MaxPanel extends HTMLElement {
     // Löschen = ein bestimmtes Programm schreiben: das Werksprogramm oder eine feste Temperatur.
     const factory = this._data.factory_week_profile || {};
     const writeDays = async (groups, done) => {
-      for (const [weekday, profile] of groups) {
-        const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, weekday, profile }, null);
-        if (result === undefined) return;
-      }
+      // One request for all days: nothing is left to send from this page afterwards.
+      const days = {};
+      for (const [weekday, profile] of groups) for (const day of weekday) days[day] = profile;
+      const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, days }, null);
+      if (result === undefined) return;
       this._showToast(done);
       this._render();
     };
@@ -1061,13 +1084,15 @@ class Eq3MaxPanel extends HTMLElement {
           "Feste Temperatur schreiben")),
       this._confirm === constKey
         ? confirmBox(`${plainNum(constValue())} °C den ganzen Tag auf ${dev.name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).`,
-          () => writeDays([[["alle"], [{ temperature: constValue() }]]], `${plainNum(constValue())} °C auf ${dev.name} geschrieben.`))
+          () => writeDays([[WP_DAYS, [{ temperature: constValue() }]]], `${plainNum(constValue())} °C auf ${dev.name} geschrieben.`))
         : null);
 
     return [
       h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
         "Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; "
         + "gezeigt werden die Tage, die es zuletzt quittiert hat."),
+      progress,
+      failure,
       h("fieldset", {}, h("legend", {}, "Gespeichert"), storedRows),
       h("fieldset", {},
         h("legend", {}, "Schreiben"),
@@ -1077,7 +1102,7 @@ class Eq3MaxPanel extends HTMLElement {
         h("div", { class: "add", style: "margin-top:6px" }, addPoint),
         error,
         h("div", { class: "setfoot" },
-          h("span", { class: "sub" }, "Je Tag ein bis zwei Telegramme, der Dienst wartet auf die Quittungen."),
+          h("span", { class: "sub" }, "Je Tag ein bis zwei Telegramme. Geschrieben wird im Hintergrund, auch wenn die Seite geschlossen wird."),
           write)),
       erase,
       others.length

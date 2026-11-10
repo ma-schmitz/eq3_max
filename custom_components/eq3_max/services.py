@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import voluptuous as vol
@@ -49,8 +48,6 @@ ATTR_WEEKDAY = "weekday"
 ATTR_PROFILE = "profile"
 ATTR_TARGET_DEVICE_ID = "target_device_id"
 ALL_DAYS = "alle"
-# Up to 14 telegrams per device with retries, possibly held back by the airtime brake.
-WEEK_PROFILE_TIMEOUT_S = 600.0
 
 POINT_SCHEMA = vol.Schema({vol.Required(ATTR_TEMPERATURE): vol.Coerce(float), vol.Optional(ATTR_UNTIL): vol.Any(cv.string, int)})
 SET_WEEK_PROFILE_SCHEMA = vol.Schema(
@@ -224,17 +221,16 @@ def _thermostat_for_profile(hass: HomeAssistant, device_id: str):
 
 async def write_week_profile(hub: MaxHub, device: MaxDevice, plan: dict[int, list[ProfilePoint]]) -> None:
     """Send the days to the device and wait for the acknowledgements; HomeAssistantError
-    (German) when the stick is away, the device refuses or stays silent."""
+    (German) when the stick is away, the device refuses or stays silent. No deadline:
+    up to 14 telegrams per device, and with an empty airtime budget (brake, or culfw
+    answering LOVF) each one waits minutes. The hub keeps writing if the caller goes away."""
     name = device.name or device.serial
     if not hub.reachable(device.address):
         raise HomeAssistantError(f"{name}: Funkmodul nicht verbunden")
     try:
-        async with asyncio.timeout(WEEK_PROFILE_TIMEOUT_S):
-            await hub.set_week_profile(device.address, plan)
+        await hub.set_week_profile(device.address, plan)
     except FrameError as err:
         raise HomeAssistantError(str(err)) from err
-    except TimeoutError as err:
-        raise HomeAssistantError(f"{name}: Wochenprogramm nicht innerhalb von 10 Minuten quittiert") from err
 
 
 def _days_from_names(names: list[str]) -> list[int]:
@@ -253,7 +249,25 @@ async def async_set_week_profile(
     panel). Validation errors are ServiceValidationError, radio failures HomeAssistantError;
     returns the devices written."""
     points = parse_profile(profile)
-    plan = {day: points for day in _days_from_names(weekdays)}
+    return await _async_write_plan(hass, device_ids, {day: points for day in _days_from_names(weekdays)})
+
+
+async def async_set_week_profile_days(
+    hass: HomeAssistant, device_ids: list[str], days: dict[str, list[dict[str, Any]]]
+) -> list[MaxDevice]:
+    """Like async_set_week_profile, with a profile of its own per weekday name: one
+    write per thermostat (the panel's factory program differs on the weekend)."""
+    plan = {}
+    for index in _days_from_names([name for name in days if name != ALL_DAYS]):
+        plan[index] = parse_profile(days[WEEKDAYS[index]])
+    if ALL_DAYS in days:
+        raise ServiceValidationError("Unbekannter Wochentag: alle")
+    return await _async_write_plan(hass, device_ids, plan)
+
+
+async def _async_write_plan(
+    hass: HomeAssistant, device_ids: list[str], plan: dict[int, list[ProfilePoint]]
+) -> list[MaxDevice]:
     if not plan:
         raise ServiceValidationError("Kein Wochentag angegeben")
     targets = [_thermostat_for_profile(hass, device_id) for device_id in device_ids]

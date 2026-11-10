@@ -57,7 +57,10 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
   geschrieben“, solange die Integration den Tag nie geschrieben hat; die Geräte melden ihr
   Programm nicht), „In den Editor“ übernimmt einen Tag. Darunter der Editor: Tage ankreuzen
   (oder „alle“), Punkte mit Temperatur und Bis-Uhrzeit (der letzte gilt bis 24:00, bis zu 13),
-  **„Schreiben“** wartet auf die Quittungen des Geräts. Zuletzt „Auf andere Thermostate
+  **„Schreiben“** wartet auf die Quittungen des Geräts. Geschrieben wird im Hintergrund: Die
+  Seite darf zwischendurch geschlossen werden, beim nächsten Öffnen steht oben, welche Tage noch
+  offen sind, ob das Funkmodul gerade auf Sendezeit wartet (dann dauert eine ganze Woche eine
+  Viertelstunde und mehr) oder warum das letzte Schreiben abgebrochen ist. Zuletzt „Auf andere Thermostate
   kopieren“ mit dem gespeicherten Programm. Unter **Löschen** zwei Knöpfe, beide mit Nachfrage und
   für alle sieben Tage: **Werksprogramm schreiben** (das Programm ab Werk) und **Feste Temperatur
   schreiben** (ein Punkt bis 24:00 mit der eingegebenen Temperatur) – ein Thermostat hat immer ein

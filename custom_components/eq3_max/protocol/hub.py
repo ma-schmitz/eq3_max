@@ -56,7 +56,7 @@ from .messages import (
     link_allowed,
     normalize_temperature,
 )
-from .scheduler import PRIO_COMMAND, PRIO_REPLY, Command, Outcome, RadioScheduler
+from .scheduler import LOVF_RETRY_S, PRIO_COMMAND, PRIO_REPLY, Command, Outcome, RadioScheduler
 from .transport import TRACE, CulTransport
 
 _LOGGER = logging.getLogger(__name__)
@@ -229,6 +229,7 @@ class MaxHub:
         sleeper_debounce: float = SLEEPER_DEBOUNCE_S,
         fast_deadline: float = FAST_DEADLINE_S,
         fast_ack_timeout: float = FAST_ACK_TIMEOUT_S,
+        lovf_delay: float = LOVF_RETRY_S,
     ) -> None:
         self.address = address
         self.devices: dict[int, MaxDevice] = {d.address: d for d in devices}
@@ -247,6 +248,9 @@ class MaxHub:
         self.raw_history: dict[int, deque[str]] = {}
         self._on_problem = on_problem
         self._brake = brake
+        self._lovf_delay = lovf_delay
+        # Week profile writes in progress by device address; they outlive their caller.
+        self._profile_jobs: dict[int, asyncio.Task[None]] = {}
         self._transport_kwargs = dict(transport_kwargs or {})
         self._counter = 0
         # Main module first: it answers for everything the device assignment does not cover.
@@ -296,6 +300,7 @@ class MaxHub:
             radio.transport.write_line,
             ack_timeout=self._ack_timeout,
             brake=self._brake,
+            lovf_delay=self._lovf_delay,
             on_change=lambda: self._notify(None),
             wait_ready=radio.transport.wait_connected,
             on_finished=lambda cmd: self._command_finished(cmd, radio),
@@ -332,7 +337,8 @@ class MaxHub:
         return list(self._radios)
 
     def radio_status(self) -> list[dict[str, Any]]:
-        """Per module: id, target, connected, version, airtime, queue (main first)."""
+        """Per module: id, target, connected, version, airtime, queue, waiting_budget
+        (a command is held back for airtime; main first)."""
         return [
             {
                 "id": radio.id,
@@ -341,6 +347,7 @@ class MaxHub:
                 "version": radio.transport.version,
                 "airtime": radio.scheduler.airtime_last_hour,
                 "queue": radio.scheduler.queue_length,
+                "waiting_budget": radio.scheduler.waiting_for_budget,
             }
             for radio in self._radios.values()
         ]
@@ -423,6 +430,10 @@ class MaxHub:
         for future in self._resets.values():
             if not future.done():
                 future.set_result(False)
+        for job in list(self._profile_jobs.values()):
+            job.cancel()
+            with contextlib.suppress(asyncio.CancelledError, FrameError):
+                await job
         for radio in self._radios.values():
             if radio.task is not None:
                 radio.task.cancel()
@@ -474,8 +485,11 @@ class MaxHub:
     async def set_week_profile(self, address: int, days: Mapping[int, Sequence[ProfilePoint]]) -> None:
         """Write whole days of the week profile (0 = Saturday ... 6 = Friday) to a
         thermostat: one telegram per part, acknowledged one after the other. The stored
-        profile follows each acknowledged day. Raises FrameError (German) when the device
-        refuses or stays silent; the remaining days are then not sent."""
+        profile follows each acknowledged day; `week_profile_writing` lists the days still
+        to come. There is no deadline: with an empty airtime budget a week takes a long
+        time. The write belongs to the hub and goes on when the caller is cancelled.
+        Raises FrameError (German) when the device refuses or stays silent (the remaining
+        days are then not sent, `week_profile_error` keeps the reason) or the hub stops."""
         dev = self.devices.get(address)
         if dev is None:
             raise FrameError("Ger\u00e4t ist dem Funkmodul nicht bekannt")
@@ -490,27 +504,60 @@ class MaxHub:
             except ValueError as err:
                 raise FrameError(f"{WEEKDAYS[day]}: {err}") from err
         name = dev.name or dev.serial
-        for day in sorted(encoded):
-            for part, words in enumerate(encoded[day]):
-                outcome = await self._await_command(
-                    Command(
-                        dst=address,
-                        build=lambda c, d=day, p=part, w=words: build_config_week_profile(
-                            c, self.address, address, day=d, part=p, words=w
-                        ),
-                        key=f"wp:{address}:{day}:{part}",
-                        deaf_probe=True,
+        if address in self._profile_jobs:
+            raise FrameError(f"{name}: Wochenprogramm wird gerade geschrieben")
+        dev.week_profile_error = None
+        dev.week_profile_writing = [WEEKDAYS[day] for day in sorted(encoded)]
+        self._notify(dev)
+        job = asyncio.create_task(self._write_week_profile(dev, encoded, days))
+        self._profile_jobs[address] = job
+        try:
+            await asyncio.shield(job)
+        except asyncio.CancelledError:
+            if job.cancelled():
+                raise FrameError(f"{name}: Wochenprogramm abgebrochen, das Funkmodul wurde angehalten") from None
+            # Nobody may be left to fetch the outcome; the job reports failures itself.
+            job.add_done_callback(lambda done: done.cancelled() or done.exception())
+            raise
+
+    async def _write_week_profile(
+        self, dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]]
+    ) -> None:
+        address = dev.address
+        name = dev.name or dev.serial
+        try:
+            for day in sorted(encoded):
+                for part, words in enumerate(encoded[day]):
+                    outcome = await self._await_command(
+                        Command(
+                            dst=address,
+                            build=lambda c, d=day, p=part, w=words: build_config_week_profile(
+                                c, self.address, address, day=d, part=p, words=w
+                            ),
+                            key=f"wp:{address}:{day}:{part}",
+                            deaf_probe=True,
+                        )
                     )
-                )
-                if outcome is Outcome.NAK:
-                    raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} abgelehnt")
-                if outcome is not Outcome.ACKED:
-                    raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} nicht quittiert ({outcome.value})")
-            dev.week_profile[WEEKDAYS[day]] = [
-                {"temperature": point.temperature, "until": format_until(point.until)} for point in days[day]
-            ]
-            _LOGGER.info("MAX! %s (%s): week profile %s acknowledged", name, dev.serial, WEEKDAYS[day])
-            self._notify(dev)
+                    if outcome is Outcome.NAK:
+                        raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} abgelehnt")
+                    if outcome is not Outcome.ACKED:
+                        raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} nicht quittiert ({outcome.value})")
+                dev.week_profile[WEEKDAYS[day]] = [
+                    {"temperature": point.temperature, "until": format_until(point.until)} for point in days[day]
+                ]
+                dev.week_profile_writing = [d for d in dev.week_profile_writing if d != WEEKDAYS[day]]
+                _LOGGER.info("MAX! %s (%s): week profile %s acknowledged", name, dev.serial, WEEKDAYS[day])
+                self._notify(dev)
+        except FrameError as err:
+            missing = ", ".join(dev.week_profile_writing)
+            dev.week_profile_error = f"{err}; nicht geschrieben: {missing}"
+            _LOGGER.warning("MAX! %s (%s): %s", name, dev.serial, dev.week_profile_error)
+            raise
+        finally:
+            self._profile_jobs.pop(address, None)
+            if dev.week_profile_writing:
+                dev.week_profile_writing = []
+                self._notify(dev)
 
     def set_config_set(self, address: int, kind: str, values: dict[str, Any]) -> list[str]:
         """Change several values of one set: one telegram with the whole set. Returns

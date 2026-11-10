@@ -62,7 +62,16 @@ data:
 - Der Dienst wartet auf die Quittungen des Geräts und meldet einen Fehler, wenn es ablehnt
   oder nicht antwortet; die restlichen Tage gehen dann nicht mehr raus. Je Tag sind das ein
   oder zwei Telegramme (ab acht Punkten zwei), eine ganze Woche also 7 bis 14 Telegramme à
-  rund 1,2 s Sendezeit. Mit eingeschalteter Sendezeit-Bremse kann das dauern.
+  rund 1,2 s Sendezeit.
+- **Das kann dauern.** Eine ganze Woche braucht mehr Sendezeit, als culfw/a-culfw am Stück
+  zulässt (9 s, siehe [Hardware](../loslegen/hardware.md)). Nach den ersten Tagen wartet
+  jedes weitere Telegramm rund zwei Minuten, eine Woche dauert dann eine Viertelstunde und
+  mehr. Ab 0.6.4 gibt es dafür keine Frist mehr (vorher brach der Dienst nach 10 Minuten
+  ab und ließ die restlichen Tage weg). Das Schreiben gehört der Integration: Es läuft
+  weiter, wenn der Aufrufer nicht mehr wartet oder die Seite geschlossen wird. Den Stand
+  zeigt der Reiter „Wochenprogramm“ (noch offene Tage, Grund eines Abbruchs). Solange ein
+  Schreiben läuft, wird ein zweites für dasselbe Thermostat abgelehnt. Ein Neustart von
+  Home Assistant beendet es; die fehlenden Tage dann noch einmal schreiben.
 - Auslesen kann die Integration das Programm nicht (die Geräte melden es nicht). Sie merkt
   sich die zuletzt quittierten Tage je Gerät; sie stehen in der Diagnose und in der
   Seite „eQ-3 MAX!“ (Datenbasis `week_profile`).

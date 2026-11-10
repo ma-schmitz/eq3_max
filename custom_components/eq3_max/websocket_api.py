@@ -49,6 +49,7 @@ from .radios import describe, radio_items, radio_names
 from .services import (
     async_copy_week_profile,
     async_set_week_profile,
+    async_set_week_profile_days,
     change_link,
     resolve_max_device,
 )
@@ -241,12 +242,14 @@ def _device(ctx: _Context, dev: MaxDevice) -> dict[str, Any]:
         "area_name": None if area is None else area.name,
         "entity_id": entity_id,
         "sleeper": dev.is_sleeper,
-        "pending": bool(dev.has_pending or dev.pending_config or dev.pending_links),
+        "pending": bool(dev.has_pending or dev.pending_config or dev.pending_links or dev.week_profile_writing),
         "state": _state(ctx, dev, entity_id),
         "links": links,
         "candidates": _candidates(ctx, dev),
         "config": _config(dev),
         "week_profile": dev.week_profile,
+        "week_profile_writing": list(dev.week_profile_writing),
+        "week_profile_error": dev.week_profile_error,
     }
 
 
@@ -284,6 +287,8 @@ def _radios(ctx: _Context) -> list[dict[str, Any]]:
                 "version": st.get("version"),
                 "airtime": round(st.get("airtime", 0.0), 1),
                 "queue": st.get("queue", 0),
+                # A command is held back: by the brake, or the stick refused it (LOVF).
+                "waiting_budget": bool(st.get("waiting_budget")),
             }
         )
     return result
@@ -481,17 +486,29 @@ def ws_set_radio(hass: HomeAssistant, connection: websocket_api.ActiveConnection
     {
         vol.Required("type"): "eq3_max/set_week_profile",
         vol.Required("device_id"): vol.All(cv.ensure_list, [str]),
-        vol.Required("weekday"): vol.All(cv.ensure_list, [str]),
-        vol.Required("profile"): [dict],
+        # Either weekday + profile (one profile for these days) or days (a profile per
+        # weekday name); always one write per thermostat.
+        vol.Optional("weekday"): vol.All(cv.ensure_list, [str]),
+        vol.Optional("profile"): [dict],
+        vol.Optional("days"): {str: [dict]},
     }
 )
 @websocket_api.async_response
 async def ws_set_week_profile(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Write a week profile; waits for the acknowledgements (seconds to minutes)."""
+    """Write a week profile; waits for the acknowledgements (seconds, with an empty
+    airtime budget many minutes). The write goes on when the page is closed; the overview
+    carries its progress (week_profile_writing, week_profile_error)."""
     try:
-        devices = await async_set_week_profile(hass, msg["device_id"], msg["weekday"], msg["profile"])
+        if "days" in msg:
+            if "weekday" in msg or "profile" in msg:
+                raise ServiceValidationError("Entweder days oder weekday und profile angeben")
+            devices = await async_set_week_profile_days(hass, msg["device_id"], msg["days"])
+        elif "weekday" in msg and "profile" in msg:
+            devices = await async_set_week_profile(hass, msg["device_id"], msg["weekday"], msg["profile"])
+        else:
+            raise ServiceValidationError("weekday und profile oder days angeben")
     except (ServiceValidationError, ValueError) as err:
         _error(connection, msg, err)
         return

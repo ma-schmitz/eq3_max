@@ -462,3 +462,57 @@ async def test_abandon_inflight_fast_command(setup):
     await until(lambda: done == [False])
     assert cmd.outcome is Outcome.ABANDONED and cmd.sent == 1
     assert sched.abandon_inflight("link:x") is False  # nothing on air any more
+
+
+# --- culfw refuses to send (LOVF): its own budget is empty ---
+
+
+async def test_lovf_frame_was_not_on_air_no_airtime_no_sent_count():
+    sender = Sender()
+    sched = RadioScheduler(sender, ack_timeout=0.05, lovf_delay=0.2, clock=FakeClock(), budget_poll=0.01)
+    task = asyncio.create_task(sched.run())
+    try:
+        cmd = Command(dst=DEV, build=frame)
+        sched.submit(cmd)
+        await until(lambda: len(sender.lines) == 1)
+        assert sched.airtime_last_hour == pytest.approx(airtime(frame(1)))
+        sched.on_lovf()
+        await until(lambda: sched.waiting_for_budget)
+        assert sched.airtime_last_hour == 0
+        assert cmd.sent == 0 and cmd.first_sent_at is None
+        await until(lambda: len(sender.lines) == 2)
+        assert not sched.waiting_for_budget
+        assert cmd.sent == 1 and sched.airtime_last_hour == pytest.approx(airtime(frame(1)))
+    finally:
+        task.cancel()
+
+
+async def test_lovf_warns_once_per_command(setup, caplog):
+    sched, sender, _ = setup
+    done = []
+    sched.submit(Command(dst=DEV, build=frame, on_done=done.append))
+    for count in (1, 2, 3):
+        await until(lambda: len(sender.lines) == count)
+        sched.on_lovf()
+    await until(lambda: len(sender.lines) == 4)
+    sched.on_ack(DEV, 1, True)
+    await until(lambda: done == [True])
+    assert len([r for r in caplog.records if "LOVF" in r.getMessage() and r.levelname == "WARNING"]) == 1
+
+
+def test_lovf_retry_default_leaves_the_stick_time_to_refill():
+    # culfw refills 10 ms per second; a telegram with preamble needs about 110 s of that.
+    sched = RadioScheduler(Sender())
+    assert sched._lovf_delay == 10.0
+
+
+async def test_waiting_for_budget_while_the_brake_holds(setup):
+    sched, sender, clock = setup
+    sched._brake = True
+    sched._airtime.append((clock(), 36.0))
+    sched.submit(Command(dst=DEV, build=frame))
+    await until(lambda: sched.waiting_for_budget)
+    assert sender.lines == []
+    clock.t += 3601
+    await until(lambda: len(sender.lines) == 1)
+    assert not sched.waiting_for_budget

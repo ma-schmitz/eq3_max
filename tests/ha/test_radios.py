@@ -67,6 +67,13 @@ async def test_each_module_is_a_device_and_devices_hang_below_theirs(hass, two_r
     assert _device(hass, two_radios, "NEQ9000010").via_device_id == main.id
 
 
+async def test_extra_module_is_created_without_deprecated_via_device(hass, two_radios, caplog):
+    assert _device(hass, two_radios, "C0FFEE:r2") is not None
+    # The entry is set up by the fixture, so the warning would sit in the setup phase.
+    messages = [record.getMessage() for record in caplog.get_records("setup")]
+    assert not [m for m in messages if "deprecated `via_device`" in m]
+
+
 async def test_radio_select_switches_without_reload(hass, two_radios, fake_hub):
     hub = fake_hub.last
     state = hass.states.get("select.ht_bad_unten_funkmodul")

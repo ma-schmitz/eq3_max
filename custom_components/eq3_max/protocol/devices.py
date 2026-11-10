@@ -140,6 +140,10 @@ class MaxDevice:
     # Last acknowledged week profile by weekday name (WEEKDAYS): points as dicts with
     # temperature and until (hh:mm, 24:00 = day end). Devices cannot report it.
     week_profile: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # A write in progress: weekday names not acknowledged yet (not stored).
+    week_profile_writing: list[str] = field(default_factory=list)
+    # Why the last write stopped early, until the next write (German, not stored).
+    week_profile_error: str | None = None
     # Radio module the commands to this device go through ("" = the main module).
     radio: str = ""
     # Last RSSI per radio module that heard the device ("" = the main module).
@@ -412,6 +416,8 @@ class MaxDevice:
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
+        # State of a running write, gone with the process.
+        del data["week_profile_writing"], data["week_profile_error"]
         data["device_type"] = int(self.device_type)
         data["mode"] = None if self.mode is None else int(self.mode)
         data["pending_mode"] = None if self.pending_mode is None else int(self.pending_mode)
@@ -428,6 +434,8 @@ class MaxDevice:
     def from_dict(cls, data: dict[str, Any]) -> MaxDevice:
         known = {f.name for f in fields(cls)}
         values = {k: v for k, v in data.items() if k in known}
+        values.pop("week_profile_writing", None)
+        values.pop("week_profile_error", None)
         for key in ("config", "config_source"):
             values[key] = dict(values.get(key) or {})
         values["pending_config"] = {k: dict(v) for k, v in (values.get("pending_config") or {}).items()}
