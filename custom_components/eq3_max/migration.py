@@ -63,7 +63,8 @@ def specs_for(device: MaxDevice) -> list[EntitySpec]:
             *_config_specs(CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS),
         ]
     if device.device_type is DeviceType.WALL_THERMOSTAT:
-        return [EntitySpec("climate", "climate", ""), *_DIAG, *_CLIMATE_DIAG, *_config_specs(CONFIG_TEMP_KEYS)]
+        # device.config_keys: the temperatures and, of the valve set, the boost duration.
+        return [EntitySpec("climate", "climate", ""), *_DIAG, *_CLIMATE_DIAG, *_config_specs(device.config_keys)]
     if device.device_type is DeviceType.SHUTTER_CONTACT:
         return [EntitySpec("binary_sensor", "state", "_STATE"), *_DIAG]
     if device.device_type is DeviceType.PUSH_BUTTON:

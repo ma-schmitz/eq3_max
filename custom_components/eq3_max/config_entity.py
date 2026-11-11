@@ -8,6 +8,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.exceptions import ServiceValidationError
 
 from .config_defs import CONFIG_LABELS
+from .errors import invalid
 from .entity import MaxCulEntity
 from .protocol.messages import FrameError
 
@@ -38,12 +39,13 @@ class MaxConfigEntity(MaxCulEntity):
             "quelle": self.device.config_source.get(self._key),
         }
 
-    def _invalid_text(self) -> str:
-        return "Ung\u00fcltiger Wert"
+    def _invalid(self, value: Any) -> ServiceValidationError:
+        """The translated error for a value the device does not take."""
+        return invalid("invalid_value")
 
     def _set(self, value: Any) -> None:
         assert self.coordinator.hub is not None
         try:
             self.coordinator.hub.set_config(self._address, self._key, value)
         except FrameError as err:
-            raise ServiceValidationError(f"{self._invalid_text()} ({err})") from err
+            raise self._invalid(value) from err

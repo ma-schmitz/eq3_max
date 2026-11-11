@@ -1,12 +1,14 @@
 {
   "config": {
+    "flow_title": "MAX! Cube with a-culfw ({host})",
     "step": {
       "user": {
         "title": "Connection",
         "description": "How is the CUL connected?",
         "menu_options": {
           "usb": "USB stick",
-          "network": "Network (CUN, flashed Cube)"
+          "network_search": "Search the network (flashed Cube, CUN)",
+          "network": "Network: enter the address (CUN, flashed Cube)"
         }
       },
       "usb": {
@@ -51,6 +53,41 @@
       "confirm": {
         "title": "Confirm import",
         "description": "{count} devices will be imported:\n{devices}"
+      },
+      "network_search": {
+        "title": "Modules found",
+        "description": "These addresses answered as culfw on port 2323. Modules already set up are not listed.",
+        "data": {
+          "module": "Radio module"
+        }
+      },
+      "network_none": {
+        "title": "Nothing found",
+        "description": "No culfw answered on port 2323 in Home Assistant's own network. The search only covers that network (at most 254 addresses around Home Assistant's address) and only port 2323. Is the Cube powered, on the LAN and flashed with a-culfw? Otherwise enter the address yourself.",
+        "menu_options": {
+          "network_search": "Search again",
+          "network": "Enter the address"
+        }
+      },
+      "discovered": {
+        "title": "MAX! Cube with a-culfw found",
+        "description": "A culfw answers at {host} ({version}). There is already an eQ-3 MAX! entry: the Cube can work for it as a further radio module (same central address, devices need no re-pairing), or become a central of its own.",
+        "menu_options": {
+          "discovered_add": "Add as a further radio module",
+          "discovered_new": "Set up as a central of its own"
+        }
+      },
+      "discovered_new": {
+        "title": "MAX! Cube with a-culfw found",
+        "description": "A culfw answers at {host} ({version}). Set it up as radio module for eQ-3 MAX!? Next you enter the central address."
+      },
+      "discovered_add": {
+        "title": "Add as radio module",
+        "description": "The module at {host} ({version}) gets the central address of the entry. Devices are assigned to it on the page 'eQ-3 MAX!'.",
+        "data": {
+          "name": "Name (e.g. upstairs)",
+          "entry": "Entry"
+        }
       }
     },
     "error": {
@@ -59,10 +96,15 @@
       "invalid_port": "The serial port must be a device path starting with /dev/.",
       "invalid_address": "Address must be exactly 6 hex digits.",
       "cannot_read": "The export could not be read.",
-      "homegear_unreachable": "Homegear could not be reached."
+      "homegear_unreachable": "Homegear could not be reached.",
+      "name_missing": "Please enter a name.",
+      "name_taken": "A radio module already has this name."
     },
     "abort": {
-      "already_configured": "This central address is already configured."
+      "already_configured": "This central address or radio module is already set up.",
+      "not_culfw": "No culfw answers there on port 2323.",
+      "radio_added": "The radio module was added.",
+      "already_in_progress": "This module is already being set up."
     }
   },
   "options": {
@@ -79,7 +121,8 @@
         "description": "Changing the connection restarts the integration.",
         "menu_options": {
           "connection_usb": "USB stick",
-          "connection_network": "Network (CUN, flashed Cube)"
+          "connection_search": "Search the network (flashed Cube, CUN)",
+          "connection_network": "Network: enter the address (CUN, flashed Cube)"
         }
       },
       "connection_usb": {
@@ -113,7 +156,9 @@
         "description": "More CUL sticks or flashed Cubes use the same central address. Every device sends through its assigned module; switching needs no re-pairing (page \"eQ-3 MAX!\" or the \"Funkmodul\" entity).",
         "menu_options": {
           "radio_add_usb": "Add USB stick",
+          "radio_search": "Search the network and add (flashed Cube, CUN)",
           "radio_add_network": "Add network CUL (CUN, flashed Cube)",
+          "radio_rename": "Rename a radio module",
           "radio_remove": "Remove radio module"
         }
       },
@@ -140,6 +185,45 @@
         "data": {
           "radio": "Radio module"
         }
+      },
+      "radio_search": {
+        "title": "Modules found",
+        "description": "These addresses answered as culfw on port 2323. The chosen module gets this entry's central address.",
+        "data": {
+          "name": "Name (e.g. upstairs)",
+          "module": "Radio module"
+        }
+      },
+      "radio_none": {
+        "title": "Nothing found",
+        "description": "No culfw answered on port 2323 in Home Assistant's own network. The search only covers that network (at most 254 addresses around Home Assistant's address) and only port 2323. Is the Cube powered, on the LAN and flashed with a-culfw? Otherwise enter the address yourself.",
+        "menu_options": {
+          "radio_search": "Search again",
+          "radio_add_network": "Enter the address"
+        }
+      },
+      "connection_search": {
+        "title": "Modules found",
+        "description": "These addresses answered as culfw on port 2323. Changing the connection restarts the integration.",
+        "data": {
+          "module": "Radio module"
+        }
+      },
+      "connection_none": {
+        "title": "Nothing found",
+        "description": "No culfw answered on port 2323 in Home Assistant's own network. The search only covers that network (at most 254 addresses around Home Assistant's address) and only port 2323. Is the Cube powered, on the LAN and flashed with a-culfw? Otherwise enter the address yourself.",
+        "menu_options": {
+          "connection_search": "Search again",
+          "connection_network": "Enter the address"
+        }
+      },
+      "radio_rename": {
+        "title": "Rename a radio module",
+        "description": "Give a module a name of its own, e.g. the floor it covers. The main module can be named as well.",
+        "data": {
+          "radio": "Radio module",
+          "name": "Name"
+        }
       }
     },
     "error": {
@@ -148,7 +232,8 @@
       "invalid_port": "The serial port must be a device path starting with /dev/.",
       "name_missing": "Please enter a name.",
       "name_taken": "A radio module already has this name.",
-      "radio_in_use": "This radio module is already configured."
+      "radio_in_use": "This radio module is already configured.",
+      "radio_unknown": "Unknown radio module."
     },
     "abort": {
       "no_extra_radios": "There is no further radio module."
@@ -222,6 +307,10 @@
         "partner_device_id": {
           "name": "Partner",
           "description": "Second MAX! device."
+        },
+        "force": {
+          "name": "Leftover on this device only",
+          "description": "Removes the partner from the first device only, even if the integration does not know that link. For leftovers of moved or swapped devices: the device keeps sending to a partner that no longer answers and reports radio errors. The partner itself gets nothing."
         }
       }
     },
@@ -255,6 +344,316 @@
           "name": "Targets",
           "description": "Thermostats that get the profile."
         }
+      }
+    },
+    "set_time": {
+      "name": "Set clock",
+      "description": "Sets the clock of thermostats to Home Assistant's local time now and waits for each acknowledgement. The week program follows the device's own clock. Window contacts and eco buttons have no clock.",
+      "fields": {
+        "device_id": {
+          "name": "Thermostats",
+          "description": "Radiator or wall thermostats."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "lowbat": {
+        "name": "Battery"
+      },
+      "funkfehler": {
+        "name": "Radio error"
+      },
+      "gesperrt": {
+        "name": "Locked"
+      },
+      "state": {
+        "name": "Window"
+      },
+      "verbunden": {
+        "name": "Connected"
+      }
+    },
+    "sensor": {
+      "ventil": {
+        "name": "Valve"
+      },
+      "rssi": {
+        "name": "RSSI"
+      },
+      "zuletzt_gemeldet": {
+        "name": "Last seen"
+      },
+      "verknuepfungen": {
+        "name": "Links"
+      },
+      "sendezeit_1h": {
+        "name": "Airtime 1h"
+      },
+      "warteschlange": {
+        "name": "Queue"
+      }
+    },
+    "select": {
+      "funkmodul": {
+        "name": "Radio module"
+      },
+      "boost_dauer": {
+        "name": "Boost duration"
+      },
+      "entkalkung_tag": {
+        "name": "Decalcification day",
+        "state": {
+          "saturday": "Saturday",
+          "sunday": "Sunday",
+          "monday": "Monday",
+          "tuesday": "Tuesday",
+          "wednesday": "Wednesday",
+          "thursday": "Thursday",
+          "friday": "Friday"
+        }
+      }
+    },
+    "number": {
+      "komfort": {
+        "name": "Comfort temperature"
+      },
+      "eco": {
+        "name": "Eco temperature"
+      },
+      "maximal": {
+        "name": "Maximum temperature"
+      },
+      "minimal": {
+        "name": "Minimum temperature"
+      },
+      "offset": {
+        "name": "Temperature offset"
+      },
+      "fenster_temperatur": {
+        "name": "Window-open temperature"
+      },
+      "fenster_dauer": {
+        "name": "Window-open duration"
+      },
+      "boost_ventil": {
+        "name": "Boost valve position"
+      },
+      "entkalkung_stunde": {
+        "name": "Decalcification hour"
+      },
+      "ventil_max": {
+        "name": "Maximum valve opening"
+      },
+      "ventil_offset": {
+        "name": "Valve offset"
+      }
+    },
+    "button": {
+      "anlernen": {
+        "name": "Pairing"
+      }
+    }
+  },
+  "device": {
+    "radio_module": {
+      "name": "eQ-3 MAX! radio module"
+    },
+    "extra_radio_module": {
+      "name": "eQ-3 MAX! radio module {name}"
+    }
+  },
+  "exceptions": {
+    "radio_error": {
+      "message": "{detail}"
+    },
+    "device_id_unknown": {
+      "message": "Unknown device"
+    },
+    "device_not_loaded": {
+      "message": "The device does not belong to a loaded eQ-3 MAX! integration"
+    },
+    "device_unknown": {
+      "message": "The radio module does not know this device"
+    },
+    "hub_not_loaded": {
+      "message": "Radio module not found or not loaded"
+    },
+    "hub_cannot_reset": {
+      "message": "The radio module itself cannot be reset"
+    },
+    "hub_cannot_link": {
+      "message": "The radio module itself cannot be linked"
+    },
+    "hub_no_week_profile": {
+      "message": "The radio module itself has no week program"
+    },
+    "hub_no_clock": {
+      "message": "The radio module itself has no clock"
+    },
+    "hub_no_config": {
+      "message": "The radio module has no configuration"
+    },
+    "hub_no_radio": {
+      "message": "The radio module itself cannot be assigned to a radio module"
+    },
+    "not_connected": {
+      "message": "Radio module not connected"
+    },
+    "device_not_connected": {
+      "message": "{name}: radio module not connected"
+    },
+    "radio_unknown": {
+      "message": "Unknown radio module: {name}"
+    },
+    "different_radio_modules": {
+      "message": "The devices belong to different radio modules"
+    },
+    "reset_not_sent": {
+      "message": "Factory reset not sent"
+    },
+    "reset_not_acknowledged": {
+      "message": "The device did not acknowledge the factory reset – it may have been reset anyway"
+    },
+    "reset_running": {
+      "message": "A factory reset is already running"
+    },
+    "link_self": {
+      "message": "A device cannot be linked with itself"
+    },
+    "link_not_allowed": {
+      "message": "These devices cannot be linked"
+    },
+    "link_already_requested": {
+      "message": "The link has already been requested"
+    },
+    "unlink_already_requested": {
+      "message": "Removing the link has already been requested"
+    },
+    "already_linked": {
+      "message": "The devices are already linked"
+    },
+    "not_linked": {
+      "message": "The devices are not linked"
+    },
+    "no_week_profile": {
+      "message": "{name}: only thermostats have a week program"
+    },
+    "weekday_invalid": {
+      "message": "Weekday must be 0 (Saturday) to 6 (Friday), not {day}"
+    },
+    "weekday_unknown": {
+      "message": "Unknown weekday: {days}"
+    },
+    "weekday_missing": {
+      "message": "No weekday given"
+    },
+    "week_profile_day_invalid": {
+      "message": "{day}: {detail}"
+    },
+    "week_profile_busy": {
+      "message": "{name}: a week program is being written right now"
+    },
+    "week_profile_aborted": {
+      "message": "{name}: writing the week program was aborted, the radio module was stopped"
+    },
+    "week_profile_rejected": {
+      "message": "{name}: the device refused the week program for {day}"
+    },
+    "week_profile_not_acknowledged": {
+      "message": "{name}: week program for {day} not acknowledged ({outcome})"
+    },
+    "week_profile_not_stored": {
+      "message": "No week program is stored for {name}"
+    },
+    "week_profile_request_invalid": {
+      "message": "Give either days, or weekday and profile"
+    },
+    "copy_to_self": {
+      "message": "A device cannot copy its week program to itself"
+    },
+    "copy_no_target": {
+      "message": "No target device given"
+    },
+    "profile_point_count": {
+      "message": "1 to {max} points per day, not {count}"
+    },
+    "profile_temperature_invalid": {
+      "message": "Temperature must be {low} to {high} °C in steps of 0.5, not {value}"
+    },
+    "profile_until_missing": {
+      "message": "End time missing at point {index}"
+    },
+    "profile_until_invalid": {
+      "message": "End time must be hh:mm, not {value}"
+    },
+    "profile_until_step": {
+      "message": "End time must be in 5-minute steps, not {value}"
+    },
+    "profile_until_order": {
+      "message": "End times must increase"
+    },
+    "profile_last_point": {
+      "message": "The last point must last until 24:00"
+    },
+    "no_clock": {
+      "message": "This device has no clock"
+    },
+    "clock_not_acknowledged": {
+      "message": "{name}: the clock was not acknowledged ({outcome})"
+    },
+    "end_time_not_future": {
+      "message": "The end time is not in the future"
+    },
+    "config_none": {
+      "message": "This device has no configuration"
+    },
+    "config_valve_only_radiator": {
+      "message": "Valve settings exist only on radiator thermostats"
+    },
+    "config_no_values": {
+      "message": "No values given"
+    },
+    "config_key_unknown": {
+      "message": "Unknown configuration value: {key}"
+    },
+    "config_key_wrong_set": {
+      "message": "{key} does not belong to this set"
+    },
+    "config_key_not_on_device": {
+      "message": "{key} does not exist on this device"
+    },
+    "config_value_range": {
+      "message": "Value must be between {low} and {high} in steps of {step}"
+    },
+    "config_not_a_number": {
+      "message": "Not a number: {value}"
+    },
+    "option_invalid": {
+      "message": "Invalid option: {option}"
+    },
+    "invalid_value": {
+      "message": "Invalid value"
+    },
+    "radio_name_missing": {
+      "message": "Please enter a name for the radio module."
+    },
+    "radio_name_taken": {
+      "message": "A radio module already has this name."
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": {
+        "Samstag": "Saturday",
+        "Sonntag": "Sunday",
+        "Montag": "Monday",
+        "Dienstag": "Tuesday",
+        "Mittwoch": "Wednesday",
+        "Donnerstag": "Thursday",
+        "Freitag": "Friday",
+        "alle": "all days"
       }
     }
   }

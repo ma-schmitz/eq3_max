@@ -4,11 +4,12 @@
   "after_dependencies": ["frontend", "homematic", "max_cul", "panel_custom"],
   "codeowners": ["@ma-schmitz"],
   "config_flow": true,
-  "dependencies": ["http", "websocket_api"],
+  "dependencies": ["http", "network", "websocket_api"],
+  "dhcp": [{ "macaddress": "008041*" }],
   "documentation": "https://ma-schmitz.github.io/eq3_max/",
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ma-schmitz/eq3_max/issues",
   "requirements": ["pyserial-asyncio-fast>=0.13"],
-  "version": "0.6.4"
+  "version": "0.7.0"
 }

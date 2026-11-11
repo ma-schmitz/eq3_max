@@ -1,72 +1,72 @@
-# Handbuch
+# Manual
 
-Bedienung und Betrieb der Integration „eQ-3 MAX!“ im Alltag.
+Everyday operation of the "eQ-3 MAX!" integration.
 
 
-eq3_max verbindet Home Assistant über einen CUL-Stick oder geflashten Cube direkt per Funk (868 MHz) mit
-eQ-3 MAX!-Geräten — ohne Homegear und ohne Cube-Software.
+eq3_max connects Home Assistant directly by radio (868 MHz) to eQ-3 MAX! devices through a
+CUL stick or a flashed Cube — without Homegear and without the Cube software.
 
 ```
-Thermostate, Fensterkontakte, Taster  ⇄  Funk 868 MHz  ⇄  Funkmodul (USB/LAN)  ⇄  eq3_max in HA
+Thermostats, window contacts, buttons  ⇄  radio 868 MHz  ⇄  radio module (USB/LAN)  ⇄  eq3_max in HA
 ```
 
-Unterstützte Geräte:
+Supported devices:
 
-| Gerät | Modell (Beispiel) | in HA |
+| Device | Model (example) | in HA |
 |---|---|---|
-| Heizkörperthermostat | BC-RT-TRX-CyN | Thermostat (`climate`) + Sensoren |
-| Wandthermostat | BC-TC-C-WM-2 | Thermostat (`climate`) + Sensoren |
-| Fensterkontakt | BC-SC-Rd-WM-2 | Fenster-Sensor (`binary_sensor`) |
-| Eco-Taster | BC-PB-2-WM | Ereignis (`event`) |
+| Radiator thermostat | BC-RT-TRX-CyN | Thermostat (`climate`) + sensors |
+| Wall thermostat | BC-TC-C-WM-2 | Thermostat (`climate`) + sensors |
+| Window contact | BC-SC-Rd-WM-2 | Window sensor (`binary_sensor`) |
+| Eco button | BC-PB-2-WM | Event (`event`) |
 
-Jedes Gerät erscheint als eigenes Gerät in HA (mit Logo, Seriennummer, Firmware und
-Funkadresse als „Hardware-Version“) und hängt am Gerät **„eQ-3 MAX! Funkmodul“**.
+Each device appears as a device of its own in HA (with logo, serial number, firmware and
+radio address as "Hardware version") and sits under the device **"eQ-3 MAX! radio module"**.
 
-## Entitäten
+## Entities
 
-### Heizkörperthermostat (Beispiel `ht_wohnzimmer`)
+### Radiator thermostat (example `ht_wohnzimmer`)
 
-| Entität | Bedeutung |
+| Entity | Meaning |
 |---|---|
-| `climate.ht_wohnzimmer` | Sollwert, Ist-Temperatur, Modus, Preset |
-| `sensor.ht_wohnzimmer_ventil` | Ventilöffnung in % |
-| `binary_sensor.ht_wohnzimmer_lowbat` | Batterie schwach |
-| `sensor.ht_wohnzimmer_rssi` | Empfangsstärke in dBm (Diagnose) |
-| `binary_sensor.ht_wohnzimmer_funkfehler` | Gerät meldet Funkfehler **oder** ein Befehl wurde nicht quittiert (Diagnose) |
-| `binary_sensor.ht_wohnzimmer_gesperrt` | Bedienung am Gerät gesperrt (Diagnose) |
-| `sensor.ht_wohnzimmer_zuletzt_gemeldet` | Zeitpunkt der letzten Meldung (Diagnose) |
+| `climate.ht_wohnzimmer` | Target, current temperature, mode, preset |
+| `sensor.ht_wohnzimmer_ventil` | Valve opening in % |
+| `binary_sensor.ht_wohnzimmer_lowbat` | Battery low |
+| `sensor.ht_wohnzimmer_rssi` | Signal strength in dBm (diagnostic) |
+| `binary_sensor.ht_wohnzimmer_funkfehler` | Device reports a radio error **or** a command was not acknowledged (diagnostic) |
+| `binary_sensor.ht_wohnzimmer_gesperrt` | Controls on the device locked (diagnostic) |
+| `sensor.ht_wohnzimmer_zuletzt_gemeldet` | Time of the last report (diagnostic) |
 
-**Attribute des Thermostats:**
+**Thermostat attributes:**
 
-| Attribut | Bedeutung |
+| Attribute | Meaning |
 |---|---|
-| `valve` | Ventilöffnung (wie der Ventil-Sensor) |
-| `id` | Seriennummer |
-| `ausstehend` | gesendeter, noch nicht quittierter Sollwert |
-| `ausstehend_modus` | Modus des ausstehenden Befehls |
-| `bis` | Endzeit im Modus „Abwesend“ (vom Gerät gemeldet) |
+| `valve` | Valve opening (same as the valve sensor) |
+| `id` | Serial number |
+| `ausstehend` | (pending) target sent but not yet acknowledged |
+| `ausstehend_modus` | Mode of the pending command |
+| `bis` | (until) end time in "Away" mode (reported by the device) |
 
-### Wandthermostat
+### Wall thermostat
 
-Wie der Heizkörperthermostat, aber ohne Ventil.
+Like the radiator thermostat, but without a valve.
 
-### Fensterkontakt
+### Window contact
 
-`binary_sensor.fk_…_state` (an = offen), dazu Batterie und RSSI. Verknüpfte Fensterkontakte
-schalten ihren Thermostat **direkt per Funk** auf die Fenster-auf-Temperatur — das passiert
-auch, wenn HA nicht läuft.
+`binary_sensor.fk_…_state` (on = open), plus battery and RSSI. Linked window contacts
+switch their thermostat to the window-open temperature **directly by radio** — this
+happens even when HA is not running.
 
-### Eco-Taster
+### Eco button
 
-`event.<taster>` mit den Ereignistypen `auto` und `eco`.
-Jeder Tastendruck erzeugt genau ein Ereignis; vom Gerät wiederholte Telegramme werden
-herausgefiltert.
+`event.<button>` with the event types `auto` and `eco`.
+Each button press creates exactly one event; telegrams repeated by the device are
+filtered out.
 
-### Funkmodul
+### Radio module
 
-| Entität | Bedeutung |
+| Entity | Meaning |
 |---|---|
-| `binary_sensor.eq3_max_verbunden` | Stick verbunden |
-| `sensor.eq3_max_sendezeit_1h` | Sendezeit der letzten Stunde in s (gesetzlich erlaubt: 36 s = 1 %) |
-| `sensor.eq3_max_warteschlange` | wartende Befehle |
-| `button.eq3_max_anlernen` | öffnet das Anlernfenster für 60 s |
+| `binary_sensor.eq3_max_verbunden` | Stick connected |
+| `sensor.eq3_max_sendezeit_1h` | Airtime of the last hour in s (legal limit: 36 s = 1 %) |
+| `sensor.eq3_max_warteschlange` | Queued commands |
+| `button.eq3_max_anlernen` | Opens the pairing window for 60 s |

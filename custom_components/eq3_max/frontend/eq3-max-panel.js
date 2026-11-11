@@ -2,6 +2,263 @@
 // Vanilla Custom Element ohne Build-Schritt und ohne Fremdbibliotheken.
 // Daten kommen ausschließlich über die WebSocket-Befehle eq3_max/*.
 
+// --- Sprache ---------------------------------------------------------------
+// Deutsch ist der Schlüssel (wie bei gettext), Englisch steht in EN. LANG folgt der
+// Sprache des Home-Assistant-Benutzers (siehe `set hass`).
+
+let LANG = "de";
+
+const EN = {
+  // Betriebsarten, Zustände, Quellen
+  "Automatik": "Auto",
+  "Manuell": "Manual",
+  "Temporär": "Temporary",
+  "Boost": "Boost",
+  "Abwesend": "Away",
+  "Aus": "Off",
+  "Homegear": "Homegear",
+  "Werksvorgabe": "Factory default",
+  "gesetzt": "set",
+  "ausstehend": "pending",
+  "wartet auf Gerät": "waiting for device",
+  "fehlgeschlagen": "failed",
+  "fehlgeschlagen (abgelehnt)": "failed (rejected)",
+  "abgelehnt": "rejected",
+  "einseitig": "one-sided",
+  "wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen":
+    "waiting for window contact – please open and close the window once",
+  "wartet auf Eco-Taster – bitte Taster einmal drücken (oder Anlerntaste)":
+    "waiting for eco button – please press the button once (or the pairing button)",
+  "Fensterkontakte hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn das Fenster einmal geöffnet und geschlossen wird.":
+    "Window contacts only listen briefly after they send themselves: changes go out once the window has been opened and closed.",
+  "Eco-Taster hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn der Taster einmal gedrückt wird (oder die Anlerntaste).":
+    "Eco buttons only listen briefly after they send themselves: changes go out once the button has been pressed (or the pairing button).",
+  // Gerätetypen
+  "Cube": "Cube",
+  "Heizkörperthermostat": "Radiator thermostat",
+  "Heizkörperthermostat+": "Radiator thermostat+",
+  "Wandthermostat": "Wall thermostat",
+  "Fensterkontakt": "Window contact",
+  "Eco-Taster": "Eco button",
+  "Unbekannt": "Unknown",
+  // Konfiguration
+  "Temperaturen": "Temperatures",
+  "Ventil": "Valve",
+  "Komforttemperatur": "Comfort temperature",
+  "Eco-Temperatur": "Eco temperature",
+  "Maximaltemperatur": "Maximum temperature",
+  "Minimaltemperatur": "Minimum temperature",
+  "Temperatur-Offset": "Temperature offset",
+  "Fenster-auf-Temperatur": "Window open temperature",
+  "Fenster-auf-Dauer": "Window open duration",
+  "Boost-Dauer": "Boost duration",
+  "Boost-Ventilstellung": "Boost valve position",
+  "Entkalkung Tag": "Decalcification day",
+  "Entkalkung Stunde": "Decalcification hour",
+  "Ventil maximal": "Valve maximum",
+  "Ventil-Offset": "Valve offset",
+  // Wochentage
+  "Montag": "Monday",
+  "Dienstag": "Tuesday",
+  "Mittwoch": "Wednesday",
+  "Donnerstag": "Thursday",
+  "Freitag": "Friday",
+  "Samstag": "Saturday",
+  "Sonntag": "Sunday",
+  // Zeit
+  "nie gemeldet": "never reported",
+  "gerade eben": "just now",
+  "vor {n} s": "{n} s ago",
+  "vor {n} min": "{n} min ago",
+  "vor {n} h": "{n} h ago",
+  "vor 1 Tag": "1 day ago",
+  "vor {n} Tagen": "{n} days ago",
+  // Übersicht
+  "kein Empfang bekannt": "no reception known",
+  "Hauptmodul": "Main module",
+  "Funkmodul": "Radio module",
+  "Ohne Bereich": "No area",
+  "Anlernen läuft … {n} s": "Pairing … {n} s",
+  "Menü": "Menu",
+  "Fehler: {error}": "Error: {error}",
+  "Lade …": "Loading …",
+  "Keine eQ-3-MAX!-Integration eingerichtet.": "No eQ-3 MAX! integration set up.",
+  "{title}: Integration nicht geladen (Zustand „{state}“).": "{title}: integration not loaded (state \"{state}\").",
+  "Noch keine Geräte angelernt.": "No devices paired yet.",
+  "Sendezeit der letzten Stunde (Grenze {limit} s)": "Airtime of the last hour (limit {limit} s)",
+  "Sendezeit": "Airtime",
+  "1 Gerät · Warteschlange {queue}": "1 device · queue {queue}",
+  "{n} Geräte · Warteschlange {queue}": "{n} devices · queue {queue}",
+  "verbunden": "connected",
+  "nicht alle verbunden": "not all connected",
+  "getrennt": "disconnected",
+  "Neue Geräte 60 s lang annehmen": "Accept new devices for 60 s",
+  "Funkmodul nicht verbunden": "Radio module not connected",
+  "Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken.": "Pairing open for 60 s – now press the pairing button on the device.",
+  "Anlernen (60 s)": "Pair (60 s)",
+  "Funkmodul fürs Anlernen": "Radio module for pairing",
+  "alle Funkmodule": "all radio modules",
+  "Warteschlange {queue}": "Queue {queue}",
+  "Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.":
+    "The airtime is used up (1 % rule); commands go out as soon as time is available again.",
+  "wartet auf Sendezeit": "waiting for airtime",
+  "Netzwerk": "Network",
+  "USB": "USB",
+  "Thermostate": "Thermostats",
+  "heizt gerade": "heating now",
+  "heizen gerade": "heating now",
+  "Fenster offen": "Windows open",
+  "Batterie schwach": "Battery low",
+  "auffällig": "need attention",
+  "nicht quittiert": "not acknowledged",
+  "Funkfehler": "Radio error",
+  "Sollwert": "Target",
+  "Ventilöffnung": "Valve opening",
+  "unbekannt": "unknown",
+  "offen": "open",
+  "geschlossen": "closed",
+  "Taster für Automatik und Eco": "Button for auto and eco",
+  "Batterie": "Battery",
+  "schwach": "low",
+  "Empfangsstärke": "Signal strength",
+  "zuletzt gemeldet": "last reported",
+  "Verknüpfungen": "Links",
+  // Seitenfenster
+  "Konfiguration": "Configuration",
+  "Wochenprogramm": "Week program",
+  "Zurück": "Back",
+  "Zurück zur Übersicht": "Back to overview",
+  "Funkmodul {name}": "Radio module {name}",
+  "Seriennummer {serial} · Adresse {address}": "Serial number {serial} · address {address}",
+  " · Firmware {firmware}": " · firmware {firmware}",
+  "Schließen": "Close",
+  // Wochenprogramm
+  "Punkt {n}: Temperatur muss zwischen 4,5 und 30,5 °C in 0,5-Schritten liegen":
+    "Point {n}: temperature must be between 4.5 and 30.5 °C in steps of 0.5",
+  "Punkt {n}: Bis-Uhrzeit fehlt (hh:mm)": "Point {n}: until time missing (hh:mm)",
+  "Punkt {n}: Bis-Uhrzeit in 5-Minuten-Schritten": "Point {n}: until time in 5-minute steps",
+  "Punkt {n}: Bis-Uhrzeiten müssen aufsteigend sein": "Point {n}: until times must be ascending",
+  "Punkt {n}: nur der letzte Punkt gilt bis 24:00": "Point {n}: only the last point lasts until 24:00",
+  "Wird geschrieben – noch offen: {days}.": "Writing – still to do: {days}.",
+  " Das Funkmodul wartet gerade auf Sendezeit (1-%-Regel); je Telegramm kann das zwei Minuten dauern, eine ganze Woche eine Viertelstunde und mehr.":
+    " The radio module is waiting for airtime (1 % rule); this can take two minutes per telegram, a whole week a quarter of an hour and more.",
+  " Die Seite muss dafür nicht offen bleiben.": " The page does not need to stay open for this.",
+  "Letztes Schreiben abgebrochen: ": "Last write aborted: ",
+  " Nicht geschrieben: {days}.": " Not written: {days}.",
+  "{temperature} °C bis {until}": "{temperature} °C until {until}",
+  "wird geschrieben …": "writing …",
+  "nicht geschrieben": "not written",
+  "In den Editor": "To the editor",
+  "keinen": "none",
+  "alle": "all",
+  "Temperatur Punkt {n}": "Temperature point {n}",
+  "bis 24:00": "until 24:00",
+  "Bis-Uhrzeit Punkt {n}": "Until time point {n}",
+  "bis": "until",
+  "Punkt entfernen": "Remove point",
+  "Punkt {n} entfernen": "Remove point {n}",
+  "Punkt hinzufügen": "Add point",
+  "Schreiben": "Write",
+  "Wochenprogramm von {name} geschrieben: {days}.": "Week program of {name} written: {days}.",
+  "Wochenprogramm von {name} kopiert auf {targets}.": "Week program of {name} copied to {targets}.",
+  "wird kopiert …": "copying …",
+  "Kopieren": "Copy",
+  "Feste Temperatur": "Fixed temperature",
+  "Abbrechen": "Cancel",
+  "Funkmodul umbenennen": "Rename radio module",
+  "Name des Funkmoduls": "Name of the radio module",
+  "Speichern": "Save",
+  "Funkmodul heißt jetzt „{name}“ – die Integration lädt neu.": "The radio module is now called \"{name}\" – the integration reloads.",
+  "Löschen": "Clear",
+  "Ein Thermostat hat immer ein Programm. Löschen heißt deshalb: ein neues schreiben, auf alle sieben Tage.":
+    "A thermostat always has a program. Clearing therefore means: writing a new one, to all seven days.",
+  "Werksprogramm": "Factory program",
+  "Mo–Fr 17 °C bis 06:00, 21 °C bis 09:00, 17 °C bis 17:00, 21 °C bis 23:00, 17 °C bis 24:00 · Sa/So 17 °C bis 06:00, 21 °C bis 22:00, 17 °C bis 24:00":
+    "Mon–Fri 17 °C until 06:00, 21 °C until 09:00, 17 °C until 17:00, 21 °C until 23:00, 17 °C until 24:00 · Sat/Sun 17 °C until 06:00, 21 °C until 22:00, 17 °C until 24:00",
+  "Werksprogramm schreiben": "Write factory program",
+  "Werksprogramm auf {name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).":
+    "Write the factory program to {name}? All seven days are overwritten (seven telegrams).",
+  "Werksprogramm auf {name} geschrieben.": "Factory program written to {name}.",
+  "ein Punkt bis 24:00, jeden Tag dieselbe Temperatur": "one point until 24:00, the same temperature every day",
+  "Temperatur 4,5 bis 30,5 °C in 0,5-Schritten": "Temperature 4.5 to 30.5 °C in steps of 0.5",
+  "Feste Temperatur schreiben": "Write fixed temperature",
+  "{temperature} °C den ganzen Tag auf {name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).":
+    "Write {temperature} °C all day to {name}? All seven days are overwritten (seven telegrams).",
+  "{temperature} °C auf {name} geschrieben.": "{temperature} °C written to {name}.",
+  "Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; gezeigt werden die Tage, die es zuletzt quittiert hat.":
+    "The device follows the week program in auto mode. It does not report its program; shown are the days it acknowledged last.",
+  "Gespeichert": "Stored",
+  "Jeder Punkt gilt bis zu seiner Uhrzeit (5-Minuten-Schritte), der letzte bis 24:00. Bis zu 13 Punkte je Tag.":
+    "Each point lasts until its time (5-minute steps), the last one until 24:00. Up to 13 points per day.",
+  "Je Tag ein bis zwei Telegramme. Geschrieben wird im Hintergrund, auch wenn die Seite geschlossen wird.":
+    "One or two telegrams per day. Writing happens in the background, even if the page is closed.",
+  "Uhr des Geräts": "Device clock",
+  "Uhr stellen": "Set clock",
+  "Das Gerät schaltet sein Wochenprogramm nach seiner eigenen Uhr. Gestellt wird sie auf die Zeit von Home Assistant; das Gerät quittiert.":
+    "The device switches its week program by its own clock. It is set to the time of Home Assistant; the device acknowledges.",
+  "Uhr von {name} gestellt.": "Clock of {name} set.",
+  "wird gestellt …": "setting …",
+  "Uhr jetzt stellen": "Set clock now",
+  "Auf andere Thermostate kopieren": "Copy to other thermostats",
+  "Erst ein Programm schreiben, dann lässt es sich kopieren.": "Write a program first, then it can be copied.",
+  // Funkmodul
+  "Alle Funkmodule nutzen dieselbe Zentralen-Adresse. Das zugeordnete Modul sendet die Befehle an das Gerät, empfangen wird über alle. Umstellen sendet nichts an das Gerät und braucht kein Neuanlernen.":
+    "All radio modules use the same central address. The assigned module sends the commands to the device, receiving works through all of them. Switching sends nothing to the device and needs no re-pairing.",
+  "nicht gehört": "not heard",
+  "bester Empfang": "best reception",
+  "zugeordnet": "assigned",
+  "Funkmodul ist gerade nicht verbunden": "Radio module is not connected right now",
+  "{name} sendet jetzt über {radio}.": "{name} now sends through {radio}.",
+  "Zuordnen": "Assign",
+  "Empfangswerte stammen aus den letzten Telegrammen des Geräts. Ein Modul, das das Gerät nie gehört hat, erreicht es vermutlich auch beim Senden nicht.":
+    "Reception values come from the device's last telegrams. A module that never heard the device probably won't reach it when sending either.",
+  // Verknüpfungen
+  "Verknüpfung mit {name} beauftragt.": "Link with {name} requested.",
+  "Lösen von {name} beauftragt.": "Unlink from {name} requested.",
+  "verknüpft": "linked",
+  "Lösen": "Unlink",
+  "Erneut senden": "Send again",
+  "Verknüpfen": "Link",
+  "{what}: {text}": "{what}: {text}",
+  "Partner auswählen": "Choose partner",
+  "Partner auswählen …": "Choose partner …",
+  "kein weiteres Gerät möglich": "no further device possible",
+  "Keine Verknüpfungen.": "No links.",
+  "Partner hinzufügen": "Add partner",
+  "Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind.":
+    "Only devices that can be linked with this one and are not linked or requested yet are offered.",
+  // Konfiguration
+  "Das Gerät übernimmt nur ganze Sätze: Werte ändern und den Satz mit einem Klick senden. Gezeigt wird der zuletzt quittierte Wert; „ausstehend“ heißt gesendet, aber noch nicht quittiert.":
+    "The device only accepts whole sets: change values and send the set with one click. Shown is the last acknowledged value; \"pending\" means sent but not yet acknowledged.",
+  "ausstehend: {value}": "pending: {value}",
+  "quittiert: {value}": "acknowledged: {value}",
+  "{min} … {max}, Schritt {step}": "{min} … {max}, step {step}",
+  "Satz ausstehend": "Set pending",
+  "nicht quittiert – wird beim nächsten Melden erneut gesendet": "not acknowledged – sent again on the next report",
+  "Verwerfen": "Discard",
+  "Satz senden": "Send set",
+  "Wert muss zwischen {min} und {max} in Schritten von {step} liegen": "Value must be between {min} and {max} in steps of {step}",
+  "{n} geändert": "{n} changed",
+  "Satz „{title}“ an {name} senden:": "Send set \"{title}\" to {name}:",
+  "Mit dem Satz gehen diese angenommenen Werksvorgaben mit (am Gerät nie gelesen):":
+    "These assumed factory defaults go along with the set (never read from the device):",
+  "Alle übrigen Werte des Satzes sind bekannt.": "All other values of the set are known.",
+  "Senden": "Send",
+  "Satz „{title}“ gesendet – wartet auf Quittung.": "Set \"{title}\" sent – waiting for acknowledgement.",
+  " Werksvorgaben mitgesendet: {labels}.": " Factory defaults sent along: {labels}.",
+};
+
+/** Text in der Sprache des Benutzers; {name}-Platzhalter aus params. */
+function t(text, params) {
+  let out = LANG === "de" ? text : (EN[text] !== undefined ? EN[text] : text);
+  if (params) out = out.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
+  return out;
+}
+
+function numberLocale() {
+  return LANG === "de" ? "de-DE" : "en-US";
+}
+
 const AIRTIME_WARN = 0.5;
 const AIRTIME_ALARM = 0.8;
 
@@ -30,12 +287,41 @@ const LINK_LABELS = {
 const LINK_CHIP = { pending: "warn", waiting: "warn", failed: "error", rejected: "error", one_sided: "warn" };
 const SLEEPER_HINTS = {
   shutter_contact:
-    "Fensterkontakte hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, " +
-    "wenn das Fenster einmal geöffnet und geschlossen wird.",
+    "Fensterkontakte hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn das Fenster einmal geöffnet und geschlossen wird.",
   push_button:
-    "Eco-Taster hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, " +
-    "wenn der Taster einmal gedrückt wird (oder die Anlerntaste).",
+    "Eco-Taster hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn der Taster einmal gedrückt wird (oder die Anlerntaste).",
 };
+// Anzeigenamen nach Schlüssel (der Server schickt sie auch, aber nur auf Deutsch).
+const TYPE_NAMES = {
+  cube: "Cube",
+  heating_thermostat: "Heizkörperthermostat",
+  heating_thermostat_plus: "Heizkörperthermostat+",
+  wall_thermostat: "Wandthermostat",
+  shutter_contact: "Fensterkontakt",
+  push_button: "Eco-Taster",
+};
+const SET_TITLES = { temp: "Temperaturen", valve: "Ventil" };
+const CONFIG_LABELS = {
+  komfort: "Komforttemperatur",
+  eco: "Eco-Temperatur",
+  maximal: "Maximaltemperatur",
+  minimal: "Minimaltemperatur",
+  offset: "Temperatur-Offset",
+  fenster_temperatur: "Fenster-auf-Temperatur",
+  fenster_dauer: "Fenster-auf-Dauer",
+  boost_dauer: "Boost-Dauer",
+  boost_ventil: "Boost-Ventilstellung",
+  entkalkung_tag: "Entkalkung Tag",
+  entkalkung_stunde: "Entkalkung Stunde",
+  ventil_max: "Ventil maximal",
+  ventil_offset: "Ventil-Offset",
+};
+// Optionsschlüssel von entkalkung_tag -> deutscher Wochentag (Anzeige über t()).
+const DAY_KEYS = {
+  monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag",
+  friday: "Freitag", saturday: "Samstag", sunday: "Sonntag",
+};
+const MAIN_RADIO_NAME = "Hauptmodul";
 
 const STYLE = `
   :host {
@@ -223,6 +509,23 @@ const STYLE = `
     width: 34px; height: 34px; border-radius: 50%;
   }
   .close:hover { background: color-mix(in srgb, var(--e3-divider) 60%, transparent); color: var(--primary-text-color); }
+  /* Zurück-Knopf des Seitenfensters: nur auf schmalen Bildschirmen (siehe @media unten). */
+  .back { display: none; }
+  .radio .rename {
+    background: none; border: 0; cursor: pointer; color: var(--e3-muted); flex: none;
+    width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .radio .rename ha-icon { --mdc-icon-size: 18px; }
+  .radio .rename:hover:not(:disabled) { background: color-mix(in srgb, var(--e3-divider) 60%, transparent); color: var(--primary-text-color); }
+  .radio .rename:disabled { opacity: 0.45; cursor: default; }
+  .radio .rename-input {
+    flex: 1; min-width: 0; font: inherit; font-weight: 600; padding: 4px 8px; border-radius: 8px;
+    border: 1px solid var(--e3-accent); background: var(--e3-card); color: var(--primary-text-color);
+  }
+  .pair-radio {
+    font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; max-width: 12em;
+    border: 1px solid var(--e3-divider); background: var(--e3-card); color: var(--primary-text-color);
+  }
   .tabs {
     display: flex; gap: 4px; margin: 0 18px 4px; padding: 4px; border-radius: 12px;
     background: color-mix(in srgb, var(--e3-divider) 45%, transparent);
@@ -271,6 +574,29 @@ const STYLE = `
   }
   .toast.error { border-left-color: var(--e3-error); }
   @media (max-width: 600px) {
+    /* The drawer fills the screen: no overlay to tap, no Escape key. Keep the way back
+       reachable: below the status bar, with a large back button on the left. */
+    .drawer {
+      padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+      padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    }
+    .drawer header { padding: 12px 12px 10px; gap: 10px; align-items: center; }
+    .drawer header .ic { display: none; }
+    .back {
+      display: inline-flex; align-items: center; justify-content: center; flex: none;
+      width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+      background: color-mix(in srgb, var(--e3-divider) 55%, transparent); color: var(--primary-text-color);
+    }
+    .back ha-icon { --mdc-icon-size: 24px; }
+    .close { width: 44px; height: 44px; font-size: 20px; flex: none; }
+    /* Reiter: nicht stauchen, sondern seitlich schieben. */
+    .tabs {
+      margin: 0 12px 4px; flex: none; overflow-x: auto; overscroll-behavior-x: contain;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tabs button { flex: 1 0 auto; white-space: nowrap; padding: 10px 14px; }
+    .body { padding: 12px 12px 18px; overscroll-behavior: contain; }
     main { padding: 12px 8px 24px; }
     .grid { grid-template-columns: 1fr; }
     .hub { padding: 14px; }
@@ -304,27 +630,27 @@ function h(tag, attrs, ...children) {
 
 function num(value, digits = 1) {
   if (value === null || value === undefined) return "–";
-  return Number(value).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return Number(value).toLocaleString(numberLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 function plainNum(value) {
-  return Number(value).toLocaleString("de-DE", { maximumFractionDigits: 2 });
+  return Number(value).toLocaleString(numberLocale(), { maximumFractionDigits: 2 });
 }
 
 function ago(ts) {
-  if (!ts) return "nie gemeldet";
+  if (!ts) return t("nie gemeldet");
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
-  if (s < 10) return "gerade eben";
-  if (s < 60) return `vor ${s} s`;
-  if (s < 3600) return `vor ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `vor ${Math.floor(s / 3600)} h`;
+  if (s < 10) return t("gerade eben");
+  if (s < 60) return t("vor {n} s", { n: s });
+  if (s < 3600) return t("vor {n} min", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("vor {n} h", { n: Math.floor(s / 3600) });
   const d = Math.floor(s / 86400);
-  return d === 1 ? "vor 1 Tag" : `vor ${d} Tagen`;
+  return d === 1 ? t("vor 1 Tag") : t("vor {n} Tagen", { n: d });
 }
 
 function rssiBars(rssi) {
   const level = rssi === null || rssi === undefined ? 0 : rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -80 ? 2 : rssi >= -90 ? 1 : 0;
-  return h("span", { class: "bars", title: rssi === null || rssi === undefined ? "kein Empfang bekannt" : `${num(rssi)} dBm` },
+  return h("span", { class: "bars", title: rssi === null || rssi === undefined ? t("kein Empfang bekannt") : `${num(rssi)} dBm` },
     [1, 2, 3, 4].map((i) => h("span", { class: i <= level ? "on" : "", style: `height:${i * 3}px` })));
 }
 
@@ -332,9 +658,48 @@ function isMulti(entry) {
   return !!(entry && entry.hub && entry.hub.radios && entry.hub.radios.length > 1);
 }
 
+/** Name eines Funkmoduls zur Anzeige: nur der unveränderte Name des Hauptmoduls wird übersetzt. */
+function radioLabel(radio) {
+  return radio.name === MAIN_RADIO_NAME ? t(MAIN_RADIO_NAME) : radio.name;
+}
+
 function radioName(entry, id) {
   const radio = entry.hub.radios.find((r) => r.id === id);
-  return radio ? radio.name : entry.hub.radios[0].name;
+  return radioLabel(radio || entry.hub.radios[0]);
+}
+
+/** Wochentag zur Anzeige; der Wert selbst (deutscher Name) geht unverändert an den Server. */
+function dayLabel(day) {
+  return t(day);
+}
+
+function daysLabel(days) {
+  return days.map(dayLabel).join(", ");
+}
+
+/** Gerätetyp nach Schlüssel; der deutsche type_name des Servers wird nicht angezeigt. */
+function typeName(dev) {
+  const base = TYPE_NAMES[dev.type];
+  if (!base) return t("Unbekannt");
+  // Der Server fasst Thermostat und Thermostat+ unter einem Schlüssel zusammen; das „+“
+  // steht nur im Namen.
+  if (dev.type === "heating_thermostat" && typeof dev.type_name === "string" && dev.type_name.endsWith("+")) {
+    return t(TYPE_NAMES.heating_thermostat_plus);
+  }
+  return t(base);
+}
+
+function setTitle(set) {
+  return SET_TITLES[set.kind] ? t(SET_TITLES[set.kind]) : set.title;
+}
+
+function configLabel(item) {
+  return CONFIG_LABELS[item.key] ? t(CONFIG_LABELS[item.key]) : item.label;
+}
+
+function optionLabel(item, opt) {
+  if (item.key === "entkalkung_tag" && DAY_KEYS[opt.label]) return t(DAY_KEYS[opt.label]);
+  return opt.label;
 }
 
 /** Zustand für Farbe und Akzent der Karte: heat · open · alert · off · idle. */
@@ -367,7 +732,7 @@ function effective(item) {
 function formatConfig(item, value) {
   if (item.type === "select") {
     const opt = item.options.find((o) => sameValue(o.value, value));
-    return opt ? opt.label : String(value);
+    return opt ? optionLabel(item, opt) : String(value);
   }
   return `${plainNum(value)}${item.unit ? " " + item.unit : ""}`;
 }
@@ -385,6 +750,8 @@ class Eq3MaxPanel extends HTMLElement {
     this._drafts = {}; // "serial:kind" -> {key: value}
     this._confirm = null; // "serial:kind"
     this._busy = new Set();
+    this._pairRadio = {}; // entry_id -> Funkmodul fürs Anlernen ("*" = alle)
+    this._renaming = null; // {entry_id, radio, value}: Funkmodul, dessen Name gerade bearbeitet wird
     this._pairingUntil = {}; // entry_id -> ms
     this._toast = null;
     this._narrow = false;
@@ -394,9 +761,88 @@ class Eq3MaxPanel extends HTMLElement {
   set hass(hass) {
     const first = !this._hass;
     this._hass = hass;
+    const language = (hass && ((hass.locale && hass.locale.language) || hass.language)) || "";
+    const lang = String(language).toLowerCase().startsWith("de") ? "de" : "en";
+    const langChanged = lang !== LANG;
+    LANG = lang;
+    if (langChanged || this._exceptionsLang !== language) {
+      // Fehlertexte des Servers für die neue Sprache neu laden.
+      this._exceptionsLang = language;
+      this._exceptionsPromise = null;
+      this._exceptionsReady = false;
+      this._localize = null;
+    }
     const menu = this.shadowRoot.querySelector("ha-menu-button");
     if (menu) menu.hass = hass;
     if (first && this.isConnected) this._start();
+    if (langChanged && this.isConnected) this._requestRender();
+  }
+
+  // --- Fehlertexte des Servers (translation_key -> Text in der Benutzersprache) ---
+
+  _loadExceptions() {
+    const hass = this._hass;
+    if (!this._exceptionsPromise) {
+      const load = hass && typeof hass.loadBackendTranslation === "function"
+        ? Promise.resolve().then(() => hass.loadBackendTranslation("exceptions", "eq3_max"))
+        : Promise.resolve(null);
+      const promise = load
+        .then((localize) => {
+          if (promise !== this._exceptionsPromise) return;
+          if (typeof localize === "function") this._localize = localize;
+        })
+        .catch(() => {})
+        .then(() => {
+          if (promise === this._exceptionsPromise) this._exceptionsReady = true;
+        });
+      this._exceptionsPromise = promise;
+    }
+    return this._exceptionsPromise;
+  }
+
+  /** Übersetzter Fehlertext oder "" (noch nicht geladen, unbekannt, kein localize). */
+  _localizeException(key, placeholders) {
+    if (!key || !this._exceptionsReady) return "";
+    const params = { ...(placeholders || {}) };
+    // Wochentag: eigener Platzhalter je Sprache, die Seite nimmt den der Benutzersprache.
+    if (params.day_de || params.day_en) {
+      params.day = LANG === "de" ? (params.day_de || params.day_en) : (params.day_en || params.day_de);
+    }
+    const id = `component.eq3_max.exceptions.${key}.message`;
+    for (const fn of [this._hass && this._hass.localize, this._localize]) {
+      if (typeof fn !== "function") continue;
+      try {
+        const text = fn(id, params);
+        if (text) return text;
+      } catch (_err) { /* nächste Quelle */ }
+    }
+    return "";
+  }
+
+  /** Fehler einer WebSocket-Antwort als Text in der Benutzersprache. */
+  async _errorText(err) {
+    const fallback = (err && err.message) || String(err);
+    const key = err && err.translation_key;
+    if (!key || (err.translation_domain && err.translation_domain !== "eq3_max")) return fallback;
+    await this._loadExceptions();
+    return this._localizeException(key, err.translation_placeholders) || fallback;
+  }
+
+  /** Dasselbe beim Rendern (synchron): solange die Texte laden, erst der Ersatztext. */
+  _exceptionText(key, placeholders, fallback) {
+    if (!key) return fallback;
+    if (!this._exceptionsReady) {
+      const promise = this._loadExceptions();
+      if (!this._exceptionsWaiting) {
+        this._exceptionsWaiting = true;
+        promise.then(() => {
+          this._exceptionsWaiting = false;
+          this._requestRender();
+        });
+      }
+      return fallback;
+    }
+    return this._localizeException(key, placeholders) || fallback;
   }
 
   get hass() {
@@ -422,6 +868,9 @@ class Eq3MaxPanel extends HTMLElement {
   disconnectedCallback() {
     window.clearInterval(this._timer);
     this._removeEscape();
+    if (this._onPopState) window.removeEventListener("popstate", this._onPopState);
+    this._onPopState = null;
+    this._backEntry = false;
     this._stop();
   }
 
@@ -435,7 +884,7 @@ class Eq3MaxPanel extends HTMLElement {
     try {
       unsub = await connection.subscribeMessage(() => this._load(), { type: "eq3_max/subscribe" });
     } catch (err) {
-      this._error = err.message || String(err);
+      this._error = await this._errorText(err);
     }
     if (gen !== this._gen || !this._started) {
       if (unsub) unsub().catch(() => {});
@@ -470,7 +919,7 @@ class Eq3MaxPanel extends HTMLElement {
     try {
       data = await this._hass.connection.sendMessagePromise({ type: "eq3_max/overview" });
     } catch (err) {
-      error = err.message || String(err);
+      error = await this._errorText(err);
     }
     if (seq !== this._loadSeq) return;
     if (error) {
@@ -495,7 +944,7 @@ class Eq3MaxPanel extends HTMLElement {
       if (success) this._showToast(typeof success === "function" ? success(result) : success);
       return result;
     } catch (err) {
-      this._showToast(err.message || String(err), true);
+      this._showToast(await this._errorText(err), true);
       return undefined;
     } finally {
       this._busy.delete(busyKey);
@@ -516,7 +965,7 @@ class Eq3MaxPanel extends HTMLElement {
   /** Is the user typing in a form field of the drawer? Then pushes wait. */
   _editing() {
     const el = this.shadowRoot.activeElement;
-    return !!(el && (el.tagName === "INPUT" || el.tagName === "SELECT") && el.closest(".drawer"));
+    return !!(el && (el.tagName === "INPUT" || el.tagName === "SELECT") && el.closest(".drawer, .radio"));
   }
 
   /** Render for background changes (push, toast): not while typing, then shortly after. */
@@ -554,9 +1003,78 @@ class Eq3MaxPanel extends HTMLElement {
         continue;
       }
       const el = this.shadowRoot.querySelector(`[data-pairing="${CSS.escape(entryId)}"]`);
-      if (el) el.textContent = `Anlernen läuft … ${left} s`;
+      if (el) el.textContent = t("Anlernen läuft … {n} s", { n: left });
     }
     if (ended) this._requestRender();
+  }
+
+  /** Auswahl des Moduls fürs Anlernen; während des Anlernens das gewählte anzeigen. */
+  _pairRadioSelect(entry, locked) {
+    const hub = entry.hub;
+    if (hub.pairing_remaining > 0) {
+      this._pairRadio[entry.entry_id] = hub.pairing_radio === null || hub.pairing_radio === undefined ? "*" : hub.pairing_radio;
+    }
+    const current = this._pairRadio[entry.entry_id] || "*";
+    const select = h("select", {
+      class: "pair-radio", "aria-label": t("Funkmodul fürs Anlernen"), title: t("Funkmodul fürs Anlernen"),
+      disabled: locked, "data-focus": `pairradio:${entry.entry_id}`,
+    },
+    h("option", { value: "*" }, t("alle Funkmodule")),
+    hub.radios.map((radio) => h("option", { value: radio.id }, radioLabel(radio))));
+    select.value = current;
+    select.addEventListener("change", () => { this._pairRadio[entry.entry_id] = select.value; this._render(); });
+    return select;
+  }
+
+  /** Name der Modul-Kachel mit Stift; im Bearbeiten Eingabefeld, Speichern, Abbrechen. */
+  _radioName(entry, radio) {
+    const editing = this._renaming && this._renaming.entry_id === entry.entry_id && this._renaming.radio === radio.id;
+    const busyKey = `rename:${entry.entry_id}:${radio.id}`;
+    if (!editing) {
+      return [
+        h("span", { class: "name" }, radioLabel(radio)),
+        h("button", {
+          class: "rename", title: t("Funkmodul umbenennen"), "aria-label": t("Funkmodul umbenennen"),
+          disabled: this._busy.has(busyKey),
+          onclick: () => {
+            this._renaming = { entry_id: entry.entry_id, radio: radio.id, value: radioLabel(radio) };
+            this._render();
+            const input = this.shadowRoot.querySelector(".rename-input");
+            if (input) { input.focus(); input.select(); }
+          },
+        }, icon("mdi:pencil")),
+      ];
+    }
+    const cancel = () => { this._renaming = null; this._render(); };
+    const save = async () => {
+      const name = (this._renaming.value || "").trim();
+      if (name === radioLabel(radio)) { cancel(); return; }
+      this._renaming = null;
+      await this._call(busyKey, { type: "eq3_max/rename_radio", entry_id: entry.entry_id, radio: radio.id, name },
+        t("Funkmodul heißt jetzt „{name}“ – die Integration lädt neu.", { name }));
+    };
+    const input = h("input", {
+      class: "rename-input", type: "text", maxlength: "40", value: this._renaming.value,
+      "aria-label": t("Name des Funkmoduls"), "data-focus": `rename:${entry.entry_id}:${radio.id}`,
+    });
+    input.value = this._renaming.value;
+    input.addEventListener("input", () => { if (this._renaming) this._renaming.value = input.value; });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); save(); }
+      if (ev.key === "Escape") { ev.preventDefault(); cancel(); }
+    });
+    return [
+      input,
+      h("button", { class: "rename", title: t("Speichern"), "aria-label": t("Speichern"), onclick: save }, icon("mdi:check")),
+      h("button", { class: "rename", title: t("Abbrechen"), "aria-label": t("Abbrechen"), onclick: cancel }, icon("mdi:close")),
+    ];
+  }
+
+  _pairRadioConnected(entry) {
+    const choice = this._pairRadio[entry.entry_id] || "*";
+    if (choice === "*") return entry.hub.any_connected;
+    const radio = entry.hub.radios.find((r) => r.id === choice);
+    return !!(radio && radio.connected);
   }
 
   // --- Lookup ---
@@ -575,7 +1093,10 @@ class Eq3MaxPanel extends HTMLElement {
     const caret = active && active.tagName === "INPUT" && typeof active.selectionStart === "number"
       ? [active.selectionStart, active.selectionEnd] : null;
     const scroll = root.querySelector(".body");
-    const scrollTop = scroll ? scroll.scrollTop : 0;
+    const tabChanged = this._renderedTab !== this._tab;
+    const scrollTop = scroll && !tabChanged ? scroll.scrollTop : 0;
+    const tabBar = root.querySelector(".tabs");
+    const tabScroll = tabBar ? tabBar.scrollLeft : 0;
 
     const nodes = [
       h("style", {}, STYLE),
@@ -588,6 +1109,17 @@ class Eq3MaxPanel extends HTMLElement {
 
     const body = root.querySelector(".body");
     if (body) body.scrollTop = scrollTop;
+    // The tab bar scrolls sideways on narrow screens: keep its position, and bring a
+    // newly chosen tab into view.
+    const newTabBar = root.querySelector(".tabs");
+    if (newTabBar) {
+      newTabBar.scrollLeft = tabScroll;
+      const activeTab = newTabBar.querySelector("button.active");
+      if (tabChanged && activeTab && typeof activeTab.scrollIntoView === "function") {
+        activeTab.scrollIntoView({ block: "nearest", inline: "center" });
+      }
+    }
+    this._renderedTab = this._selected ? this._tab : null;
     if (focusKey) {
       const el = root.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`);
       if (el) {
@@ -609,8 +1141,8 @@ class Eq3MaxPanel extends HTMLElement {
     } else if (this._narrow) {
       menu = h("button", {
         class: "menu-btn",
-        title: "Menü",
-        "aria-label": "Menü",
+        title: t("Menü"),
+        "aria-label": t("Menü"),
         onclick: () => this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true })),
       }, "☰");
     }
@@ -618,31 +1150,31 @@ class Eq3MaxPanel extends HTMLElement {
   }
 
   _renderMain() {
-    if (this._error && !this._data) return h("div", { class: "notice" }, `Fehler: ${this._error}`);
-    if (!this._data) return h("div", { class: "empty" }, "Lade …");
-    if (!this._data.entries.length) return h("div", { class: "empty" }, "Keine eQ-3-MAX!-Integration eingerichtet.");
+    if (this._error && !this._data) return h("div", { class: "notice" }, t("Fehler: {error}", { error: this._error }));
+    if (!this._data) return h("div", { class: "empty" }, t("Lade …"));
+    if (!this._data.entries.length) return h("div", { class: "empty" }, t("Keine eQ-3-MAX!-Integration eingerichtet."));
     return this._data.entries.map((entry) => this._renderEntry(entry));
   }
 
   _renderEntry(entry) {
     if (!entry.loaded) {
       return h("section", { class: "entry" },
-        h("div", { class: "notice" }, `${entry.title}: Integration nicht geladen (Zustand „${entry.state}“).`));
+        h("div", { class: "notice" }, t("{title}: Integration nicht geladen (Zustand „{state}“).", { title: entry.title, state: entry.state })));
     }
     const groups = new Map();
     for (const dev of entry.devices) {
       const key = dev.area_id || "";
-      if (!groups.has(key)) groups.set(key, { name: dev.area_name || "Ohne Bereich", devices: [] });
+      if (!groups.has(key)) groups.set(key, { name: dev.area_name || t("Ohne Bereich"), devices: [] });
       groups.get(key).devices.push(dev);
     }
     const ordered = [...groups.entries()].sort(([ka, a], [kb, b]) => {
       if (!ka) return 1;
       if (!kb) return -1;
-      return a.name.localeCompare(b.name, "de");
+      return a.name.localeCompare(b.name, LANG);
     });
     return h("section", { class: "entry" },
       this._renderHub(entry),
-      entry.devices.length ? null : h("div", { class: "empty" }, "Noch keine Geräte angelernt."),
+      entry.devices.length ? null : h("div", { class: "empty" }, t("Noch keine Geräte angelernt.")),
       ordered.map(([, group]) => [
         h("h2", { class: "area" }, group.name, h("span", { class: "count" }, String(group.devices.length))),
         h("div", { class: "grid" }, group.devices.map((dev) => this._renderCard(entry, dev))),
@@ -653,8 +1185,8 @@ class Eq3MaxPanel extends HTMLElement {
   _airtime(airtime, limit) {
     const ratio = Math.min(1, airtime / limit);
     const meterClass = ratio >= AIRTIME_ALARM ? "alarm" : ratio >= AIRTIME_WARN ? "warn" : "";
-    return h("div", { class: "air", title: `Sendezeit der letzten Stunde (Grenze ${limit} s)` },
-      "Sendezeit", h("span", { class: `meter ${meterClass}` }, h("span", { style: `width:${ratio * 100}%` })),
+    return h("div", { class: "air", title: t("Sendezeit der letzten Stunde (Grenze {limit} s)", { limit }) },
+      t("Sendezeit"), h("span", { class: `meter ${meterClass}` }, h("span", { style: `width:${ratio * 100}%` })),
       `${num(airtime)} / ${limit} s`);
   }
 
@@ -663,35 +1195,43 @@ class Eq3MaxPanel extends HTMLElement {
     const multi = isMulti(entry);
     const left = Math.max(0, Math.round(((this._pairingUntil[entry.entry_id] || 0) - Date.now()) / 1000));
     const busy = this._busy.has(`pair:${entry.entry_id}`);
-    const radios = hub.radios && hub.radios.length ? hub.radios : [{ ...hub, name: "Funkmodul", id: "" }];
+    const radios = hub.radios && hub.radios.length ? hub.radios : [{ ...hub, name: t("Funkmodul"), id: "" }];
     const n = entry.devices.length;
     return h("div", { class: "hub" },
       h("div", { class: "hub-head" },
         h("div", {},
           h("div", { class: "title" }, entry.title),
-          h("div", { class: "sub" }, `${n === 1 ? "1 Gerät" : `${n} Geräte`} · Warteschlange ${hub.queue}`)),
+          h("div", { class: "sub" }, n === 1
+            ? t("1 Gerät · Warteschlange {queue}", { queue: hub.queue })
+            : t("{n} Geräte · Warteschlange {queue}", { n, queue: hub.queue }))),
         h("span", { class: `pill ${hub.connected ? "" : "bad"}` }, h("span", { class: `dot ${hub.connected ? "ok" : ""}` }),
-          hub.connected ? "verbunden" : multi ? "nicht alle verbunden" : "getrennt"),
+          hub.connected ? t("verbunden") : multi ? t("nicht alle verbunden") : t("getrennt")),
         h("span", { class: "spacer" }),
+        // Mehrere Module: wählen, welches das neue Gerät annimmt (und dem es zugeordnet wird).
+        multi ? this._pairRadioSelect(entry, left > 0 || busy) : null,
         h("button", {
           class: "action primary",
           "data-pairing": entry.entry_id,
-          disabled: left > 0 || busy || !hub.any_connected,
-          title: hub.any_connected ? "Neue Geräte 60 s lang annehmen" : "Funkmodul nicht verbunden",
-          onclick: () => this._call(`pair:${entry.entry_id}`, { type: "eq3_max/pair", entry_id: entry.entry_id },
-            "Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."),
-        }, left > 0 ? `Anlernen läuft … ${left} s` : "Anlernen (60 s)")),
+          disabled: left > 0 || busy || !this._pairRadioConnected(entry),
+          title: this._pairRadioConnected(entry) ? t("Neue Geräte 60 s lang annehmen") : t("Funkmodul nicht verbunden"),
+          onclick: () => {
+            const choice = this._pairRadio[entry.entry_id] || "*";
+            const message = { type: "eq3_max/pair", entry_id: entry.entry_id };
+            if (multi && choice !== "*") message.radio = choice;
+            this._call(`pair:${entry.entry_id}`, message, t("Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."));
+          },
+        }, left > 0 ? t("Anlernen läuft … {n} s", { n: left }) : t("Anlernen (60 s)"))),
       h("div", { class: "radios" }, radios.map((radio) => h("div", { class: "radio" },
         h("div", { class: "top" },
-          h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? "verbunden" : "getrennt" }),
-          h("span", { class: "name" }, radio.name),
-          multi ? h("span", { class: "sub" }, `Warteschlange ${radio.queue}`) : null,
+          h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? t("verbunden") : t("getrennt") }),
+          this._radioName(entry, radio),
+          multi ? h("span", { class: "sub" }, t("Warteschlange {queue}", { queue: radio.queue })) : null,
           radio.waiting_budget
-            ? h("span", { class: "pill bad", title: "Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist." }, "wartet auf Sendezeit")
+            ? h("span", { class: "pill bad", title: t("Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.") }, t("wartet auf Sendezeit"))
             : null),
         h("div", { class: "conn", title: radio.version || "" },
           icon(radio.connection === "network" ? "mdi:lan" : "mdi:usb"),
-          h("span", {}, `${radio.connection === "network" ? "Netzwerk" : "USB"} · ${radio.target}`)),
+          h("span", {}, `${radio.connection === "network" ? t("Netzwerk") : t("USB")} · ${radio.target}`)),
         this._airtime(radio.airtime, hub.airtime_limit)))),
       this._renderStats(entry),
     );
@@ -708,31 +1248,32 @@ class Eq3MaxPanel extends HTMLElement {
       h("span", { class: "ic", style: value && tone ? `--tone:${tone}` : "" }, icon(ic)),
       h("div", {}, h("div", { class: "v" }, String(value)), h("div", { class: "l" }, label)));
     return h("div", { class: "stats" },
-      tile("", "", "mdi:thermostat", climates, "Thermostate"),
-      tile("heat", "var(--e3-heat)", "mdi:fire", heating, heating === 1 ? "heizt gerade" : "heizen gerade"),
-      tile("open", "var(--e3-open)", "mdi:window-open-variant", open, "Fenster offen"),
-      tile("alert", "var(--e3-error)", "mdi:battery-alert-variant-outline", battery, "Batterie schwach"),
-      tile("alert", "var(--e3-error)", "mdi:clock-alert-outline", attention, "auffällig"));
+      tile("", "", "mdi:thermostat", climates, t("Thermostate")),
+      tile("heat", "var(--e3-heat)", "mdi:fire", heating, heating === 1 ? t("heizt gerade") : t("heizen gerade")),
+      tile("open", "var(--e3-open)", "mdi:window-open-variant", open, t("Fenster offen")),
+      tile("alert", "var(--e3-error)", "mdi:battery-alert-variant-outline", battery, t("Batterie schwach")),
+      tile("alert", "var(--e3-error)", "mdi:clock-alert-outline", attention, t("auffällig")));
   }
 
   _renderCard(entry, dev) {
     const st = dev.state;
     const tone = cardTone(dev);
     const badges = [];
-    if (dev.pending) badges.push(chip("ausstehend", "warn"));
-    if (st.command_failed || st.config_failed.length) badges.push(chip("nicht quittiert", "error"));
-    if (st.rf_error) badges.push(chip("Funkfehler", "error"));
+    if (dev.pending) badges.push(chip(t("ausstehend"), "warn"));
+    if (st.command_failed || st.config_failed.length) badges.push(chip(t("nicht quittiert"), "error"));
+    if (st.rf_error) badges.push(chip(t("Funkfehler"), "error"));
 
-    let kind = dev.type_name;
+    let kind = typeName(dev);
     let body;
     if (dev.type === "heating_thermostat" || dev.type === "wall_thermostat") {
-      kind = st.hvac === "off" ? HVAC_LABELS.off : PRESET_LABELS[st.preset] || MODE_LABELS[st.mode] || dev.type_name;
+      const label = st.hvac === "off" ? HVAC_LABELS.off : PRESET_LABELS[st.preset] || MODE_LABELS[st.mode];
+      kind = label ? t(label) : typeName(dev);
       body = [
         h("div", { class: "temps" },
           h("span", { class: "cur" }, num(st.measured), h("small", {}, "°C")),
-          h("span", { class: "target", title: "Sollwert" }, icon("mdi:target"), `${num(st.target)} °C`)),
+          h("span", { class: "target", title: t("Sollwert") }, icon("mdi:target"), `${num(st.target)} °C`)),
         dev.type === "heating_thermostat"
-          ? h("div", { class: "valve", title: "Ventilöffnung" }, "Ventil",
+          ? h("div", { class: "valve", title: t("Ventilöffnung") }, t("Ventil"),
             h("span", { class: "meter" }, h("span", { style: `width:${st.valve || 0}%` })),
             st.valve === null ? "–" : `${st.valve} %`)
           : null,
@@ -741,9 +1282,9 @@ class Eq3MaxPanel extends HTMLElement {
       const isOpen = st.window_open;
       body = h("div", { class: `wstate ${isOpen ? "open" : ""}` },
         icon(isOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant"),
-        isOpen === null ? "unbekannt" : isOpen ? "offen" : "geschlossen");
+        isOpen === null ? t("unbekannt") : isOpen ? t("offen") : t("geschlossen"));
     } else {
-      body = h("div", { class: "sub" }, "Taster für Automatik und Eco");
+      body = h("div", { class: "sub" }, t("Taster für Automatik und Eco"));
     }
     const linkCount = dev.links.partners.length;
     const open = () => this._open(entry.entry_id, dev.serial);
@@ -761,13 +1302,13 @@ class Eq3MaxPanel extends HTMLElement {
         badges.length ? h("div", { class: "badges" }, badges) : null),
       body,
       h("div", { class: "foot" },
-        h("span", { class: st.battery_low ? "low" : "", title: "Batterie" },
+        h("span", { class: st.battery_low ? "low" : "", title: t("Batterie") },
           icon(st.battery_low ? "mdi:battery-alert-variant-outline" : "mdi:battery-high"),
-          st.battery_low ? "schwach" : st.battery_low === false ? "ok" : "?"),
-        h("span", { title: "Empfangsstärke" }, rssiBars(st.rssi), st.rssi === null ? "– dBm" : `${num(st.rssi, 0)} dBm`),
-        h("span", { title: "zuletzt gemeldet" }, icon("mdi:clock-outline"), h("span", { "data-ago": st.last_seen || 0 }, ago(st.last_seen))),
-        h("span", { title: "Verknüpfungen" }, icon("mdi:link-variant"), String(linkCount)),
-        isMulti(entry) ? h("span", { title: "Funkmodul" }, icon("mdi:radio-tower"), radioName(entry, dev.radio)) : null,
+          st.battery_low ? t("schwach") : st.battery_low === false ? "ok" : "?"),
+        h("span", { title: t("Empfangsstärke") }, rssiBars(st.rssi), st.rssi === null ? "– dBm" : `${num(st.rssi, 0)} dBm`),
+        h("span", { title: t("zuletzt gemeldet") }, icon("mdi:clock-outline"), h("span", { "data-ago": st.last_seen || 0 }, ago(st.last_seen))),
+        h("span", { title: t("Verknüpfungen") }, icon("mdi:link-variant"), String(linkCount)),
+        isMulti(entry) ? h("span", { title: t("Funkmodul") }, icon("mdi:radio-tower"), radioName(entry, dev.radio)) : null,
       ),
     );
   }
@@ -783,8 +1324,40 @@ class Eq3MaxPanel extends HTMLElement {
       if (ev.key === "Escape" && this._selected) this._close();
     };
     document.addEventListener("keydown", this._onEscape);
+    this._pushBackEntry();
     const target = this.shadowRoot.querySelector(".drawer .close");
     if (target) target.focus();
+  }
+
+  // The phone's back gesture closes the drawer instead of leaving the page: opening adds
+  // a history entry of our own (same address), going back removes it and closes.
+  _pushBackEntry() {
+    if (this._backEntry) return;
+    try {
+      window.history.pushState({ eq3MaxDrawer: true }, "");
+      this._backEntry = true;
+    } catch (err) {
+      this._backEntry = false;
+      return;
+    }
+    if (!this._onPopState) {
+      this._onPopState = () => {
+        // Our entry is gone (back was used): close without touching the history again.
+        if (this._backEntry && !(window.history.state && window.history.state.eq3MaxDrawer)) {
+          this._backEntry = false;
+          if (this._selected) this._close();
+        }
+      };
+      window.addEventListener("popstate", this._onPopState);
+    }
+  }
+
+  _dropBackEntry() {
+    if (!this._backEntry) return;
+    this._backEntry = false;
+    try {
+      if (window.history.state && window.history.state.eq3MaxDrawer) window.history.back();
+    } catch (err) { /* nothing to undo */ }
   }
 
   _removeEscape() {
@@ -797,10 +1370,41 @@ class Eq3MaxPanel extends HTMLElement {
     this._selected = null;
     this._confirm = null;
     this._removeEscape();
+    this._dropBackEntry();
     this._render();
     // Back to the card the drawer was opened from.
     const card = serial && this.shadowRoot.querySelector(`.card[data-serial="${CSS.escape(serial)}"]`);
     if (card) card.focus();
+  }
+
+  // Swipe left/right inside the drawer changes the tab (touch screens).
+  _swipeStart(ev) {
+    this._swipe = null;
+    if (!ev.touches || ev.touches.length !== 1) return;
+    const touch = ev.touches[0];
+    const target = ev.target;
+    // Not from the screen edge (the system's own back gesture), not while typing or
+    // dragging something that scrolls sideways itself.
+    if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
+    if (target && target.closest && target.closest("input, select, textarea, .wp-days")) return;
+    this._swipe = { x: touch.clientX, y: touch.clientY, t: Date.now() };
+  }
+
+  _swipeEnd(ev) {
+    const start = this._swipe;
+    this._swipe = null;
+    if (!start || !ev.changedTouches || !ev.changedTouches.length) return;
+    const touch = ev.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Date.now() - start.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < 2.5 * Math.abs(dy)) return;
+    const keys = this._tabKeys || [];
+    const index = keys.indexOf(this._tab);
+    const next = index + (dx < 0 ? 1 : -1);
+    if (index < 0 || next < 0 || next >= keys.length) return;
+    this._tab = keys[next];
+    this._confirm = null;
+    this._render();
   }
 
   _renderDrawer() {
@@ -809,14 +1413,16 @@ class Eq3MaxPanel extends HTMLElement {
     if (!dev) {
       this._selected = null;
       this._removeEscape();
+      this._dropBackEntry();
       return null;
     }
     const entry = this._data.entries.find((e) => e.entry_id === this._selected.entryId);
-    const available = [["links", "Verknüpfungen"]];
-    if (dev.config.length > 0) available.push(["config", "Konfiguration"]);
-    if (dev.type === "heating_thermostat" || dev.type === "wall_thermostat") available.push(["week", "Wochenprogramm"]);
-    if (isMulti(entry)) available.push(["radio", "Funkmodul"]);
+    const available = [["links", t("Verknüpfungen")]];
+    if (dev.config.length > 0) available.push(["config", t("Konfiguration")]);
+    if (dev.type === "heating_thermostat" || dev.type === "wall_thermostat") available.push(["week", t("Wochenprogramm")]);
+    if (isMulti(entry)) available.push(["radio", t("Funkmodul")]);
     if (!available.some(([key]) => key === this._tab)) this._tab = "links";
+    this._tabKeys = available.map(([key]) => key);
     const tabs = available.length > 1
       ? h("div", { class: "tabs", role: "tablist" },
         available.map(([key, label]) =>
@@ -831,15 +1437,18 @@ class Eq3MaxPanel extends HTMLElement {
       h("div", { class: "overlay", onclick: () => this._close() }),
       h("aside", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": dev.name },
         h("header", { class: `tone-${cardTone(dev)}` },
+          h("button", { class: "back", title: t("Zurück"), "aria-label": t("Zurück zur Übersicht"), onclick: () => this._close() },
+            icon("mdi:arrow-left")),
           h("span", { class: "ic", style: `--tone:${TONE_COLORS[cardTone(dev)]}` }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
           h("div", { class: "t" },
             h("div", { class: "n" }, dev.name),
-            h("div", { class: "tags" }, chip(dev.type_name), chip(dev.area_name || "Ohne Bereich"),
-              isMulti(entry) ? chip(`Funkmodul ${radioName(entry, dev.radio)}`, "info") : null),
-            h("div", { class: "meta" }, `Seriennummer ${dev.serial} · Adresse ${dev.address}${dev.firmware ? " · Firmware " + dev.firmware : ""}`)),
-          h("button", { class: "close", title: "Schließen", "aria-label": "Schließen", onclick: () => this._close() }, "✕")),
+            h("div", { class: "tags" }, chip(typeName(dev)), chip(dev.area_name || t("Ohne Bereich")),
+              isMulti(entry) ? chip(t("Funkmodul {name}", { name: radioName(entry, dev.radio) }), "info") : null),
+            h("div", { class: "meta" }, t("Seriennummer {serial} · Adresse {address}", { serial: dev.serial, address: dev.address })
+              + (dev.firmware ? t(" · Firmware {firmware}", { firmware: dev.firmware }) : ""))),
+          h("button", { class: "close", title: t("Schließen"), "aria-label": t("Schließen"), onclick: () => this._close() }, "✕")),
         tabs,
-        h("div", { class: "body" },
+        h("div", { class: "body", ontouchstart: (ev) => this._swipeStart(ev), ontouchend: (ev) => this._swipeEnd(ev) },
           this._tab === "config" ? this._renderConfig(dev)
             : this._tab === "week" ? this._renderWeekProfile(entry, dev)
               : this._tab === "radio" ? this._renderRadio(entry, dev)
@@ -849,6 +1458,16 @@ class Eq3MaxPanel extends HTMLElement {
   }
 
   // --- Wochenprogramm ---
+
+  /** Grund des abgebrochenen Schreibens: {message, key, placeholders, missing} oder (alt) ein Text. */
+  _weekProfileError(error) {
+    if (typeof error === "string") return error;
+    const text = this._exceptionText(error.key, error.placeholders, error.message || "");
+    const missing = Array.isArray(error.missing) && error.missing.length
+      ? t(" Nicht geschrieben: {days}.", { days: daysLabel(error.missing) })
+      : "";
+    return text + missing;
+  }
 
   _wpDraft(dev) {
     if (!this._wpDrafts[dev.serial]) {
@@ -866,15 +1485,15 @@ class Eq3MaxPanel extends HTMLElement {
     for (let i = 0; i < points.length; i++) {
       const t = Number(String(points[i].temperature).replace(",", "."));
       if (!Number.isFinite(t) || t < 4.5 || t > 30.5 || Math.round(t * 2) !== t * 2) {
-        return `Punkt ${i + 1}: Temperatur muss zwischen 4,5 und 30,5 °C in 0,5-Schritten liegen`;
+        return t("Punkt {n}: Temperatur muss zwischen 4,5 und 30,5 °C in 0,5-Schritten liegen", { n: i + 1 });
       }
       if (i === points.length - 1) break;
       const m = /^(\d{1,2}):?(\d{2})$/.exec(String(points[i].until || "").trim());
-      if (!m) return `Punkt ${i + 1}: Bis-Uhrzeit fehlt (hh:mm)`;
+      if (!m) return t("Punkt {n}: Bis-Uhrzeit fehlt (hh:mm)", { n: i + 1 });
       const minutes = Number(m[1]) * 60 + Number(m[2]);
-      if (minutes % 5) return `Punkt ${i + 1}: Bis-Uhrzeit in 5-Minuten-Schritten`;
-      if (minutes <= last) return `Punkt ${i + 1}: Bis-Uhrzeiten müssen aufsteigend sein`;
-      if (minutes >= 24 * 60) return `Punkt ${i + 1}: nur der letzte Punkt gilt bis 24:00`;
+      if (minutes % 5) return t("Punkt {n}: Bis-Uhrzeit in 5-Minuten-Schritten", { n: i + 1 });
+      if (minutes <= last) return t("Punkt {n}: Bis-Uhrzeiten müssen aufsteigend sein", { n: i + 1 });
+      if (minutes >= 24 * 60) return t("Punkt {n}: nur der letzte Punkt gilt bis 24:00", { n: i + 1 });
       last = minutes;
     }
     return null;
@@ -890,27 +1509,26 @@ class Eq3MaxPanel extends HTMLElement {
     const waitingBudget = !!(radio && radio.waiting_budget);
     const progress = writing.length
       ? h("div", { class: "wp-note" },
-        h("b", {}, `Wird geschrieben – noch offen: ${writing.join(", ")}.`),
+        h("b", {}, t("Wird geschrieben – noch offen: {days}.", { days: daysLabel(writing) })),
         waitingBudget
-          ? " Das Funkmodul wartet gerade auf Sendezeit (1-%-Regel); je Telegramm kann das zwei Minuten dauern, "
-            + "eine ganze Woche eine Viertelstunde und mehr."
+          ? t(" Das Funkmodul wartet gerade auf Sendezeit (1-%-Regel); je Telegramm kann das zwei Minuten dauern, eine ganze Woche eine Viertelstunde und mehr.")
           : "",
-        " Die Seite muss dafür nicht offen bleiben.")
+        t(" Die Seite muss dafür nicht offen bleiben."))
       : null;
     const failure = !writing.length && dev.week_profile_error
-      ? h("div", { class: "wp-note bad" }, h("b", {}, "Letztes Schreiben abgebrochen: "), dev.week_profile_error)
+      ? h("div", { class: "wp-note bad" }, h("b", {}, t("Letztes Schreiben abgebrochen: ")), this._weekProfileError(dev.week_profile_error))
       : null;
     if (draft.constant === undefined) draft.constant = "17";
     const stored = dev.week_profile || {};
-    const fmt = (p) => `${plainNum(p.temperature)} °C bis ${p.until}`;
+    const fmt = (p) => t("{temperature} °C bis {until}", { temperature: plainNum(p.temperature), until: p.until });
 
     // Stored days (what the device acknowledged last).
     const storedRows = WP_DAYS.map((day) => h("div", { class: "wp-day" },
-      h("span", { class: "wp-name" }, day),
-      writing.includes(day) ? h("span", { class: "sub" }, "wird geschrieben …") : null,
+      h("span", { class: "wp-name" }, dayLabel(day)),
+      writing.includes(day) ? h("span", { class: "sub" }, t("wird geschrieben …")) : null,
       stored[day]
         ? h("span", { class: "grow" }, stored[day].map(fmt).join(" · "))
-        : h("span", { class: "grow sub" }, "nicht geschrieben"),
+        : h("span", { class: "grow sub" }, t("nicht geschrieben")),
       stored[day]
         ? h("button", {
           class: "action", disabled: busy,
@@ -921,7 +1539,7 @@ class Eq3MaxPanel extends HTMLElement {
             draft.days = new Set([day]);
             this._render();
           },
-        }, "In den Editor")
+        }, t("In den Editor"))
         : null));
 
     // Editor.
@@ -929,30 +1547,30 @@ class Eq3MaxPanel extends HTMLElement {
       const box = h("input", { type: "checkbox", "data-focus": `${key}:d:${day}` });
       box.checked = draft.days.has(day);
       box.addEventListener("change", () => { box.checked ? draft.days.add(day) : draft.days.delete(day); update(); });
-      return h("label", { class: "wp-check" }, box, day.slice(0, 2));
+      return h("label", { class: "wp-check" }, box, dayLabel(day).slice(0, 2));
     });
     const allButton = h("button", {
       class: "action", type: "button",
       onclick: () => { draft.days = draft.days.size === WP_DAYS.length ? new Set() : new Set(WP_DAYS); this._render(); },
-    }, draft.days.size === WP_DAYS.length ? "keinen" : "alle");
+    }, draft.days.size === WP_DAYS.length ? t("keinen") : t("alle"));
 
     const pointRows = draft.points.map((point, i) => {
       const lastPoint = i === draft.points.length - 1;
       const temp = h("input", {
         type: "number", min: "4.5", max: "30.5", step: "0.5", inputmode: "decimal",
-        "data-focus": `${key}:t:${i}`, "aria-label": `Temperatur Punkt ${i + 1}`,
+        "data-focus": `${key}:t:${i}`, "aria-label": t("Temperatur Punkt {n}", { n: i + 1 }),
       });
       temp.value = String(point.temperature);
       temp.addEventListener("input", () => { point.temperature = temp.value; update(); });
       let until;
       if (lastPoint) {
-        until = h("span", { class: "sub" }, "bis 24:00");
+        until = h("span", { class: "sub" }, t("bis 24:00"));
       } else {
         // Textfeld statt type=time: ein Zeitwähler verliert eine halb eingegebene Zeit, wenn
         // die Seite wegen eines Telegramms neu aufgebaut wird; der Entwurf hält jeden Tastendruck.
         until = h("input", {
           type: "text", placeholder: "hh:mm", maxlength: "5", autocomplete: "off",
-          "data-focus": `${key}:u:${i}`, "aria-label": `Bis-Uhrzeit Punkt ${i + 1}`,
+          "data-focus": `${key}:u:${i}`, "aria-label": t("Bis-Uhrzeit Punkt {n}", { n: i + 1 }),
         });
         until.value = point.until || "";
         until.addEventListener("input", (ev) => {
@@ -971,10 +1589,10 @@ class Eq3MaxPanel extends HTMLElement {
       return h("div", { class: "wp-point" },
         h("span", { class: "sub" }, `${i + 1}.`),
         h("span", { class: "ctl" }, temp, h("span", { class: "sub" }, "°C")),
-        h("span", { class: "ctl" }, lastPoint ? null : h("span", { class: "sub" }, "bis"), until),
+        h("span", { class: "ctl" }, lastPoint ? null : h("span", { class: "sub" }, t("bis")), until),
         draft.points.length > 1
           ? h("button", {
-            class: "close", title: "Punkt entfernen", "aria-label": `Punkt ${i + 1} entfernen`,
+            class: "close", title: t("Punkt entfernen"), "aria-label": t("Punkt {n} entfernen", { n: i + 1 }),
             onclick: () => { draft.points.splice(i, 1); draft.points[draft.points.length - 1].until = ""; this._render(); },
           }, "✕")
           : null);
@@ -986,10 +1604,10 @@ class Eq3MaxPanel extends HTMLElement {
         draft.points.splice(draft.points.length - 1, 0, { temperature: last.temperature, until: "" });
         this._render();
       },
-    }, "Punkt hinzufügen");
+    }, t("Punkt hinzufügen"));
 
     const error = h("div", { style: "color:var(--e3-error);font-size:13px;min-height:18px" });
-    const write = h("button", { class: "action primary" }, busy ? "wird geschrieben …" : "Schreiben");
+    const write = h("button", { class: "action primary" }, busy ? t("wird geschrieben …") : t("Schreiben"));
     write.addEventListener("click", async () => {
       const weekday = WP_DAYS.filter((d) => draft.days.has(d));
       const profile = draft.points.map((p, i) => {
@@ -1001,7 +1619,7 @@ class Eq3MaxPanel extends HTMLElement {
         return item;
       });
       const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, weekday, profile },
-        `Wochenprogramm von ${dev.name} geschrieben: ${weekday.join(", ")}.`);
+        t("Wochenprogramm von {name} geschrieben: {days}.", { name: dev.name, days: daysLabel(weekday) }));
       if (result !== undefined) this._render();
     });
     const update = () => {
@@ -1026,10 +1644,10 @@ class Eq3MaxPanel extends HTMLElement {
         const targets = others.filter((d) => draft.targets.has(d.serial));
         const result = await this._call(`${key}:copy`,
           { type: "eq3_max/copy_week_profile", device_id: dev.device_id, target_device_id: targets.map((d) => d.device_id) },
-          `Wochenprogramm von ${dev.name} kopiert auf ${targets.map((d) => d.name).join(", ")}.`);
+          t("Wochenprogramm von {name} kopiert auf {targets}.", { name: dev.name, targets: targets.map((d) => d.name).join(", ") }));
         if (result !== undefined) { draft.targets = new Set(); this._render(); }
       },
-    }, busy ? "wird kopiert …" : "Kopieren");
+    }, busy ? t("wird kopiert …") : t("Kopieren"));
 
     // Löschen = ein bestimmtes Programm schreiben: das Werksprogramm oder eine feste Temperatur.
     const factory = this._data.factory_week_profile || {};
@@ -1044,7 +1662,7 @@ class Eq3MaxPanel extends HTMLElement {
     };
     const factoryKey = `${key}:factory`;
     const constKey = `${key}:const`;
-    const constTemp = h("input", { type: "number", min: "4.5", max: "30.5", step: "0.5", inputmode: "decimal", "data-focus": constKey, "aria-label": "Feste Temperatur" });
+    const constTemp = h("input", { type: "number", min: "4.5", max: "30.5", step: "0.5", inputmode: "decimal", "data-focus": constKey, "aria-label": t("Feste Temperatur") });
     constTemp.value = draft.constant || "17";
     constTemp.addEventListener("input", () => { draft.constant = constTemp.value; });
     const constValue = () => Number(String(constTemp.value).replace(",", "."));
@@ -1052,8 +1670,8 @@ class Eq3MaxPanel extends HTMLElement {
     const confirmBox = (text, onYes) => h("div", { class: "confirm" },
       h("div", {}, text),
       h("div", { class: "setfoot" },
-        h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, "Abbrechen"),
-        h("button", { class: "action danger", disabled: busy, onclick: () => { this._confirm = null; onYes(); } }, "Schreiben")));
+        h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, t("Abbrechen")),
+        h("button", { class: "action danger", disabled: busy, onclick: () => { this._confirm = null; onYes(); } }, t("Schreiben"))));
     const groupsFactory = () => {
       const byProfile = new Map();
       for (const day of WP_DAYS) {
@@ -1064,53 +1682,64 @@ class Eq3MaxPanel extends HTMLElement {
       return [...byProfile.values()].map((g) => [g.days, g.profile.map((p, i) => (i === g.profile.length - 1 ? { temperature: p.temperature } : p))]);
     };
     const erase = h("fieldset", {},
-      h("legend", {}, "Löschen"),
+      h("legend", {}, t("Löschen")),
       h("div", { class: "sub", style: "margin-bottom:6px" },
-        "Ein Thermostat hat immer ein Programm. Löschen heißt deshalb: ein neues schreiben, auf alle sieben Tage."),
+        t("Ein Thermostat hat immer ein Programm. Löschen heißt deshalb: ein neues schreiben, auf alle sieben Tage.")),
       h("div", { class: "row" },
-        h("span", { class: "grow" }, "Werksprogramm", h("span", { class: "hint" },
-          "Mo–Fr 17 °C bis 06:00, 21 °C bis 09:00, 17 °C bis 17:00, 21 °C bis 23:00, 17 °C bis 24:00 · Sa/So 17 °C bis 06:00, 21 °C bis 22:00, 17 °C bis 24:00")),
+        h("span", { class: "grow" }, t("Werksprogramm"), h("span", { class: "hint" },
+          t("Mo–Fr 17 °C bis 06:00, 21 °C bis 09:00, 17 °C bis 17:00, 21 °C bis 23:00, 17 °C bis 24:00 · Sa/So 17 °C bis 06:00, 21 °C bis 22:00, 17 °C bis 24:00"))),
         h("button", { class: "action", disabled: busy || !dev.device_id || !Object.keys(factory).length,
-          onclick: () => { this._confirm = factoryKey; this._render(); } }, "Werksprogramm schreiben")),
+          onclick: () => { this._confirm = factoryKey; this._render(); } }, t("Werksprogramm schreiben"))),
       this._confirm === factoryKey
-        ? confirmBox(`Werksprogramm auf ${dev.name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).`,
-          () => writeDays(groupsFactory(), `Werksprogramm auf ${dev.name} geschrieben.`))
+        ? confirmBox(t("Werksprogramm auf {name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).", { name: dev.name }),
+          () => writeDays(groupsFactory(), t("Werksprogramm auf {name} geschrieben.", { name: dev.name })))
         : null,
       h("div", { class: "row" },
-        h("span", { class: "grow" }, "Feste Temperatur", h("span", { class: "hint" }, "ein Punkt bis 24:00, jeden Tag dieselbe Temperatur")),
+        h("span", { class: "grow" }, t("Feste Temperatur"), h("span", { class: "hint" }, t("ein Punkt bis 24:00, jeden Tag dieselbe Temperatur"))),
         h("span", { class: "ctl" }, constTemp, h("span", { class: "sub" }, "°C")),
         h("button", { class: "action", disabled: busy || !dev.device_id,
-          onclick: () => { if (!constOk()) { this._showToast("Temperatur 4,5 bis 30,5 °C in 0,5-Schritten", true); return; } this._confirm = constKey; this._render(); } },
-          "Feste Temperatur schreiben")),
+          onclick: () => { if (!constOk()) { this._showToast(t("Temperatur 4,5 bis 30,5 °C in 0,5-Schritten"), true); return; } this._confirm = constKey; this._render(); } },
+          t("Feste Temperatur schreiben"))),
       this._confirm === constKey
-        ? confirmBox(`${plainNum(constValue())} °C den ganzen Tag auf ${dev.name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).`,
-          () => writeDays([[WP_DAYS, [{ temperature: constValue() }]]], `${plainNum(constValue())} °C auf ${dev.name} geschrieben.`))
+        ? confirmBox(t("{temperature} °C den ganzen Tag auf {name} schreiben? Alle sieben Tage werden überschrieben (sieben Telegramme).",
+          { temperature: plainNum(constValue()), name: dev.name }),
+          () => writeDays([[WP_DAYS, [{ temperature: constValue() }]]],
+            t("{temperature} °C auf {name} geschrieben.", { temperature: plainNum(constValue()), name: dev.name })))
         : null);
 
     return [
       h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
-        "Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; "
-        + "gezeigt werden die Tage, die es zuletzt quittiert hat."),
+        t("Das Gerät folgt dem Wochenprogramm im Modus Automatik. Es meldet sein Programm nicht; gezeigt werden die Tage, die es zuletzt quittiert hat.")),
       progress,
       failure,
-      h("fieldset", {}, h("legend", {}, "Gespeichert"), storedRows),
+      h("fieldset", {}, h("legend", {}, t("Gespeichert")), storedRows),
       h("fieldset", {},
-        h("legend", {}, "Schreiben"),
+        h("legend", {}, t("Schreiben")),
         h("div", { class: "wp-days" }, dayBoxes, allButton),
-        h("div", { class: "sub", style: "margin:6px 0" }, "Jeder Punkt gilt bis zu seiner Uhrzeit (5-Minuten-Schritte), der letzte bis 24:00. Bis zu 13 Punkte je Tag."),
+        h("div", { class: "sub", style: "margin:6px 0" }, t("Jeder Punkt gilt bis zu seiner Uhrzeit (5-Minuten-Schritte), der letzte bis 24:00. Bis zu 13 Punkte je Tag.")),
         pointRows,
         h("div", { class: "add", style: "margin-top:6px" }, addPoint),
         error,
         h("div", { class: "setfoot" },
-          h("span", { class: "sub" }, "Je Tag ein bis zwei Telegramme. Geschrieben wird im Hintergrund, auch wenn die Seite geschlossen wird."),
+          h("span", { class: "sub" }, t("Je Tag ein bis zwei Telegramme. Geschrieben wird im Hintergrund, auch wenn die Seite geschlossen wird.")),
           write)),
       erase,
+      h("fieldset", {},
+        h("legend", {}, t("Uhr des Geräts")),
+        h("div", { class: "row" },
+          h("span", { class: "grow" }, t("Uhr stellen"), h("span", { class: "hint" },
+            t("Das Gerät schaltet sein Wochenprogramm nach seiner eigenen Uhr. Gestellt wird sie auf die Zeit von Home Assistant; das Gerät quittiert."))),
+          h("button", {
+            class: "action", disabled: this._busy.has(`time:${dev.serial}`) || !dev.device_id,
+            onclick: () => this._call(`time:${dev.serial}`, { type: "eq3_max/set_time", device_id: dev.device_id },
+              t("Uhr von {name} gestellt.", { name: dev.name })),
+          }, this._busy.has(`time:${dev.serial}`) ? t("wird gestellt …") : t("Uhr jetzt stellen")))),
       others.length
         ? h("fieldset", {},
-          h("legend", {}, "Auf andere Thermostate kopieren"),
+          h("legend", {}, t("Auf andere Thermostate kopieren")),
           hasStored
             ? [h("div", { class: "wp-days" }, targetBoxes), h("div", { class: "setfoot" }, copyButton)]
-            : h("div", { class: "empty" }, "Erst ein Programm schreiben, dann lässt es sich kopieren."))
+            : h("div", { class: "empty" }, t("Erst ein Programm schreiben, dann lässt es sich kopieren.")))
         : null,
     ];
   }
@@ -1124,27 +1753,25 @@ class Eq3MaxPanel extends HTMLElement {
     const busy = this._busy.has(`radio:${dev.serial}`);
     return [
       h("div", { class: "notice" },
-        "Alle Funkmodule nutzen dieselbe Zentralen-Adresse. Das zugeordnete Modul sendet die Befehle an das Gerät, "
-        + "empfangen wird über alle. Umstellen sendet nichts an das Gerät und braucht kein Neuanlernen."),
+        t("Alle Funkmodule nutzen dieselbe Zentralen-Adresse. Das zugeordnete Modul sendet die Befehle an das Gerät, empfangen wird über alle. Umstellen sendet nichts an das Gerät und braucht kein Neuanlernen.")),
       h("div", {}, entry.hub.radios.map((radio) => h("div", { class: "row" },
-        h("span", { class: "grow" }, h("span", { class: `dot ${radio.connected ? "ok" : ""}`, style: "display:inline-block;margin-right:8px" }), radio.name),
+        h("span", { class: "grow" }, h("span", { class: `dot ${radio.connected ? "ok" : ""}`, style: "display:inline-block;margin-right:8px" }), radioLabel(radio)),
         rssiBars(rssi[radio.id]),
-        h("span", {}, rssi[radio.id] === undefined ? "nicht gehört" : `${num(rssi[radio.id])} dBm`),
-        radio.id === best && heard.length > 1 ? chip("bester Empfang", "ok") : null,
+        h("span", {}, rssi[radio.id] === undefined ? t("nicht gehört") : `${num(rssi[radio.id])} dBm`),
+        radio.id === best && heard.length > 1 ? chip(t("bester Empfang"), "ok") : null,
         dev.radio === radio.id
-          ? chip("zugeordnet", "ok")
+          ? chip(t("zugeordnet"), "ok")
           : h("button", {
             class: "action",
             disabled: busy || !dev.device_id,
-            title: radio.connected ? "" : "Funkmodul ist gerade nicht verbunden",
+            title: radio.connected ? "" : t("Funkmodul ist gerade nicht verbunden"),
             onclick: () => this._call(`radio:${dev.serial}`,
               { type: "eq3_max/set_radio", device_id: dev.device_id, radio: radio.id },
-              `${dev.name} sendet jetzt über ${radio.name}.`),
-          }, "Zuordnen"),
-        h("span", { class: "hint" }, `${radio.connection === "network" ? "Netzwerk" : "USB"} · ${radio.target}`)))),
+              t("{name} sendet jetzt über {radio}.", { name: dev.name, radio: radioLabel(radio) })),
+          }, t("Zuordnen")),
+        h("span", { class: "hint" }, `${radio.connection === "network" ? t("Netzwerk") : t("USB")} · ${radio.target}`)))),
       h("div", { class: "sub", style: "margin-top:6px;color:var(--e3-muted);font-size:12px" },
-        "Empfangswerte stammen aus den letzten Telegrammen des Geräts. Ein Modul, das das Gerät nie gehört hat, "
-        + "erreicht es vermutlich auch beim Senden nicht."),
+        t("Empfangswerte stammen aus den letzten Telegrammen des Geräts. Ein Modul, das das Gerät nie gehört hat, erreicht es vermutlich auch beim Senden nicht.")),
     ];
   }
 
@@ -1153,8 +1780,8 @@ class Eq3MaxPanel extends HTMLElement {
   _linkCall(op, dev, partner) {
     const key = `${op}:${dev.serial}:${partner.serial}`;
     const text = op === "link"
-      ? `Verknüpfung mit ${partner.name} beauftragt.`
-      : `Lösen von ${partner.name} beauftragt.`;
+      ? t("Verknüpfung mit {name} beauftragt.", { name: partner.name })
+      : t("Lösen von {name} beauftragt.", { name: partner.name });
     return this._call(key, { type: `eq3_max/${op}`, device_id: dev.device_id, partner_device_id: partner.device_id }, text);
   }
 
@@ -1171,37 +1798,39 @@ class Eq3MaxPanel extends HTMLElement {
     for (const partner of dev.links.partners) {
       rows.push(h("div", { class: "row" },
         h("span", { class: "grow" }, partner.name),
-        chip("verknüpft", "ok"),
-        this._linkButton("unlink", dev, partner, "Lösen", true)));
+        chip(t("verknüpft"), "ok"),
+        this._linkButton("unlink", dev, partner, t("Lösen"), true)));
     }
     for (const item of dev.links.pending) {
       const buttons = [];
       if (item.state === "failed" || item.state === "rejected") {
-        buttons.push(this._linkButton(item.op === "remove" ? "unlink" : "link", dev, item, "Erneut senden"));
+        buttons.push(this._linkButton(item.op === "remove" ? "unlink" : "link", dev, item, t("Erneut senden")));
       }
-      if (item.state === "one_sided") buttons.push(this._linkButton("link", dev, item, "Verknüpfen"));
-      if (item.op !== "remove") buttons.push(this._linkButton("unlink", dev, item, "Lösen", true));
-      const what = item.op === "remove" ? "Lösen" : item.op === "add" ? "Verknüpfen" : null;
+      if (item.state === "one_sided") buttons.push(this._linkButton("link", dev, item, t("Verknüpfen")));
+      if (item.op !== "remove") buttons.push(this._linkButton("unlink", dev, item, t("Lösen"), true));
+      const what = item.op === "remove" ? t("Lösen") : item.op === "add" ? t("Verknüpfen") : null;
+      // item.text kommt vom Server auf Deutsch; die bekannten Texte stehen in EN.
+      const text = item.text ? t(item.text) : "";
       rows.push(h("div", { class: "row" },
         h("span", { class: "grow" }, item.name),
-        chip(LINK_LABELS[item.state] || item.state, LINK_CHIP[item.state] || ""),
+        chip(LINK_LABELS[item.state] ? t(LINK_LABELS[item.state]) : item.state, LINK_CHIP[item.state] || ""),
         buttons,
-        h("span", { class: "hint" }, what ? `${what}: ${item.text}` : item.text)));
+        h("span", { class: "hint" }, what ? t("{what}: {text}", { what, text }) : text)));
     }
 
-    const select = h("select", { "data-focus": `cand:${dev.serial}`, "aria-label": "Partner auswählen" },
-      h("option", { value: "" }, dev.candidates.length ? "Partner auswählen …" : "kein weiteres Gerät möglich"),
+    const select = h("select", { "data-focus": `cand:${dev.serial}`, "aria-label": t("Partner auswählen") },
+      h("option", { value: "" }, dev.candidates.length ? t("Partner auswählen …") : t("kein weiteres Gerät möglich")),
       dev.candidates.map((c) => h("option", { value: c.serial }, c.name)));
     if (this._candidate && dev.candidates.some((c) => c.serial === this._candidate)) select.value = this._candidate;
     select.addEventListener("change", () => { this._candidate = select.value; this._render(); });
     const chosen = dev.candidates.find((c) => c.serial === select.value);
 
     return [
-      dev.sleeper && SLEEPER_HINTS[dev.type] ? h("div", { class: "notice" }, SLEEPER_HINTS[dev.type]) : null,
+      dev.sleeper && SLEEPER_HINTS[dev.type] ? h("div", { class: "notice" }, t(SLEEPER_HINTS[dev.type])) : null,
       h("div", {},
-        rows.length ? rows : h("div", { class: "empty" }, "Keine Verknüpfungen.")),
+        rows.length ? rows : h("div", { class: "empty" }, t("Keine Verknüpfungen."))),
       h("div", {},
-        h("div", { class: "sub", style: "margin-bottom:6px;font-weight:500" }, "Partner hinzufügen"),
+        h("div", { class: "sub", style: "margin-bottom:6px;font-weight:500" }, t("Partner hinzufügen")),
         h("div", { class: "add" },
           select,
           h("button", {
@@ -1212,9 +1841,9 @@ class Eq3MaxPanel extends HTMLElement {
               this._candidate = null;
               await this._linkCall("link", dev, chosen);
             },
-          }, "Verknüpfen")),
+          }, t("Verknüpfen"))),
         h("div", { class: "sub", style: "margin-top:6px;color:var(--e3-muted);font-size:12px" },
-          "Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind.")),
+          t("Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind."))),
     ];
   }
 
@@ -1252,8 +1881,7 @@ class Eq3MaxPanel extends HTMLElement {
   _renderConfig(dev) {
     return [
       h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
-        "Das Gerät übernimmt nur ganze Sätze: Werte ändern und den Satz mit einem Klick senden. " +
-        "Gezeigt wird der zuletzt quittierte Wert; „ausstehend“ heißt gesendet, aber noch nicht quittiert."),
+        t("Das Gerät übernimmt nur ganze Sätze: Werte ändern und den Satz mit einem Klick senden. Gezeigt wird der zuletzt quittierte Wert; „ausstehend“ heißt gesendet, aber noch nicht quittiert.")),
       dev.config.map((set) => this._renderSet(dev, set)),
     ];
   }
@@ -1269,12 +1897,12 @@ class Eq3MaxPanel extends HTMLElement {
       const current = item.key in draft ? draft[item.key] : effective(item);
       let control;
       if (item.type === "select") {
-        control = h("select", { "data-focus": `cfg:${dk}:${item.key}`, "aria-label": item.label },
-          item.options.map((o) => h("option", { value: String(o.value) }, o.label)));
+        control = h("select", { "data-focus": `cfg:${dk}:${item.key}`, "aria-label": configLabel(item) },
+          item.options.map((o) => h("option", { value: String(o.value) }, optionLabel(item, o))));
       } else {
         control = h("input", {
           type: "number", min: String(item.min), max: String(item.max), step: String(item.step),
-          inputmode: "decimal", "data-focus": `cfg:${dk}:${item.key}`, "aria-label": item.label,
+          inputmode: "decimal", "data-focus": `cfg:${dk}:${item.key}`, "aria-label": configLabel(item),
         });
       }
       control.value = String(current);
@@ -1290,32 +1918,32 @@ class Eq3MaxPanel extends HTMLElement {
       });
       const error = h("span", { style: "color:var(--e3-error)" });
       refs.push({ item, control, error });
-      const meta = [chip(SOURCE_LABELS[item.source] || item.source || "?",
+      const meta = [chip(SOURCE_LABELS[item.source] ? t(SOURCE_LABELS[item.source]) : item.source || "?",
         item.source === "werksvorgabe" ? "warn" : item.source === "gesetzt" ? "ok" : "info")];
       if (item.pending !== null && item.pending !== undefined) {
-        meta.push(chip(`ausstehend: ${formatConfig(item, item.pending)}`, "warn"));
-        meta.push(h("span", {}, `quittiert: ${formatConfig(item, item.value)}`));
+        meta.push(chip(t("ausstehend: {value}", { value: formatConfig(item, item.pending) }), "warn"));
+        meta.push(h("span", {}, t("quittiert: {value}", { value: formatConfig(item, item.value) })));
       }
       if (item.type === "number") {
-        meta.push(h("span", {}, `${plainNum(item.min)} … ${plainNum(item.max)}, Schritt ${plainNum(item.step)}`));
+        meta.push(h("span", {}, t("{min} … {max}, Schritt {step}", { min: plainNum(item.min), max: plainNum(item.max), step: plainNum(item.step) })));
       }
       meta.push(error);
       return h("div", { class: "cfg" },
-        h("span", { class: "label" }, item.label),
+        h("span", { class: "label" }, configLabel(item)),
         h("span", { class: "ctl" }, control, item.unit ? h("span", { class: "sub" }, item.unit) : null),
         h("div", { class: "meta" }, meta));
     });
 
     const status = [];
-    if (set.pending) status.push(chip("Satz ausstehend", "warn"));
-    if (set.failed) status.push(chip("nicht quittiert – wird beim nächsten Melden erneut gesendet", "error"));
+    if (set.pending) status.push(chip(t("Satz ausstehend"), "warn"));
+    if (set.failed) status.push(chip(t("nicht quittiert – wird beim nächsten Melden erneut gesendet"), "error"));
 
     const count = h("span", { class: "sub" });
     const discard = h("button", {
       class: "action",
       onclick: () => { delete this._drafts[dk]; this._confirm = null; this._render(); },
-    }, "Verwerfen");
-    const send = h("button", { class: "action primary", onclick: () => { this._confirm = dk; this._render(); } }, "Satz senden");
+    }, t("Verwerfen"));
+    const send = h("button", { class: "action primary", onclick: () => { this._confirm = dk; this._render(); } }, t("Satz senden"));
     const confirmBox = h("div", {});
 
     const update = () => {
@@ -1327,11 +1955,12 @@ class Eq3MaxPanel extends HTMLElement {
         invalid = invalid || bad;
         control.classList.toggle("changed", item.key in changes);
         error.textContent = bad
-          ? `Wert muss zwischen ${plainNum(item.min)} und ${plainNum(item.max)} in Schritten von ${plainNum(item.step)} liegen`
+          ? t("Wert muss zwischen {min} und {max} in Schritten von {step} liegen",
+            { min: plainNum(item.min), max: plainNum(item.max), step: plainNum(item.step) })
           : "";
       }
       const n = Object.keys(changes).length;
-      count.textContent = n ? `${n} geändert` : "";
+      count.textContent = n ? t("{n} geändert", { n }) : "";
       discard.style.display = Object.keys(draft).length ? "" : "none";
       send.disabled = !n || invalid || busy || !dev.device_id;
       return { changes, invalid };
@@ -1342,20 +1971,20 @@ class Eq3MaxPanel extends HTMLElement {
       const factory = set.values.filter((item) => !(item.key in changes) && item.source === "werksvorgabe" &&
         (item.pending === null || item.pending === undefined));
       confirmBox.append(h("div", { class: "confirm" },
-        h("div", {}, `Satz „${set.title}“ an ${dev.name} senden:`),
+        h("div", {}, t("Satz „{title}“ an {name} senden:", { title: setTitle(set), name: dev.name })),
         h("ul", {}, set.values.filter((item) => item.key in changes).map((item) =>
-          h("li", {}, `${item.label}: ${formatConfig(item, effective(item))} → ${formatConfig(item, changes[item.key])}`))),
+          h("li", {}, `${configLabel(item)}: ${formatConfig(item, effective(item))} → ${formatConfig(item, changes[item.key])}`))),
         factory.length
-          ? h("div", {}, "Mit dem Satz gehen diese angenommenen Werksvorgaben mit (am Gerät nie gelesen):",
-            h("ul", {}, factory.map((item) => h("li", {}, `${item.label}: ${formatConfig(item, item.value)}`))))
-          : h("div", {}, "Alle übrigen Werte des Satzes sind bekannt."),
+          ? h("div", {}, t("Mit dem Satz gehen diese angenommenen Werksvorgaben mit (am Gerät nie gelesen):"),
+            h("ul", {}, factory.map((item) => h("li", {}, `${configLabel(item)}: ${formatConfig(item, item.value)}`))))
+          : h("div", {}, t("Alle übrigen Werte des Satzes sind bekannt.")),
         h("div", { class: "setfoot" },
-          h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, "Abbrechen"),
-          h("button", { class: "action primary", disabled: busy || !dev.device_id, onclick: () => this._sendSet(dev, set, changes) }, "Senden"))));
+          h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, t("Abbrechen")),
+          h("button", { class: "action primary", disabled: busy || !dev.device_id, onclick: () => this._sendSet(dev, set, changes) }, t("Senden")))));
     }
 
     return h("fieldset", {},
-      h("legend", {}, set.title),
+      h("legend", {}, setTitle(set)),
       status.length ? h("div", { class: "add", style: "margin-bottom:6px" }, status) : null,
       rows,
       h("div", { class: "setfoot" }, count, discard, send),
@@ -1367,9 +1996,9 @@ class Eq3MaxPanel extends HTMLElement {
     const result = await this._call(`cfg:${dk}`,
       { type: "eq3_max/set_config", device_id: dev.device_id, kind: set.kind, values: changes },
       (res) => {
-        const labels = set.values.filter((item) => res.factory_keys.includes(item.key)).map((item) => item.label);
-        return `Satz „${set.title}“ gesendet – wartet auf Quittung.` +
-          (labels.length ? ` Werksvorgaben mitgesendet: ${labels.join(", ")}.` : "");
+        const labels = set.values.filter((item) => res.factory_keys.includes(item.key)).map(configLabel);
+        return t("Satz „{title}“ gesendet – wartet auf Quittung.", { title: setTitle(set) }) +
+          (labels.length ? t(" Werksvorgaben mitgesendet: {labels}.", { labels: labels.join(", ") }) : "");
       });
     if (result !== undefined) {
       delete this._drafts[dk];

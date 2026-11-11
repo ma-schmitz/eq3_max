@@ -51,6 +51,11 @@ unlink:
       selector:
         device:
           integration: eq3_max
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 set_week_profile:
   fields:
@@ -66,6 +71,7 @@ set_week_profile:
       selector:
         select:
           multiple: true
+          translation_key: weekday
           options:
             - Samstag
             - Sonntag
@@ -89,6 +95,15 @@ copy_week_profile:
         device:
           integration: eq3_max
     target_device_id:
+      required: true
+      selector:
+        device:
+          integration: eq3_max
+          multiple: true
+
+set_time:
+  fields:
+    device_id:
       required: true
       selector:
         device:

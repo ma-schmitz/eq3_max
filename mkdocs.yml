@@ -1,7 +1,7 @@
 # Projektseite (Material for MkDocs). Lokal: .venv-docs/bin/mkdocs serve
 # Veröffentlicht wird sie auf GitHub Pages (.github/workflows/pages.yml).
 site_name: eq3_max
-site_description: eQ-3 MAX! direkt in Home Assistant – über einen CUL-Stick oder geflashten Cube, ohne Homegear.
+site_description: eQ-3 MAX! directly in Home Assistant – through a CUL stick or a flashed Cube, without Homegear.
 # Account des öffentlichen Repos (GitHub-Export: tools/github_export.py).
 site_url: https://ma-schmitz.github.io/eq3_max/
 repo_url: https://github.com/ma-schmitz/eq3_max
@@ -12,11 +12,11 @@ exclude_docs: |
   hooks.py
   overrides/
   __pycache__/
-copyright: eq3_max – Home-Assistant-Integration für eQ-3 MAX!
+copyright: eq3_max – Home Assistant integration for eQ-3 MAX!
 
 theme:
   name: material
-  language: de
+  language: en
   custom_dir: website/overrides
   logo: assets/icon.png
   favicon: assets/icon.png
@@ -30,14 +30,14 @@ theme:
       accent: custom
       toggle:
         icon: material/weather-night
-        name: Dunkles Design
+        name: Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: custom
       accent: custom
       toggle:
         icon: material/weather-sunny
-        name: Helles Design
+        name: Light mode
   features:
     - navigation.tabs
     - navigation.tabs.sticky
@@ -45,7 +45,6 @@ theme:
     - navigation.indexes
     - navigation.top
     - navigation.footer
-    - navigation.instant
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -77,29 +76,76 @@ markdown_extensions:
 
 plugins:
   - search:
-      lang: de
+      lang: [en, de]
+  # Zweisprachig: Englisch unter /, Deutsch unter /de/; deutsche Seiten heißen *.de.md.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: de
+          name: Deutsch
+          build: true
+          site_description: eQ-3 MAX! direkt in Home Assistant – über einen CUL-Stick oder geflashten Cube, ohne Homegear.
+          copyright: eq3_max – Home-Assistant-Integration für eQ-3 MAX!
+          theme:
+            palette:
+              - media: "(prefers-color-scheme: light)"
+                scheme: default
+                primary: custom
+                accent: custom
+                toggle:
+                  icon: material/weather-night
+                  name: Dunkles Design
+              - media: "(prefers-color-scheme: dark)"
+                scheme: slate
+                primary: custom
+                accent: custom
+                toggle:
+                  icon: material/weather-sunny
+                  name: Helles Design
+          nav_translations:
+            Home: Start
+            Getting started: Loslegen
+            Installation: Installation
+            Setup: Einrichtung
+            Hardware: Hardware
+            Migration: Umstieg
+            From Homegear: Von Homegear
+            Manual: Handbuch
+            Operating a thermostat: Thermostat bedienen
+            Device configuration: Gerätekonfiguration
+            Links: Verknüpfungen
+            The "eQ-3 MAX!" panel: Seite „eQ-3 MAX!“
+            Multiple radio modules: Mehrere Funkmodule
+            Pairing devices: Geräte anlernen
+            Services: Dienste
+            Operation and faults: Betrieb und Störungen
   # Schriften und andere externe Dateien beim Bauen herunterladen und selbst ausliefern
   # (keine Verbindung zu Google beim Besuch der Seite).
   - privacy
 
 nav:
-  - Start: index.md
-  - Loslegen:
+  - Home: index.md
+  - Getting started:
       - Installation: loslegen/installation.md
-      - Einrichtung: loslegen/einrichtung.md
+      - Setup: loslegen/einrichtung.md
       - Hardware: loslegen/hardware.md
-  - Umstieg:
+  - Migration:
       - umstieg/index.md
-      - Von Homegear: umstieg/homegear.md
-  - Handbuch:
+      - From Homegear: umstieg/homegear.md
+  - Manual:
       - handbuch/index.md
-      - Thermostat bedienen: handbuch/bedienung.md
-      - Gerätekonfiguration: handbuch/konfiguration.md
-      - Verknüpfungen: handbuch/verknuepfungen.md
-      - Seite „eQ-3 MAX!“: handbuch/seite.md
-      - Mehrere Funkmodule: handbuch/funkmodule.md
-      - Geräte anlernen: handbuch/anlernen.md
-      - Dienste: handbuch/dienste.md
-      - Betrieb und Störungen: handbuch/betrieb.md
+      - Operating a thermostat: handbuch/bedienung.md
+      - Device configuration: handbuch/konfiguration.md
+      - Links: handbuch/verknuepfungen.md
+      - The "eQ-3 MAX!" panel: handbuch/seite.md
+      - Multiple radio modules: handbuch/funkmodule.md
+      - Pairing devices: handbuch/anlernen.md
+      - Services: handbuch/dienste.md
+      - Operation and faults: handbuch/betrieb.md
   - FAQ: faq.md
   - Changelog: changelog.md

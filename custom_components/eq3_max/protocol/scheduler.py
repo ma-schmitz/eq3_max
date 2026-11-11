@@ -63,6 +63,9 @@ class Command:
     # Device is awake right now (e.g. a window contact just sent): "Zf" without the
     # 1 s wake-up preamble instead of "Zs".
     fast: bool = False
+    # Build the telegram anew for every attempt (same counter): its content ages, like
+    # the time of day.
+    fresh: bool = False
     # Per-command limits; None uses the scheduler's ack timeout / retries.
     retries: int | None = None
     ack_timeout: float | None = None
@@ -113,6 +116,11 @@ class RadioScheduler:
         self._acked: bool | None = None
         self._lovf = False
         self._waiting_budget = False
+        # Event loop time until which the stick is busy with the telegram handed to it
+        # last (real time, not the injectable clock: it is about the hardware).
+        self._busy_until = 0.0
+        # How often a send had to wait for the previous one to leave the air.
+        self.waited_for_air = 0
         self._airtime: deque[tuple[float, float]] = deque()
 
     @property
@@ -127,10 +135,30 @@ class RadioScheduler:
         return sum(cost for _, cost in self._airtime)
 
     @property
+    def busy_for(self) -> float:
+        """Seconds the stick still needs for the telegram handed to it last."""
+        return max(0.0, self._busy_until - asyncio.get_running_loop().time())
+
+    async def _wait_for_air(self) -> None:
+        """Hold the next telegram until the previous one is off the air. culfw sends
+        blocking (1 s wake-up preamble plus the data); a second "Zs" in that time hung
+        the nanoCUL for good. Normally the wait for the acknowledgement covers it; a
+        send given up for a more urgent one does not."""
+        remaining = self.busy_for
+        if remaining > 0:
+            self.waited_for_air += 1
+            await asyncio.sleep(remaining)
+
+    @property
     def waiting_for_budget(self) -> bool:
         """The command in turn waits for airtime: held by the brake or refused by the
         stick (LOVF)."""
         return self._waiting_budget
+
+    def book_airtime(self, cost: float) -> None:
+        """Count a transmission that went out past the queue (the hub's acknowledgements)."""
+        self._airtime.append((self._clock(), cost))
+        self._changed()
 
     def submit(self, cmd: Command) -> None:
         """Queue a command. A newer command with the same key replaces the waiting one;
@@ -156,6 +184,18 @@ class RadioScheduler:
         self._abandoned = True
         self._ack_event.set()
         return True
+
+    def abandon_key(self, key: str) -> bool:
+        """Give up the command with this key, waiting or on air (no further attempts;
+        on_done is called for the one on air, outcome ABANDONED). Returns whether there
+        was one."""
+        dropped = self.cancel_key(key) > 0
+        cmd = self._inflight_cmd
+        if cmd is not None and cmd.key == key:
+            self._abandoned = True
+            self._ack_event.set()
+            return True
+        return dropped
 
     def cancel_key(self, key: str) -> int:
         """Drop waiting commands with this key (no on_done call); returns how many."""
@@ -191,6 +231,8 @@ class RadioScheduler:
             return False
         if self._acked is None:
             self._acked = ok
+        # The device answered: the telegram is off the air.
+        self._busy_until = 0.0
         self._ack_event.set()
         return True
 
@@ -253,6 +295,15 @@ class RadioScheduler:
                     _LOGGER.debug("command for %06X expired before sending", cmd.dst)
                     cmd.outcome = Outcome.EXPIRED
                     return False
+                if cmd.fresh and cmd.sent:
+                    try:
+                        frame = cmd.build(self._counter)
+                        line = ("Zf" if cmd.fast else "Zs") + encode_frame(frame)
+                    except Exception:
+                        _LOGGER.exception("cannot encode command for %06X", cmd.dst)
+                        cmd.outcome = Outcome.ERROR
+                        return False
+                await self._wait_for_air()
                 self._ack_event.clear()
                 self._lovf = False
                 self._inflight = (frame.dst, frame.counter) if cmd.expects_ack else None
@@ -272,6 +323,10 @@ class RadioScheduler:
                 cmd.sent += 1
                 booked = (self._clock(), cost)
                 self._airtime.append(booked)
+                # Busy for the telegram's airtime plus a little margin for turning the
+                # radio around - but never longer than the wait for its acknowledgement,
+                # after which the next attempt was always sent.
+                self._busy_until = asyncio.get_running_loop().time() + min(cost + 0.05, ack_timeout)
                 self._changed()
                 if not cmd.expects_ack:
                     cmd.outcome = Outcome.SENT

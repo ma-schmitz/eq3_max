@@ -746,7 +746,7 @@ async def test_failed_command_without_rx_reopens_at_once_and_resends(caplog):
         h.set_temperature(HT, 21.0, Mode.MANUAL)
         await until(lambda: cul.opened == 2 and h.connected, timeout=1.0)
         assert reopens == [1]
-        assert "CUL empfaengt nach dem Senden nichts mehr - Port wird neu geoeffnet" in caplog.text
+        assert "CUL receives nothing after sending, reopening the port" in caplog.text
         assert len([l for l in cul.all_written if l.startswith("Zs")]) == 4
         await until(lambda: len(sent(cul)) == 1)
         assert sent(cul)[0].endswith("6A")
@@ -871,7 +871,7 @@ async def test_devices_get_factory_config_at_start(hub):
     h, cul, rec = hub
     assert h.devices[HT].config["komfort"] == 21.0
     assert h.devices[HT].config_source["entkalkung_tag"] == "werksvorgabe"
-    assert "boost_dauer" not in h.devices[WT].config
+    assert h.devices[WT].config["boost_dauer"] == 5 and "boost_ventil" not in h.devices[WT].config
     assert h.devices[FK].config == {}
 
 
@@ -892,13 +892,13 @@ async def test_set_config_sends_whole_temperature_set_and_ack_commits(hub):
     assert dev.config_source["boost_dauer"] == "werksvorgabe"
 
 
-async def test_set_config_valve_goes_to_heating_thermostat_only(hub):
+async def test_set_config_valve_limits_go_to_heating_thermostats_only(hub):
     h, cul, rec = hub
     h.set_config(HT, "entkalkung_tag", "Mittwoch")
     await until(lambda: len(sent(cul)) == 1)
     assert sent(cul)[0] == "Zs" + "0E0100" + "12C0FFEEA1B00500" + "308CFF00"
     with pytest.raises(FrameError):
-        h.set_config(WT, "boost_dauer", 10)
+        h.set_config(WT, "ventil_max", 80)
     assert "valve" not in h.devices[WT].pending_config
 
 
@@ -1073,12 +1073,12 @@ async def test_sending_assumed_factory_values_logs_warning(hub, caplog):
     for key in ("komfort", "eco", "maximal", "offset", "fenster_temperatur"):
         dev.config_source[key] = "homegear"
     h.set_config(HT, "komfort", 22.0)
-    assert "Sende angenommene Werksvorgaben mit: minimal, fenster_dauer" in caplog.text
+    assert "sending assumed factory values along: minimal, fenster_dauer" in caplog.text
     caplog.clear()
     for key in ("minimal", "fenster_dauer"):
         dev.config_source[key] = "gesetzt"
     h.set_config(HT, "eco", 16.0)
-    assert "Werksvorgaben" not in caplog.text
+    assert "assumed factory values" not in caplog.text
 
 
 # --- Block 3: Verknuepfungen ---
@@ -1100,7 +1100,13 @@ def matches(sent_line, expected):
 
 
 def fast(cul):
-    return [l for l in cul.written if l.startswith("Zf")]
+    """Fast sends without the hub's own acknowledgements (type 02 from the central)."""
+    return [l for l in cul.written if l.startswith("Zf") and l[8:10] != "02"]
+
+
+def acks(cul):
+    """Acknowledgements the hub sent: Zf, flags 02, type 02, from the central."""
+    return [l for l in cul.written if l.startswith("Zf") and l[6:10] == "0202"]
 
 
 def ack(cul, src, sent_line, ok=True):
@@ -1210,20 +1216,20 @@ async def test_unlink_is_symmetric(hub):
 
 async def test_disallowed_self_and_duplicate_links_are_rejected(hub):
     h, cul, rec = hub
-    with pytest.raises(FrameError, match="nicht verkn\u00fcpfen"):
+    with pytest.raises(FrameError, match="cannot be linked"):
         h.link(FK, PB)
-    with pytest.raises(FrameError, match="sich selbst"):
+    with pytest.raises(FrameError, match="with itself"):
         h.link(HT, HT)
-    with pytest.raises(FrameError, match="nicht bekannt"):
+    with pytest.raises(FrameError, match="not known"):
         h.link(HT, 0x123456)
     h.devices[HT].links = [WT_S]
     h.devices[WT].links = [HT_S]
-    with pytest.raises(FrameError, match="bereits verkn\u00fcpft"):
+    with pytest.raises(FrameError, match="already linked"):
         h.link(WT, HT)
-    with pytest.raises(FrameError, match="nicht verkn\u00fcpft"):
+    with pytest.raises(FrameError, match="not linked"):
         h.unlink(HT, FK)
     h.link(HT, FK)
-    with pytest.raises(FrameError, match="bereits beauftragt"):
+    with pytest.raises(FrameError, match="already requested"):
         h.link(FK, HT)
     await asyncio.sleep(0.05)
     assert len(sent(cul)) == 1  # only the HT side of HT-FK
@@ -1621,12 +1627,12 @@ async def test_factory_log_lists_only_values_going_along(hub, caplog):
     h, cul, rec = hub
     caplog.set_level("WARNING")
     assumed = h.set_config_set(HT, "temp", {"komfort": 22.5, "eco": 16.0})
-    logs = [r.getMessage() for r in caplog.records if "Werksvorgaben" in r.getMessage()]
+    logs = [r.getMessage() for r in caplog.records if "assumed factory values" in r.getMessage()]
     assert logs and logs[-1].endswith(": " + ", ".join(assumed))
     assert "komfort" not in logs[-1] and "eco" not in logs[-1]
     caplog.clear()
     h.set_config(HT, "boost_dauer", 10)
-    logs = [r.getMessage() for r in caplog.records if "Werksvorgaben" in r.getMessage()]
+    logs = [r.getMessage() for r in caplog.records if "assumed factory values" in r.getMessage()]
     assert logs[-1].endswith(": boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset")
 
 
@@ -1656,7 +1662,7 @@ async def test_unreachable_device_does_not_reopen_once_the_stick_proved_it_hears
         await until(lambda: h.devices[HT].command_failed, timeout=1.0)
         await asyncio.sleep(0.05)
         assert cul.opened == 2
-        assert "neu geoeffnet" not in caplog.text
+        assert "reopening the port" not in caplog.text
         # HT is heard again: it is no longer silent, a later failure may reopen once more.
         cul.feed(line(5, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19302A00BE"))
         await until(lambda: h.silent_devices == [])
@@ -1713,7 +1719,7 @@ async def test_reopen_warning_only_when_the_port_is_really_reopened(caplog):
     try:
         h.set_temperature(HT, 21.0, Mode.MANUAL)
         await until(lambda: cul.opened == 2 and h.connected, timeout=1.0)
-        assert caplog.text.count("neu geoeffnet") == 1
+        assert caplog.text.count("reopening the port") == 1
         caplog.clear()
         # Same quiet episode: the transport refuses a second fast reopen.
         await until(lambda: h.devices[HT].command_failed, timeout=1.0)
@@ -1722,7 +1728,7 @@ async def test_reopen_warning_only_when_the_port_is_really_reopened(caplog):
         await until(lambda: h.devices[HT].command_failed and h.devices[HT].pending_target == 21.5, timeout=1.0)
         await asyncio.sleep(0.05)
         assert cul.opened == 2
-        assert "neu geoeffnet" not in caplog.text
+        assert "reopening the port" not in caplog.text
     finally:
         await h.stop()
 
@@ -1804,7 +1810,7 @@ async def test_set_week_profile_nak_raises_and_keeps_the_stored_day(hub):
     task = asyncio.create_task(h.set_week_profile(HT, {2: [_P(20.0, 1440)], 3: FHEM_DAY}))
     await until(lambda: len(sent(cul)) == 1)
     ack(cul, HT, sent(cul)[0], ok=False)
-    with pytest.raises(FrameError, match="Montag.*abgelehnt"):
+    with pytest.raises(FrameError, match="Monday refused"):
         await asyncio.wait_for(task, 1.0)
     await asyncio.sleep(0.1)
     assert len(sent(cul)) == 1  # Tuesday is not sent any more
@@ -1814,7 +1820,7 @@ async def test_set_week_profile_nak_raises_and_keeps_the_stored_day(hub):
 async def test_set_week_profile_without_ack_raises_after_the_attempts(hub):
     h, cul, rec = hub
     task = asyncio.create_task(h.set_week_profile(WT, {0: FHEM_DAY}))
-    with pytest.raises(FrameError, match="Samstag.*nicht quittiert"):
+    with pytest.raises(FrameError, match="Saturday not acknowledged"):
         await asyncio.wait_for(task, 2.0)
     # Four unheard attempts count as a deaf stick: the port was reopened meanwhile.
     lines = [l for l in (cul.all_written + cul.written) if l.startswith("Zs")]
@@ -1824,13 +1830,13 @@ async def test_set_week_profile_without_ack_raises_after_the_attempts(hub):
 
 async def test_set_week_profile_refuses_unknown_sleepers_and_bad_points(hub):
     h, cul, rec = hub
-    with pytest.raises(FrameError, match="nicht bekannt"):
+    with pytest.raises(FrameError, match="not known"):
         await h.set_week_profile(0x999999, {0: FHEM_DAY})
-    with pytest.raises(FrameError, match="Thermostat"):
+    with pytest.raises(FrameError, match="only thermostats"):
         await h.set_week_profile(FK, {0: FHEM_DAY})
     with pytest.raises(FrameError, match="24:00"):
         await h.set_week_profile(HT, {0: [_P(20.0, 600)]})
-    with pytest.raises(FrameError, match="Wochentag"):
+    with pytest.raises(FrameError, match="weekday"):
         await h.set_week_profile(HT, {7: FHEM_DAY})
     await asyncio.sleep(0.05)
     assert sent(cul) == []
@@ -1871,7 +1877,7 @@ async def test_week_profile_second_write_while_one_runs_is_refused(hub):
     h, cul, rec = hub
     task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
     await until(lambda: len(sent(cul)) == 1)
-    with pytest.raises(FrameError, match="wird gerade geschrieben"):
+    with pytest.raises(FrameError, match="being written"):
         await h.set_week_profile(HT, {3: FHEM_DAY})
     ack(cul, HT, sent(cul)[0])
     await asyncio.wait_for(task, 1.0)
@@ -1883,10 +1889,11 @@ async def test_week_profile_failure_is_kept_until_the_next_write(hub):
     task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY, 3: FHEM_DAY}))
     await until(lambda: len(sent(cul)) == 1)
     ack(cul, HT, sent(cul)[0], ok=False)
-    with pytest.raises(FrameError, match="abgelehnt"):
+    with pytest.raises(FrameError, match="refused"):
         await asyncio.wait_for(task, 1.0)
     assert dev.week_profile_writing == []
-    assert "Montag" in dev.week_profile_error and "Dienstag" in dev.week_profile_error
+    assert dev.week_profile_error["key"] == "week_profile_rejected"
+    assert dev.week_profile_error["missing"] == ["Montag", "Dienstag"]
     assert rec.updates[-1].address == HT
     task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
     await until(lambda: len(sent(cul)) == 2)
@@ -1933,6 +1940,660 @@ async def test_stop_ends_a_running_week_profile_write(hub):
     task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
     await until(lambda: len(sent(cul)) == 1)
     await h.stop()
-    with pytest.raises(FrameError, match="abgebrochen"):
+    with pytest.raises(FrameError, match="aborted"):
         await asyncio.wait_for(task, 1.0)
     assert h.devices[HT].week_profile_writing == []
+
+
+# --- leftover half links: the device still holds a partner the integration does not know of ---
+
+
+async def test_forced_unlink_removes_an_unknown_partner_from_one_device_only(hub):
+    """A wall thermostat keeps reporting a radio error because it still carries a
+    thermostat that was moved away long ago."""
+    h, cul, rec = hub
+    assert h.devices[WT].links == [] and h.devices[HT].links == []
+    with pytest.raises(FrameError, match="not linked"):
+        h.unlink(WT, HT)
+    h.unlink(WT, HT, force=True)
+    await until(lambda: len(sent(cul)) == 1)
+    assert matches(sent(cul)[0], link_frame(WT, HT, 1, 0x21))
+    assert h.devices[WT].link_op(HT_S)["op"] == "remove"
+    assert h.devices[HT].pending_links == []  # the other side is left alone
+    ack(cul, WT, sent(cul)[0])
+    await until(lambda: h.devices[WT].pending_links == [])
+    await asyncio.sleep(0.05)
+    assert len(sent(cul)) == 1
+    assert h.devices[WT].links == [] and h.devices[HT].links == []
+
+
+async def test_forced_unlink_at_a_contact_waits_for_its_next_telegram(hub):
+    h, cul, rec = hub
+    h.unlink(FK, HT, force=True)
+    assert h.devices[FK].link_op(HT_S)["state"] == "wartet auf Gerät"
+    await asyncio.sleep(0.05)
+    assert sent(cul) == [] and fast(cul) == []
+    cul.feed(line(8, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: len(fast(cul)) == 1)
+    assert matches(fast(cul)[0], link_frame(FK, HT, 1, 0x21))
+    ack(cul, FK, fast(cul)[0])
+    await until(lambda: h.devices[FK].pending_links == [])
+
+
+async def test_forced_unlink_keeps_the_basic_checks(hub):
+    h, cul, rec = hub
+    with pytest.raises(FrameError, match="with itself"):
+        h.unlink(HT, HT, force=True)
+    with pytest.raises(FrameError, match="not known"):
+        h.unlink(HT, 0x123456, force=True)
+    with pytest.raises(FrameError, match="cannot be linked"):
+        h.unlink(FK, PB, force=True)
+    h.unlink(WT, HT, force=True)
+    with pytest.raises(FrameError, match="already requested"):
+        h.unlink(WT, HT, force=True)
+
+
+# --- the hub acknowledges telegrams to the central itself (no culfw auto-ack) ---
+
+
+async def test_no_module_acknowledges_by_itself(hub):
+    h, cul, rec = hub
+    assert cul.written[:4] == ["V", "X21", "Zr", "Za000000"]
+
+
+async def test_contact_telegram_to_the_central_is_acknowledged_at_once(hub):
+    """Flags 02, the telegram's counter, payload 00, without wake-up preamble: the form
+    Homegear used, which the wall thermostat accepts."""
+    h, cul, rec = hub
+    cul.feed(line(0x35, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: len(acks(cul)) == 1)
+    assert acks(cul)[0] == f"Zf0B350202C0FFEE{FK:06X}0000"
+    await asyncio.sleep(0.05)
+    assert len(acks(cul)) == 1
+    assert h.airtime_last_hour == pytest.approx(0.096)
+
+
+async def test_wall_thermostat_and_button_telegrams_are_acknowledged_states_are_not(hub):
+    h, cul, rec = hub
+    cul.feed(line(0x9C, 0x05, MsgType.SET_TEMPERATURE, WT, CENTRAL, 0, "6A"))
+    await until(lambda: len(acks(cul)) == 1)
+    assert acks(cul)[0] == f"Zf0B9C0202C0FFEE{WT:06X}0000"
+    cul.feed(line(0x59, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+    await until(lambda: len(acks(cul)) == 2)
+    # A thermostat's status report to the central is never acknowledged (as FHEM, Homegear).
+    cul.feed(line(0x11, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19002A"))
+    # Telegrams to someone else are none of our business.
+    cul.feed(line(0x12, 0x00, MsgType.SET_TEMPERATURE, WT, HT, 0, "6A"))
+    await asyncio.sleep(0.05)
+    assert len(acks(cul)) == 2
+
+
+async def test_a_repeated_telegram_is_acknowledged_again(hub):
+    """A button repeats with the same counter when it missed the acknowledgement."""
+    h, cul, rec = hub
+    telegram = line(0x59, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000")
+    cul.feed(telegram)
+    await until(lambda: len(acks(cul)) == 1)
+    h._ack_guard = 0.01
+    await asyncio.sleep(0.03)
+    cul.feed(telegram)
+    await until(lambda: len(acks(cul)) == 2)
+
+
+async def test_unknown_sender_is_acknowledged_too(hub):
+    h, cul, rec = hub
+    cul.feed(line(0x01, 0x06, MsgType.SHUTTER_CONTACT_STATE, 0x123456, CENTRAL, 0, "10"))
+    await until(lambda: len(acks(cul)) == 1)
+
+
+async def test_acknowledgement_is_on_the_line_before_anything_else_happens():
+    """A window contact listens for a few tens of milliseconds only. The answer must be
+    written before the telegram is processed: state changes start automations in Home
+    Assistant, and that delayed the acknowledgement by 45 ms (seen 10.11.2026)."""
+    cul = FakeCul()
+    seen = []
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, devices(),
+        on_update=lambda dev: seen.append(len(acks(cul))) if dev is not None and dev.address == FK else None,
+        on_button=lambda d, t: None,
+        on_device_added=lambda d: None,
+        on_problem=lambda *a: None,
+        open_connection=cul.open,
+        ack_timeout=0.05,
+    )
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        cul.feed(line(0x35, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "12"))
+        await until(lambda: seen)
+        assert seen[0] == 1  # already written when the first update of the contact fires
+    finally:
+        await h.stop()
+
+
+# --- a device that restarted (new batteries): time request and re-pair ping in one breath ---
+
+
+async def test_restarted_device_gets_its_pong_first_then_the_time(hub):
+    """A wall thermostat asks for the time and 150 ms later pings its central again. The
+    time reply (with its retries, 12 s) was in the way of the pong, the device gave up
+    waiting and stopped answering (10.11.2026). The ping means it is not listening for
+    the time reply: drop that, answer the ping at once, send the time after the pong."""
+    h, cul, rec = hub
+    cul.feed(line(0, 0x0A, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, ""))
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0][8:10] == "03"  # the time reply is on air
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, WT, CENTRAL, 0, "100300" + b"NEQ9000011".hex()))
+    await until(lambda: len(sent(cul)) == 2)
+    assert sent(cul)[1][8:10] == "01"  # pong at once, not after the time reply's retries
+    await asyncio.sleep(0.03)
+    assert [l[8:10] for l in sent(cul)] == ["03", "01"]  # the abandoned time reply is not repeated
+    ack(cul, WT, sent(cul)[1])
+    await until(lambda: len(sent(cul)) == 3)
+    assert sent(cul)[2][8:10] == "03"  # now the time
+    ack(cul, WT, sent(cul)[2])
+    await asyncio.sleep(0.1)
+    assert len(sent(cul)) == 3
+
+
+async def test_ping_without_a_time_request_still_brings_the_time_after_the_pong(hub):
+    h, cul, rec = hub
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, WT, CENTRAL, 0, "100300" + b"NEQ9000011".hex()))
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0][8:10] == "01"
+    ack(cul, WT, sent(cul)[0])
+    await until(lambda: len(sent(cul)) == 2)
+    assert sent(cul)[1][8:10] == "03"
+
+
+async def test_time_a_device_sends_to_the_central_is_acknowledged(hub):
+    """After its clock was set by hand the wall thermostat passes its time on to the
+    central and its partners, three times at 5 s intervals to the central, and reports a
+    radio error when nobody answers (seen 10.11.2026). A time *request* (no payload) is
+    answered with the time instead."""
+    h, cul, rec = hub
+    cul.feed(line(0x03, 0x05, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, _time_payload(h._local_now())))
+    await until(lambda: len(acks(cul)) == 1)
+    assert acks(cul)[0] == f"Zf0B030202C0FFEE{WT:06X}0000"
+    await asyncio.sleep(0.05)
+    assert sent(cul) == []  # its time is right: nothing to send
+    cul.feed(line(0x04, 0x0A, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, ""))
+    await until(lambda: len(sent(cul)) == 1)
+    assert len(acks(cul)) == 1  # the request gets the time, not an acknowledgement
+    # Time passed on to another device is not ours to answer.
+    cul.feed(line(0x05, 0x00, MsgType.TIME_INFORMATION, WT, HT, 0, "1A0A1595C2"))
+    await asyncio.sleep(0.05)
+    assert len(acks(cul)) == 1
+
+
+def _time_payload(when):
+    from custom_components.eq3_max.protocol.messages import build_time_information
+
+    return build_time_information(0, 0, 0, when).payload.hex().upper()
+
+
+async def test_device_telling_a_wrong_time_gets_the_right_one(hub):
+    """A clock set by hand is minutes off (and the thermostat takes a stale time reply
+    after its date dialog): once it tells us its time, correct it."""
+    from datetime import timedelta
+
+    h, cul, rec = hub
+    wrong = h._local_now() - timedelta(minutes=3)
+    cul.feed(line(0x03, 0x05, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, _time_payload(wrong)))
+    await until(lambda: len(acks(cul)) == 1)
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0][8:10] == "03" and sent(cul)[0].endswith(_time_payload(h._local_now()))
+    ack(cul, WT, sent(cul)[0])
+    # Its repeats of the same telling do not start a second correction.
+    cul.feed(line(0x04, 0x05, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, _time_payload(wrong)))
+    await until(lambda: len(acks(cul)) == 2)
+    await asyncio.sleep(0.05)
+    assert len(sent(cul)) == 1
+
+
+async def test_device_telling_the_right_time_is_only_acknowledged(hub):
+    from datetime import timedelta
+
+    h, cul, rec = hub
+    close = h._local_now() - timedelta(seconds=20)
+    cul.feed(line(0x03, 0x05, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, _time_payload(close)))
+    await until(lambda: len(acks(cul)) == 1)
+    await asyncio.sleep(0.05)
+    assert sent(cul) == []
+
+
+# --- who acknowledges: the hub with a USB main module, the firmware with a network one ---
+
+
+def _network(open_fn):
+    async def _open(target):
+        return await open_fn(target)
+
+    _open.network = True
+    return _open
+
+
+async def _hub_with(open_connection, cul):
+    h = MaxHub(
+        "192.0.2.60:2323", CENTRAL, devices(),
+        on_update=lambda d: None, on_button=lambda d, t: None, on_device_added=lambda d: None,
+        on_problem=lambda *a: None, open_connection=open_connection, ack_timeout=0.05,
+        transport_kwargs={"health_interval": 0},
+    )
+    await h.start()
+    await until(lambda: h.connected)
+    return h
+
+
+async def test_network_main_module_keeps_the_firmware_acknowledgement():
+    """A line from a flashed Cube reaches Home Assistant 80-160 ms after the stick's
+    (measured 10.11.2026); a window contact has stopped listening by then (it missed an
+    answer after 42 ms). There the firmware answers itself, 20 ms after the telegram, as
+    up to 0.6.x; the hub only answers what the firmware does not know."""
+    cul = FakeCul("V 1.26.08 a-culfw CUBE")
+    h = await _hub_with(_network(cul.open), cul)
+    try:
+        assert cul.written[:4] == ["V", "X21", "Zr", "ZaC0FFEE"]
+        cul.feed(line(0x35, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+        cul.feed(line(0x9C, 0x05, MsgType.SET_TEMPERATURE, WT, CENTRAL, 0, "6A"))
+        await asyncio.sleep(0.05)
+        assert acks(cul) == []
+        cul.feed(line(0x03, 0x05, MsgType.TIME_INFORMATION, WT, CENTRAL, 0, _time_payload(h._local_now())))
+        await until(lambda: len(acks(cul)) == 1)
+    finally:
+        await h.stop()
+
+
+# --- set a device's clock on request ---
+
+
+async def test_set_time_sends_the_time_and_returns_on_the_acknowledgement(hub):
+    """The data go out after the 1 s wake-up preamble: the telegram carries the time
+    the device will read it at."""
+    from datetime import timedelta
+
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_time(WT))
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0][8:10] == "03"
+    assert sent(cul)[0].endswith(_time_payload(h._local_now() + timedelta(seconds=1)))
+    ack(cul, WT, sent(cul)[0])
+    await asyncio.wait_for(task, 1.0)
+
+
+async def test_set_time_repeats_with_the_time_of_the_repeat(hub):
+    from datetime import timedelta
+
+    h, cul, rec = hub
+    task = asyncio.create_task(h.set_time(HT))
+    await until(lambda: len(sent(cul)) == 1)
+    first = sent(cul)[0]
+    h._local_now.t = h._local_now.t + timedelta(seconds=3)
+    await until(lambda: len(sent(cul)) == 2)
+    second = sent(cul)[1]
+    assert second[4:6] == first[4:6]  # same counter: the same command
+    assert second.endswith(_time_payload(h._local_now() + timedelta(seconds=1))) and second != first
+    ack(cul, HT, second)
+    await asyncio.wait_for(task, 1.0)
+
+
+async def test_set_time_reports_a_silent_device_and_refuses_devices_without_a_clock(hub):
+    h, cul, rec = hub
+    with pytest.raises(FrameError, match="no clock"):
+        await h.set_time(FK)
+    with pytest.raises(FrameError, match="not known"):
+        await h.set_time(0x123456)
+    with pytest.raises(FrameError, match="not acknowledged"):
+        await asyncio.wait_for(h.set_time(WT), 2.0)
+
+
+# --- boost duration: the wall thermostat has one too, and a room shares it ---
+
+
+def _room():
+    """Wall thermostat with two radiators, plus one radiator in another room."""
+    wt = MaxDevice(WT, "NEQ9000011", DeviceType.WALL_THERMOSTAT, name="wt-wohnzimmer")
+    a = MaxDevice(HT, "MEQ9000007", DeviceType.HEATING_THERMOSTAT, name="ht-wohnzimmer1")
+    b = MaxDevice(0xA1B002, "MEQ9000021", DeviceType.HEATING_THERMOSTAT, name="ht-esszimmer2")
+    other = MaxDevice(0xA1B00D, "NEQ9000022", DeviceType.HEATING_THERMOSTAT, name="ht-tom")
+    wt.links = [a.serial, b.serial]
+    a.links = [wt.serial]
+    b.links = [wt.serial]
+    # ht-esszimmer2 was set up by hand: its other valve values must survive.
+    b.config.update({"boost_ventil": 60, "ventil_max": 90})
+    b.config_source.update({"boost_ventil": "gesetzt", "ventil_max": "gesetzt"})
+    return [wt, a, b, other]
+
+
+async def _room_hub(cul):
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, _room(),
+        on_update=lambda d: None, on_button=lambda d, t: None, on_device_added=lambda d: None,
+        on_problem=lambda *a: None, open_connection=cul.open, ack_timeout=0.05,
+    )
+    await h.start()
+    await until(lambda: h.connected)
+    return h
+
+
+def _valve_line(dst):
+    return lambda l: l[8:10] == "12" and l[16:22] == f"{dst:06X}"
+
+
+async def test_wall_thermostat_takes_a_boost_duration(hub):
+    """Its display counts the boost down by its own setting (600 after this telegram,
+    seen 10.11.2026); the other valve values go along as factory settings."""
+    h, cul, rec = hub
+    assert "boost_dauer" in h.devices[WT].config_keys and "boost_ventil" not in h.devices[WT].config_keys
+    h.set_config(WT, "boost_dauer", 10)
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0].endswith(f"{WT:06X}00500CFF00")
+    ack(cul, WT, sent(cul)[0])
+    await until(lambda: h.devices[WT].config["boost_dauer"] == 10)
+    with pytest.raises(FrameError):
+        h.set_config(WT, "boost_ventil", 60)
+
+
+async def test_boost_duration_set_at_the_wall_thermostat_goes_to_its_radiators():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        h.set_config(WT, "boost_dauer", 10)
+        await until(lambda: len(sent(cul)) == 1)
+        ack(cul, WT, sent(cul)[0])
+        await until(lambda: len(sent(cul)) == 2)
+        ack(cul, HT, sent(cul)[1])
+        await until(lambda: len(sent(cul)) == 3)
+        ack(cul, 0xA1B002, sent(cul)[2])
+        await asyncio.sleep(0.05)
+        lines = sent(cul)
+        assert len(lines) == 3
+        assert [l[16:22] for l in lines] == [f"{WT:06X}", f"{HT:06X}", "A1B002"]
+        # 10 min with each device's own boost valve: 80 % factory, 60 % set by hand; max 90 %.
+        assert lines[1].endswith("00500CFF00")
+        assert lines[2].endswith("004C0CE500")
+        assert h.devices[0xA1B00D].pending_config == {}  # another room
+        assert all(h.devices[a].config["boost_dauer"] == 10 for a in (WT, HT, 0xA1B002))
+    finally:
+        await h.stop()
+
+
+async def test_boost_duration_set_at_a_radiator_goes_to_the_whole_room():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        h.set_config_set(0xA1B002, "valve", {"boost_dauer": 15, "boost_ventil": 70})
+        await until(lambda: len(sent(cul)) == 1)
+        assert sent(cul)[0][16:22] == "A1B002"
+        ack(cul, 0xA1B002, sent(cul)[0])
+        await until(lambda: len(sent(cul)) == 2)
+        ack(cul, int(sent(cul)[1][16:22], 16), sent(cul)[1])
+        await until(lambda: len(sent(cul)) == 3)
+        assert sorted(l[16:22] for l in sent(cul)[1:]) == sorted([f"{WT:06X}", f"{HT:06X}"])
+        # Duration and valve opening of the boost are the room's (the wall thermostat's
+        # "bOS" menu sets both); the valve limits stay each radiator's own.
+        assert h.devices[HT].pending_config["valve"]["boost_ventil"] == 70
+        assert h.devices[HT].pending_config["valve"]["boost_dauer"] == 15
+        assert h.devices[HT].pending_config["valve"]["ventil_max"] == 100
+        assert "boost_ventil" not in h.devices[WT].config_keys
+        assert h.devices[0xA1B00D].pending_config == {}
+    finally:
+        await h.stop()
+
+
+async def test_boost_duration_that_is_already_shared_sends_nothing_more():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        h.set_config(HT, "ventil_max", 80)  # another value: nobody else is concerned
+        await until(lambda: len(sent(cul)) == 1)
+        ack(cul, HT, sent(cul)[0])
+        await asyncio.sleep(0.05)
+        assert len(sent(cul)) == 1
+    finally:
+        await h.stop()
+
+
+# --- what a room shares: temperatures, window settings and the week program ---
+
+
+def _temp_line(l):
+    return l[8:10] == "11"
+
+
+async def test_comfort_and_eco_set_at_one_thermostat_go_to_the_room_in_one_telegram_each():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        h.devices[HT].config["offset"] = -1.0  # this radiator's own sensor correction
+        h.set_config_set(WT, "temp", {"komfort": 22.0, "eco": 18.0, "offset": 0.5})
+        seen = []
+        for _ in range(3):
+            await until(lambda: len(sent(cul)) == len(seen) + 1)
+            line_ = sent(cul)[-1]
+            seen.append(line_)
+            ack(cul, int(line_[16:22], 16), line_)
+        await asyncio.sleep(0.05)
+        assert len(sent(cul)) == 3 and all(_temp_line(l) for l in sent(cul))
+        assert [l[16:22] for l in seen] == [f"{WT:06X}", f"{HT:06X}", "A1B002"]
+        for address in (WT, HT, 0xA1B002):
+            assert h.devices[address].config["komfort"] == 22.0 and h.devices[address].config["eco"] == 18.0
+        # The offset belongs to the single device: not shared.
+        assert h.devices[WT].config["offset"] == 0.5 and h.devices[HT].config["offset"] == -1.0
+        assert h.devices[0xA1B002].config["offset"] == 0.0
+        assert h.devices[0xA1B00D].config["komfort"] == 21.0  # another room
+    finally:
+        await h.stop()
+
+
+async def test_window_and_limit_settings_are_shared_valve_limits_are_not():
+    from custom_components.eq3_max.protocol.devices import ROOM_CONFIG_KEYS
+
+    # What the wall thermostat's own menu sets for its room (comfort/eco, AEr, bOS, dEC).
+    assert set(ROOM_CONFIG_KEYS) == {
+        "komfort", "eco", "maximal", "minimal", "fenster_temperatur", "fenster_dauer",
+        "boost_dauer", "boost_ventil", "entkalkung_tag", "entkalkung_stunde",
+    }
+    for own in ("offset", "ventil_max", "ventil_offset"):
+        assert own not in ROOM_CONFIG_KEYS
+
+
+async def test_a_value_the_mate_cannot_take_is_left_out_with_a_warning(caplog):
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        def refuse(key, value):
+            raise FrameError(f"{key} {value} does not fit this device")
+
+        h.devices[HT].stage_config = refuse
+        h.set_config(WT, "eco", 8.0)
+        await until(lambda: len(sent(cul)) == 1)
+        ack(cul, WT, sent(cul)[0])
+        await until(lambda: len(sent(cul)) == 2)
+        assert sent(cul)[1][16:22] == "A1B002"
+        assert "ht-wohnzimmer1" in caplog.text and "eco" in caplog.text
+        assert h.devices[HT].pending_config == {}
+    finally:
+        await h.stop()
+
+
+async def test_week_profile_written_to_one_thermostat_goes_to_the_room():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        task = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+        targets = []
+        for _ in range(3):
+            await until(lambda: len(sent(cul)) == len(targets) + 1)
+            line_ = sent(cul)[-1]
+            targets.append(line_[16:22])
+            ack(cul, int(line_[16:22], 16), line_)
+        await asyncio.wait_for(task, 1.0)
+        await until(lambda: all(h.devices[a].week_profile == {"Montag": FHEM_DAY_STORED} for a in (WT, HT, 0xA1B002)))
+        assert sorted(targets) == sorted([f"{WT:06X}", f"{HT:06X}", "A1B002"])
+        assert h.devices[0xA1B00D].week_profile == {}
+        await asyncio.sleep(0.05)
+        assert len(sent(cul)) == 3
+    finally:
+        await h.stop()
+
+
+async def test_writing_the_same_days_to_a_room_mate_joins_the_running_write():
+    """Copying a program to several thermostats of one room: the second target is
+    already being written as a mate of the first."""
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        first = asyncio.create_task(h.set_week_profile(HT, {2: FHEM_DAY}))
+        await until(lambda: len(sent(cul)) == 1)
+        second = asyncio.create_task(h.set_week_profile(0xA1B002, {2: FHEM_DAY}))
+        await asyncio.sleep(0.01)
+        assert not second.done()  # no "wird gerade geschrieben": it waits for the mate's job
+        other = asyncio.create_task(h.set_week_profile(0xA1B002, {3: FHEM_DAY}))
+        with pytest.raises(FrameError, match="being written"):
+            await asyncio.wait_for(other, 1.0)
+        for n in range(3):
+            await until(lambda: len(sent(cul)) == n + 1)
+            line_ = sent(cul)[n]
+            ack(cul, int(line_[16:22], 16), line_)
+        await asyncio.wait_for(asyncio.gather(first, second), 1.0)
+        assert len(sent(cul)) == 3
+    finally:
+        await h.stop()
+
+
+# --- a known device comes back after a factory reset: put everything back on it ---
+
+
+def _types_to(cul, dst):
+    return [l[8:10] for l in sent(cul) if l[16:22] == f"{dst:06X}"]
+
+
+async def _ack_all(cul, count, timeout=3.0):
+    """Acknowledge whatever goes out until `count` telegrams were sent."""
+    done = 0
+    loop = asyncio.get_running_loop()
+    end = loop.time() + timeout
+    while done < count:
+        if loop.time() > end:
+            raise AssertionError(f"only {done} of {count} telegrams sent: {[l[8:10] for l in sent(cul)]}")
+        if len(sent(cul)) > done:
+            line_ = sent(cul)[done]
+            ack(cul, int(line_[16:22], 16), line_)
+            done += 1
+        await asyncio.sleep(0.002)
+
+
+async def test_reset_device_gets_links_config_program_setpoint_and_time_back():
+    """A factory reset wipes the thermostat: links, settings, week program, the central.
+    It keeps its address and serial. Pairing it again must leave it as it was."""
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        ht = h.devices[HT]
+        ht.config.update({"komfort": 22.0, "boost_dauer": 10})
+        ht.config_source.update({"komfort": "gesetzt", "boost_dauer": "gesetzt"})
+        ht.week_profile = {"Montag": FHEM_DAY_STORED}
+        ht.mode, ht.target = Mode.MANUAL, 18.0
+        # Factory fresh, in pairing mode: the ping goes to nobody in particular.
+        cul.feed(line(0, 0x00, MsgType.PAIR_PING, HT, 0, 0, "100100" + b"MEQ9000007".hex()))
+        await _ack_all(cul, 7)
+        await asyncio.sleep(0.05)
+        types = _types_to(cul, HT)
+        assert types[0] == "01"  # the pong first
+        # link to the wall thermostat, both config sets, setpoint, the stored day, the time
+        assert sorted(types[1:]) == sorted(["20", "11", "12", "40", "10", "03"])
+        link = next(l for l in sent(cul) if l[8:10] == "20")
+        assert link.endswith(f"{WT:06X}03")  # the wall thermostat as partner again
+        assert _types_to(cul, WT) == []  # the wall thermostat still has it: nothing sent there
+        assert ht.links == ["NEQ9000011"] and ht.pending_links == []
+        assert ht.config["komfort"] == 22.0 and ht.pending_config == {}
+        assert ht.week_profile == {"Montag": FHEM_DAY_STORED} and ht.week_profile_writing == []
+    finally:
+        await h.stop()
+
+
+async def test_ping_to_the_central_is_no_reset_nothing_is_rewritten():
+    """A device that restarted (batteries) still knows its central and pings it by
+    address: it kept everything."""
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        h.devices[HT].week_profile = {"Montag": FHEM_DAY_STORED}
+        cul.feed(line(0, 0x00, MsgType.PAIR_PING, HT, CENTRAL, 0, "100100" + b"MEQ9000007".hex()))
+        await _ack_all(cul, 2)
+        await asyncio.sleep(0.05)
+        assert _types_to(cul, HT) == ["01", "03"]  # pong and time, as before
+    finally:
+        await h.stop()
+
+
+async def test_reset_wall_thermostat_gets_its_radiators_back():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        cul.feed(line(0, 0x00, MsgType.PAIR_PING, WT, 0, 0, "100300" + b"NEQ9000011".hex()))
+        await _ack_all(cul, 6)
+        await asyncio.sleep(0.05)
+        types = _types_to(cul, WT)
+        assert types[0] == "01"
+        assert sorted(types[1:]) == sorted(["20", "20", "11", "12", "03"])  # two radiators, settings, time
+        partners = sorted(l[24:30] for l in sent(cul) if l[8:10] == "20")
+        assert partners == sorted([f"{HT:06X}", "A1B002"])
+    finally:
+        await h.stop()
+
+
+async def test_reset_device_does_not_get_the_window_open_temperature_back():
+    cul = FakeCul()
+    h = await _room_hub(cul)
+    try:
+        ht = h.devices[HT]
+        ht.mode, ht.target = Mode.MANUAL, ht.window_open_temperature
+        cul.feed(line(0, 0x00, MsgType.PAIR_PING, HT, 0, 0, "100100" + b"MEQ9000007".hex()))
+        await _ack_all(cul, 5)
+        await asyncio.sleep(0.05)
+        assert "40" not in _types_to(cul, HT)
+    finally:
+        await h.stop()
+
+
+# --- a forced removal the device refuses: there was nothing to remove ---
+
+
+async def test_refused_removal_of_an_unknown_partner_leaves_nothing_pending(hub):
+    """Thermostats answer the removal of a partner they do not carry with a refusal.
+    Kept as "rejected", it made the device look as if something were still outstanding."""
+    h, cul, rec = hub
+    h.unlink(HT, WT, force=True)
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, HT, sent(cul)[0], ok=False)
+    await until(lambda: h.devices[HT].pending_links == [])
+    assert link_status(h.devices, h.devices[HT]).pending == []
+
+
+async def test_refused_removal_of_a_known_partner_stays_visible(hub):
+    h, cul, rec = hub
+    h.devices[HT].links = [WT_S]
+    h.devices[WT].links = [HT_S]
+    h.unlink(HT, WT)
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, HT, sent(cul)[0], ok=False)
+    await until(lambda: h.devices[HT].link_op(WT_S)["state"] == "fehlgeschlagen (abgelehnt)")
+
+
+async def test_leftover_refused_removals_are_dropped_at_start():
+    cul = FakeCul()
+    devs = devices()
+    ht = next(d for d in devs if d.address == HT)
+    ht.set_link_op(WT_S, WT, DeviceType.WALL_THERMOSTAT, "remove", "fehlgeschlagen (abgelehnt)")
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, devs,
+        on_update=lambda d: None, on_button=lambda d, t: None, on_device_added=lambda d: None,
+        on_problem=lambda *a: None, open_connection=cul.open, ack_timeout=0.05,
+    )
+    await h.start()
+    try:
+        assert h.devices[HT].pending_links == []
+    finally:
+        await h.stop()

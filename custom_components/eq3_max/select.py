@@ -11,12 +11,14 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .config_defs import ICONS, OPTIONS
+from .config_defs import ICONS, OPTION_VALUES, OPTIONS
 from .config_entity import MaxConfigEntity
 from .entity import MaxCulEntity
-from .const import DOMAIN
+from .errors import invalid, translated
+from .const import CONF_MAIN_NAME, DOMAIN, MAIN_RADIO_NAME
 from .migration import specs_for, unique_id
 from .protocol.messages import FrameError
+from .protocol.hub import MAIN_RADIO
 from .radios import radio_names
 
 
@@ -48,7 +50,16 @@ class MaxRadioSelect(MaxCulEntity, SelectEntity):
 
     def __init__(self, coordinator, device) -> None:
         super().__init__(coordinator, device, "funkmodul", "Funkmodul")
+        # Not registered by the migration: fix the entity_id here, or it would follow the
+        # translated name (…_radio_module on an English system).
+        self.entity_id = f"select.{slugify(device.name or device.serial)}_funkmodul"
+        # Attribute keys stay the same in every language (templates use them).
+        self._attr_keys = {radio: f"rssi_{slugify(name)}" for radio, name in radio_names(coordinator.entry.data).items()}
         self._names = radio_names(coordinator.entry.data)
+        if not coordinator.entry.data.get(CONF_MAIN_NAME):
+            # The main module has no name of its own: show it in Home Assistant's language.
+            german = coordinator.hass.config.language.startswith("de")
+            self._names[MAIN_RADIO] = MAIN_RADIO_NAME if german else "Main module"
         self._attr_options = list(self._names.values())
 
     @property
@@ -58,16 +69,16 @@ class MaxRadioSelect(MaxCulEntity, SelectEntity):
     @property
     def extra_state_attributes(self) -> dict[str, float | None]:
         """RSSI per module: which module hears the device best."""
-        return {f"rssi_{slugify(name)}": self.device.rssi_by_radio.get(radio) for radio, name in self._names.items()}
+        return {self._attr_keys[radio]: self.device.rssi_by_radio.get(radio) for radio in self._names}
 
     async def async_select_option(self, option: str) -> None:
         radio = next((radio for radio, name in self._names.items() if name == option), None)
         if radio is None:
-            raise ServiceValidationError(f"Unbekanntes Funkmodul: {option}")
+            raise invalid("radio_unknown", name=option)
         try:
             self.coordinator.async_set_radio(self._address, radio)
         except FrameError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise translated(err, ServiceValidationError) from err
 
 
 class MaxConfigSelect(MaxConfigEntity, SelectEntity):
@@ -76,11 +87,14 @@ class MaxConfigSelect(MaxConfigEntity, SelectEntity):
         self._attr_options = OPTIONS[key]
         self._attr_icon = ICONS[key]
 
-    def _display(self, value: Any) -> str:
-        return f"{value} min" if self._key == "boost_dauer" else str(value)
+    def _invalid(self, value: Any):
+        return invalid("option_invalid", option=self._display(value))
 
-    def _invalid_text(self) -> str:
-        return "Ung\u00fcltige Auswahl"
+    def _display(self, value: Any) -> str:
+        if self._key == "boost_dauer":
+            return f"{value} min"
+        # Option key of a stored value (decalcification day: German weekday -> "saturday" ...).
+        return next((text for stored, text in OPTION_VALUES[self._key] if stored == value), str(value))
 
     @property
     def current_option(self) -> str | None:
@@ -92,7 +106,7 @@ class MaxConfigSelect(MaxConfigEntity, SelectEntity):
             try:
                 value: Any = int(option.removesuffix(" min"))
             except ValueError as err:
-                raise ServiceValidationError(f"Ung\u00fcltige Auswahl: {option}") from err
+                raise invalid("option_invalid", option=option) from err
         else:
-            value = option
+            value = next((stored for stored, text in OPTION_VALUES[self._key] if text == option), option)
         self._set(value)

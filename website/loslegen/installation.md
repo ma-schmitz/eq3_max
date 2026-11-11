@@ -1,30 +1,30 @@
 # Installation
 
-## Voraussetzungen
+## Requirements
 
-- **Home Assistant 2026.8** oder neuer (das eigene Logo erscheint ab 2026.9).
-- Ein **Funkmodul mit culfw** und MAX!-Unterstützung, siehe [Hardware](hardware.md):
-  ein nanoCUL per USB oder ein mit a-culfw geflashter MAX! Cube im Netzwerk.
-- Wer von Homegear oder einer älteren Installation kommt: vorher [Umstieg](../umstieg/index.md) lesen.
+- **Home Assistant 2026.8** or newer (the integration's own logo appears from 2026.9).
+- A **radio module with culfw** and MAX! support, see [Hardware](hardware.md):
+  a nanoCUL via USB or a MAX! Cube flashed with a-culfw on the network.
+- Coming from Homegear or an older installation: read [Migration](../umstieg/index.md) first.
 
-## Installieren
+## Installing
 
-=== "Über HACS"
+=== "Via HACS"
 
-    1. HACS öffnen → Menü oben rechts → **Benutzerdefinierte Repositories**.
-    2. Die Adresse dieses Repositorys eintragen, Kategorie **Integration**.
-    3. **eQ-3 MAX!** suchen und herunterladen.
-    4. Home Assistant neu starten.
+    1. Open HACS → menu at the top right → **Custom repositories**.
+    2. Enter the address of this repository, category **Integration**.
+    3. Search for **eQ-3 MAX!** and download it.
+    4. Restart Home Assistant.
 
-=== "Von Hand"
+=== "Manually"
 
-    1. Den Ordner `custom_components/eq3_max` aus dem Repository nach
-       `/config/custom_components/` auf der HA-Box kopieren (SSH-Add-on oder Samba).
-    2. Home Assistant neu starten.
+    1. Copy the folder `custom_components/eq3_max` from the repository to
+       `/config/custom_components/` on the HA box (SSH add-on or Samba).
+    2. Restart Home Assistant.
 
-Danach unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** nach
-„eQ-3 MAX!“ suchen und der [Einrichtung](einrichtung.md) folgen.
+Then go to **Settings → Devices & services → Add integration**, search for
+"eQ-3 MAX!" and follow the [setup](einrichtung.md).
 
 !!! tip "Updates"
-    Ein Neuladen der Integration lädt keinen neuen Python-Code. Nach jedem Update
-    Home Assistant **neu starten**.
+    Reloading the integration does not load new Python code. After every update,
+    **restart** Home Assistant.

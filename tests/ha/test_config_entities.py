@@ -26,14 +26,15 @@ async def test_heating_thermostat_has_all_config_entities(hass, setup_entry, fak
         assert entry.entity_category is er.EntityCategory.CONFIG
 
 
-async def test_wall_thermostat_has_only_temperature_config(hass, setup_entry, fake_hub):
+async def test_wall_thermostat_has_temperature_config_and_boost_duration(hass, setup_entry, fake_hub):
     reg = er.async_get(hass)
     for key in TEMP_NUMBERS:
         assert reg.async_get(f"number.wt_wohnzimmer_{key}") is not None, key
     for key in VALVE_NUMBERS:
         assert reg.async_get(f"number.wt_wohnzimmer_{key}") is None, key
-    for key in VALVE_SELECTS:
-        assert reg.async_get(f"select.wt_wohnzimmer_{key}") is None, key
+    # Its display counts the boost down by its own duration; it has no decalcification.
+    assert reg.async_get("select.wt_wohnzimmer_boost_dauer") is not None
+    assert reg.async_get("select.wt_wohnzimmer_entkalkung_tag") is None
     numbers = [e for e in er.async_entries_for_config_entry(reg, setup_entry.entry_id) if e.domain == "number"]
     assert len(numbers) == 7 + 11  # WT + HT; no contact or button
 
@@ -43,7 +44,8 @@ async def test_factory_values_with_source_and_ranges(hass, setup_entry, fake_hub
     assert st.state == "21.0"
     assert st.attributes["quelle"] == "werksvorgabe" and st.attributes["ausstehend"] is None
     assert (st.attributes["min"], st.attributes["max"], st.attributes["step"]) == (4.5, 30.5, 0.5)
-    assert st.attributes["friendly_name"] == "ht-bad-unten Komforttemperatur"
+    # Device name plus the entity's translated name (the test system runs in English).
+    assert st.attributes["friendly_name"] == "ht-bad-unten Comfort temperature"
     off = hass.states.get("number.ht_bad_unten_offset")
     assert off.state == "0.0" and (off.attributes["min"], off.attributes["max"]) == (-3.5, 3.5)
     dur = hass.states.get("number.ht_bad_unten_fenster_dauer")
@@ -55,8 +57,9 @@ async def test_factory_values_with_source_and_ranges(hass, setup_entry, fake_hub
     assert boost.state == "5 min"
     assert boost.attributes["options"] == ["0 min", "5 min", "10 min", "15 min", "20 min", "25 min", "30 min", "60 min"]
     day = hass.states.get("select.ht_bad_unten_entkalkung_tag")
-    assert day.state == "Samstag"
-    assert day.attributes["options"] == ["Samstag", "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
+    # Option keys, shown translated by Home Assistant; the device stores the German weekday.
+    assert day.state == "saturday"
+    assert day.attributes["options"] == ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"]
 
 
 async def test_number_set_value_goes_to_hub_and_shows_pending(hass, setup_entry, fake_hub):
@@ -87,7 +90,7 @@ async def test_changing_one_value_keeps_the_others(hass, setup_entry, fake_hub):
 async def test_select_sets_valve_values(hass, setup_entry, fake_hub):
     hub = fake_hub.last
     await hass.services.async_call(
-        "select", "select_option", {ATTR_ENTITY_ID: "select.ht_bad_unten_entkalkung_tag", "option": "Mittwoch"},
+        "select", "select_option", {ATTR_ENTITY_ID: "select.ht_bad_unten_entkalkung_tag", "option": "wednesday"},
         blocking=True,
     )
     await hass.services.async_call(
@@ -96,12 +99,12 @@ async def test_select_sets_valve_values(hass, setup_entry, fake_hub):
     assert hub.commands[-2:] == [("config", HT, "entkalkung_tag", "Mittwoch"), ("config", HT, "boost_dauer", 10)]
     st = hass.states.get("select.ht_bad_unten_boost_dauer")
     assert st.state == "5 min" and st.attributes["ausstehend"] == "10 min"
-    assert hass.states.get("select.ht_bad_unten_entkalkung_tag").attributes["ausstehend"] == "Mittwoch"
+    assert hass.states.get("select.ht_bad_unten_entkalkung_tag").attributes["ausstehend"] == "wednesday"
     hub.ack_config(HT, "valve")
     await hass.async_block_till_done()
     assert hass.states.get("select.ht_bad_unten_boost_dauer").state == "10 min"
     assert hub.devices[HT].config["boost_dauer"] == 10
-    assert hass.states.get("select.ht_bad_unten_entkalkung_tag").state == "Mittwoch"
+    assert hass.states.get("select.ht_bad_unten_entkalkung_tag").state == "wednesday"
     assert hass.states.get("select.ht_bad_unten_entkalkung_tag").attributes["quelle"] == "gesetzt"
 
 
@@ -115,11 +118,11 @@ async def test_wall_thermostat_number_sets_temperature_config(hass, setup_entry,
 
 
 async def test_invalid_value_is_rejected(hass, setup_entry, fake_hub):
-    with pytest.raises(ServiceValidationError, match="Wert muss zwischen 4,5 und 30,5 in Schritten von 0,5 liegen"):
+    with pytest.raises(ServiceValidationError, match="between 4.5 and 30.5 in steps of 0.5"):
         await hass.services.async_call(
             "number", "set_value", {ATTR_ENTITY_ID: "number.ht_bad_unten_komfort", "value": 21.3}, blocking=True
         )
-    with pytest.raises(ServiceValidationError, match="Wert muss zwischen 0 und 60 in Schritten von 5 liegen"):
+    with pytest.raises(ServiceValidationError, match="between 0 and 60 in steps of 5"):
         await hass.services.async_call(
             "number", "set_value", {ATTR_ENTITY_ID: "number.ht_bad_unten_fenster_dauer", "value": 7}, blocking=True
         )

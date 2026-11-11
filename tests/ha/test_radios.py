@@ -62,7 +62,7 @@ async def test_hub_gets_the_extra_module_and_devices_keep_theirs(hass, two_radio
 async def test_each_module_is_a_device_and_devices_hang_below_theirs(hass, two_radios):
     main = _device(hass, two_radios, "C0FFEE")
     og = _device(hass, two_radios, "C0FFEE:r2")
-    assert og is not None and og.name == "eQ-3 MAX! Funkmodul Obergeschoss" and og.via_device_id == main.id
+    assert og is not None and og.name == "eQ-3 MAX! radio module Obergeschoss" and og.via_device_id == main.id
     assert _device(hass, two_radios, "MEQ9000007").via_device_id == og.id
     assert _device(hass, two_radios, "NEQ9000010").via_device_id == main.id
 
@@ -78,7 +78,7 @@ async def test_radio_select_switches_without_reload(hass, two_radios, fake_hub):
     hub = fake_hub.last
     state = hass.states.get("select.ht_bad_unten_funkmodul")
     assert state.state == "Obergeschoss"
-    assert state.attributes["options"] == ["Hauptmodul", "Obergeschoss"]
+    assert state.attributes["options"] == ["Main module", "Obergeschoss"]  # main module in the system language
     hub.devices[FK].rssi_by_radio = {"": -60.0, "r2": -80.5}
     hub.on_update(hub.devices[FK])
     await hass.async_block_till_done()
@@ -156,7 +156,7 @@ async def test_ws_set_radio(hass, two_radios, fake_hub, hass_ws_client):
     assert fake_hub.last.devices[HT].radio == ""
     await client.send_json_auto_id({"type": "eq3_max/set_radio", "device_id": device_id, "radio": "keller"})
     reply = await client.receive_json()
-    assert not reply["success"] and reply["error"]["message"] == "Unbekanntes Funkmodul"
+    assert not reply["success"] and reply["error"]["translation_key"] == "radio_unknown"
 
 
 async def test_ws_set_radio_requires_admin(hass, two_radios, fake_hub, hass_ws_client, hass_read_only_access_token):
@@ -176,7 +176,7 @@ async def _radios_menu(hass, entry):
 
 async def test_add_network_module(hass, setup_entry, fake_hub):
     r = await _radios_menu(hass, setup_entry)
-    assert r["menu_options"] == ["radio_add_usb", "radio_add_network"]
+    assert r["menu_options"] == ["radio_add_usb", "radio_search", "radio_add_network", "radio_rename"]
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "radio_add_network"})
     with patch("custom_components.eq3_max.config_flow.probe_network", return_value=True) as probe:
         r = await hass.config_entries.options.async_configure(
@@ -239,7 +239,7 @@ async def test_pairing_and_reset_need_only_the_relevant_module(hass, two_radios,
     from homeassistant.exceptions import HomeAssistantError
 
     ht = _device(hass, two_radios, "MEQ9000007").id
-    with pytest.raises(HomeAssistantError, match="nicht verbunden"):
+    with pytest.raises(HomeAssistantError, match="not connected"):
         await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": ht}, blocking=True)
     fk = _device(hass, two_radios, "NEQ9000010").id
     await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": fk}, blocking=True)
@@ -285,3 +285,106 @@ async def test_remove_module_cleans_up_and_ids_are_not_reused(hass, two_radios, 
         )
         await hass.async_block_till_done()
     assert [item["id"] for item in two_radios.data["radios"]] == ["r3"]
+
+
+# --- names of the modules, the main module included ---
+
+
+async def test_rename_the_main_module(hass, two_radios, fake_hub):
+    r = await _radios_menu(hass, two_radios)
+    assert "radio_rename" in r["menu_options"]
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "radio_rename"})
+    assert r["type"] is FlowResultType.FORM and r["step_id"] == "radio_rename"
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"radio": "", "name": "  "})
+    assert r["errors"] == {"base": "name_missing"}
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"radio": "", "name": "Obergeschoss"})
+    assert r["errors"] == {"base": "name_taken"}
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"radio": "", "name": " EG "})
+    await hass.async_block_till_done()
+    assert r["type"] is FlowResultType.CREATE_ENTRY
+    assert two_radios.data["main_name"] == "EG"
+    main = _device(hass, two_radios, "C0FFEE")
+    assert main.name == "eQ-3 MAX! radio module EG"
+    state = hass.states.get("select.ht_bad_unten_funkmodul")
+    assert state.attributes["options"] == ["EG", "Obergeschoss"]
+    # The panel shows the chosen name as well.
+    from custom_components.eq3_max.radios import radio_names
+
+    assert radio_names(two_radios.data) == {"": "EG", "r2": "Obergeschoss"}
+
+
+async def test_rename_an_extra_module_keeps_its_devices(hass, two_radios, fake_hub):
+    r = await _radios_menu(hass, two_radios)
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "radio_rename"})
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"radio": "r2", "name": "OG"})
+    await hass.async_block_till_done()
+    assert r["type"] is FlowResultType.CREATE_ENTRY
+    assert [item["name"] for item in two_radios.data["radios"]] == ["OG"]
+    assert _device(hass, two_radios, "C0FFEE:r2").name == "eQ-3 MAX! radio module OG"
+    assert _device(hass, two_radios, "MEQ9000007").via_device_id == _device(hass, two_radios, "C0FFEE:r2").id
+    assert hass.states.get("select.ht_bad_unten_funkmodul").state == "OG"
+
+
+async def test_single_module_can_be_named_too(hass, setup_entry, fake_hub):
+    r = await _radios_menu(hass, setup_entry)
+    assert "radio_rename" in r["menu_options"]
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "radio_rename"})
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"radio": "", "name": "Keller"})
+    await hass.async_block_till_done()
+    assert setup_entry.data["main_name"] == "Keller"
+
+
+async def test_ws_pair_through_a_chosen_module(hass, two_radios, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "eq3_max/pair", "entry_id": two_radios.entry_id, "radio": "r2"})
+    reply = await client.receive_json()
+    assert reply["success"] and hub.pairing == 60 and hub.pairing_radio == "r2"
+    # That module must be connected; the others do not matter.
+    hub.radio_connected["r2"] = False
+    await client.send_json_auto_id({"type": "eq3_max/pair", "entry_id": two_radios.entry_id, "radio": "r2"})
+    reply = await client.receive_json()
+    assert not reply["success"] and reply["error"]["translation_key"] == "not_connected"
+    await client.send_json_auto_id({"type": "eq3_max/pair", "entry_id": two_radios.entry_id, "radio": "keller"})
+    reply = await client.receive_json()
+    assert not reply["success"] and reply["error"]["translation_key"] == "radio_unknown"
+    # Without a module: whichever hears the device.
+    await client.send_json_auto_id({"type": "eq3_max/pair", "entry_id": two_radios.entry_id})
+    reply = await client.receive_json()
+    assert reply["success"] and hub.pairing_radio is None
+
+
+async def test_overview_says_which_module_pairs(hass, two_radios, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    hub.open_pairing(60, radio="r2")
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "eq3_max/overview"})
+    section = (await client.receive_json())["result"]["entries"][0]
+    assert section["hub"]["pairing_radio"] == "r2" and section["hub"]["pairing_remaining"] == 60
+
+
+async def test_ws_rename_a_module_from_the_panel(hass, two_radios, fake_hub, hass_ws_client):
+    client = await hass_ws_client(hass)
+
+    async def rename(radio, name):
+        await client.send_json_auto_id(
+            {"type": "eq3_max/rename_radio", "entry_id": two_radios.entry_id, "radio": radio, "name": name}
+        )
+        return await client.receive_json()
+
+    reply = await rename("", "  ")
+    assert not reply["success"] and reply["error"]["translation_key"] == "radio_name_missing"
+    reply = await rename("", "Obergeschoss")
+    assert not reply["success"] and reply["error"]["translation_key"] == "radio_name_taken"
+    reply = await rename("keller", "Keller")
+    assert not reply["success"] and reply["error"]["translation_key"] == "radio_unknown"
+    reply = await rename("", " EG ")
+    assert reply["success"] and reply["result"] == {"name": "EG"}
+    await hass.async_block_till_done()
+    assert two_radios.data["main_name"] == "EG"
+    assert _device(hass, two_radios, "C0FFEE").name == "eQ-3 MAX! radio module EG"
+    reply = await rename("r2", "OG")
+    assert reply["success"]
+    await hass.async_block_till_done()
+    assert [item["name"] for item in two_radios.data["radios"]] == ["OG"]
+    assert hass.states.get("select.ht_bad_unten_funkmodul").attributes["options"] == ["EG", "OG"]

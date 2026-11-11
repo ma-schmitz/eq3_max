@@ -1,30 +1,45 @@
-# Verknüpfungen
+# Links
 
 
-Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte Thermostate.
+Window contacts and wall thermostats act **directly by radio** on linked thermostats.
 
-- Anzeige: `sensor.<gerät>_verknuepfungen` — Zahl der vollständigen Verknüpfungen, Attribut
-  `partner` (Namen), `ausstehend` (laufende Aufträge mit Zustand).
-- Anlegen/Lösen: Dienste `eq3_max.link` / `eq3_max.unlink` mit zwei Geräten; beide Richtungen
-  werden gesendet und einzeln quittiert.
+- Display: `sensor.<device>_verknuepfungen` — number of complete links, attribute
+  `partner` (names), `ausstehend` (pending: running requests with their state).
+- Create/remove: services `eq3_max.link` / `eq3_max.unlink` with two devices; both
+  directions are sent and acknowledged separately.
   ```yaml
   action: eq3_max.link
   data:
-    device_id: <Fensterkontakt>
-    partner_device_id: <Thermostat>
+    device_id: <window contact>
+    partner_device_id: <thermostat>
   ```
-- **Fensterkontakte und Eco-Taster schlafen.** Aufträge an sie warten, bis sie sich melden:
-  Zustand „wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen“ (Taster:
-  einmal drücken; bei beiden geht auch die Anlerntaste, das Gerät bleibt angelernt). Gesendet
-  wird ohne Weckpräambel, 80 ms nach dem letzten Telegramm des Geräts – ein Versuch je
-  Gelegenheit, denn ein Kontakt hört nach eigenem Senden nur einen Moment zu. Mehrere
-  Gelegenheiten je Ereignis sind normal: Der Kontakt meldet sich bei der Zentrale, dann bei
-  jedem Partner und bei unerreichbaren Partnern minutenlang immer wieder. Bleibt der Auftrag
-  mehrere Ereignisse lang „wartet auf …“, hilft der Telegramm-Trace
-  ([Betrieb](betrieb.md#diagnose)).
-- Zustände in `ausstehend`: ausstehend · wartet auf … · fehlgeschlagen (wird wiederholt) ·
-  **fehlgeschlagen (abgelehnt)** (Gerät hat abgelehnt, keine automatische Wiederholung) ·
-  einseitig (nur eine Seite kennt die andere).
-- Bekannt (09.10.2026): Ein Heizkörperthermostat **lehnt das Entfernen eines Wandthermostats ab**;
-  Hinzufügen funktioniert.
-- Ein Werksreset löst die Verknüpfungen auch bei den früheren Partnern.
+- **Window contacts and eco buttons sleep.** Requests to them wait until they report:
+  state "waiting for window contact – please open and close the window once" (button:
+  press it once; for both, the pairing button works too, the device stays paired). Sending
+  happens without wake-up preamble, 80 ms after the device's last telegram – one attempt
+  per opportunity, because a contact only listens for a moment after sending itself.
+  Several opportunities per event are normal: the contact reports to the central unit, then
+  to each partner, and to unreachable partners again and again for minutes. If the request
+  stays "waiting for …" over several events, the telegram trace helps
+  ([Operation](betrieb.md#diagnose)).
+- States in `ausstehend`: pending · waiting for … · failed (will be retried) ·
+  **failed (rejected)** (the device refused, no automatic retry) ·
+  one-sided (only one side knows the other).
+- Known (09.10.2026): a radiator thermostat **refuses removal of a wall thermostat**;
+  adding works.
+- A factory reset also removes the links on the former partners.
+- **Leftover links (from 0.7.0).** After thermostats were swapped or moved, a device
+  sometimes still holds a partner that the integration does not know and that no longer
+  knows it. That partner never acknowledges: a wall thermostat reports a **radio error** on
+  every target change, a window contact repeats its telegram for minutes. In the telegram
+  trace you recognise it by telegrams from the device to an address that gets no answer.
+  Remove it, on this one device only:
+  ```yaml
+  action: eq3_max.unlink
+  data:
+    device_id: <device with the leftover>
+    partner_device_id: <old partner>
+    force: true
+  ```
+  Nothing is sent to the old partner. For window contacts this request, too, waits for the
+  next window event.

@@ -1,49 +1,50 @@
-# Umstieg auf eq3_max
+# Migrating to eq3_max
 
-So zieht eine bestehende MAX!-Installation auf die Integration **eq3_max** („eQ-3 MAX!“) um.
-Erprobt ist der Weg von Homegear an einer Installation mit 24 Geräten.
+This is how an existing MAX! installation moves to the integration **eq3_max** ("eQ-3 MAX!").
+The path from Homegear has been proven on an installation with 24 devices.
 
-## Welche Anleitung passt?
+## Which guide fits?
 
-| Bisher | Anleitung | Neu anlernen? | Entity-IDs |
+| Before | Guide | Pair again? | Entity IDs |
 |---|---|---|---|
-| Homegear + legacy `homematic`-Integration | [Von Homegear](homegear.md) | nein | automatisch übernommen |
-| nichts, Neuinstallation | [Einrichtung](../loslegen/einrichtung.md) | – | – |
+| Homegear + legacy `homematic` integration | [From Homegear](homegear.md) | no | taken over automatically |
+| nothing, new installation | [Setup](../loslegen/einrichtung.md) | – | – |
 
-## Das Prinzip
+## The principle
 
-!!! abstract "Drei Regeln"
+!!! abstract "Three rules"
 
-    - **MAX!-Geräte merken sich die Funkadresse ihrer Zentrale.** Sendet eq3_max mit derselben
-      Adresse und kennt es die Geräteliste, muss kein Gerät neu angelernt werden.
-    - **Entity-IDs bleiben**, damit Automationen, Dashboards und der Verlauf weiterlaufen.
-    - **Nie zwei Zentralen gleichzeitig.** Die alte Lösung wird abgeschaltet, bevor eq3_max
-      startet. Solange `homematic` in HA geladen ist, verweigert eq3_max die
-      Einrichtung.
+    - **MAX! devices remember the radio address of their central unit.** If eq3_max sends
+      with the same address and knows the device list, no device has to be paired again.
+    - **Entity IDs stay**, so automations, dashboards and history keep working.
+    - **Never two central units at the same time.** The old solution is switched off before
+      eq3_max starts. As long as `homematic` is loaded in HA, eq3_max refuses
+      setup.
 
-## Voraussetzungen
+## Requirements
 
-- Home Assistant **2026.8 oder neuer** (Logo im UI ab 2026.9).
-- Ein Funkmodul mit culfw, eins von beiden (Details unter [Hardware](../loslegen/hardware.md)):
-  - **nanoCUL** per USB an der HA-Box (erprobt), oder
-  - **MAX! Cube mit a-culfw** im Netzwerk (Port 2323) oder per USB (in weiteren
-    Installationen im Einsatz).
+- Home Assistant **2026.8 or newer** (logo in the UI from 2026.9).
+- A radio module with culfw, either of the two (details under [Hardware](../loslegen/hardware.md)):
+  - **nanoCUL** via USB on the HA box (proven), or
+  - **MAX! Cube with a-culfw** on the network (port 2323) or via USB (in use in further
+    installations).
 
-  Für den Umstieg ist es gleich, welches: Entscheidend ist die Zentralen-Adresse, nicht
-  das Modul.
-- Zugriff auf `/config` der HA-Box (SSH-Add-on oder Samba).
-- Etwa eine Stunde, am besten tagsüber bei wenig Heizbedarf. Die Thermostate regeln während
-  der Umstellung selbstständig weiter, nur Befehle aus HA kommen nicht an.
+  For the migration it does not matter which: what counts is the central address, not
+  the module.
+- Access to `/config` on the HA box (SSH add-on or Samba).
+- About an hour, ideally during the day when little heating is needed. The thermostats keep
+  regulating on their own during the switchover, only commands from HA do not arrive.
 
-## Häufige Stolperstellen
+## Common pitfalls
 
-| Symptom | Ursache und Abhilfe |
+| Symptom | Cause and remedy |
 |---|---|
-| Einrichtung bricht mit „Homematic-Integration noch aktiv“ ab | `homematic:` steht noch in der YAML, oder HA wurde nicht neu gestartet |
-| Neue Entitäten heißen `…_2` | Der Vorgänger-Eintrag gehört einer fremden Integration oder fehlte im Trockenlauf |
-| Geräte heißen wie ihre Seriennummer | Export ohne Namen und kein Vorgänger mit Namen → `name` in der Exportdatei setzen |
-| Konfiguration steht überall auf `werksvorgabe` | Export ohne Werte → Export bei laufendem Homegear wiederholen oder Werte in eq3_max setzen |
-| Verknüpfungen fehlen | Export ohne `links` → auf der Seite „eQ-3 MAX!“ oder mit `eq3_max.link` nachtragen |
-| Befehle bleiben „ausstehend“, Funkfehler | Stick wird nach dem Senden taub (USB-Port). Die Integration öffnet den Port dann selbst neu. Dauerhafte Abhilfe: anderer Port, kurzes Verlängerungskabel oder aktiver Hub |
-| Befehle verzögert, im Log `LOVF`, am Funkmodul „wartet auf Sendezeit“ | Der Sendezeit-Vorrat der Firmware ist leer (a-culfw: höchstens 9 s am Stück, 10 ms je Sekunde kommen nach). eq3_max wartet und sendet von selbst weiter; nichts tun. Viele Befehle hintereinander (Wochenprogramme, Konfiguration vieler Geräte) brauchen dann entsprechend lange |
-| Neuer Code wirkt nicht | Neuladen der Integration lädt keinen neuen Python-Code → HA neu starten |
+| Setup aborts with "Homematic integration still active" | `homematic:` is still in the YAML, or HA was not restarted |
+| New entities are named `…_2` | The predecessor entry belongs to another integration or was missing in the dry run |
+| Devices are named after their serial number | Export without names and no predecessor with names → set `name` in the export file |
+| Configuration shows `werksvorgabe` (factory default) everywhere | Export without values → repeat the export while Homegear is running, or set the values in eq3_max |
+| Links are missing | Export without `links` → add them on the "eQ-3 MAX!" panel or with `eq3_max.link` |
+| Commands stay "pending", radio errors | Stick goes deaf after sending (USB port). The integration then reopens the port itself. Permanent remedy: another port, a short extension cable or an active hub |
+| Commands delayed, `LOVF` in the log, "waiting for airtime" on the radio module | The firmware's airtime reserve is empty (nanoCUL/CUL 9 s, Cube 36 s in one go, 10 ms per second are refilled). eq3_max waits and continues sending by itself; do nothing. Many commands in a row (week programs, configuration of many devices) take correspondingly long |
+| Flashed Cube: radio module turns red again and again, commands stay unacknowledged | The Cube restarts because it is on the LAN and draws its power from a USB port of a router/NAS/computer (bug in a-culfw) → connect it to a USB power supply |
+| New code has no effect | Reloading the integration does not load new Python code → restart HA |

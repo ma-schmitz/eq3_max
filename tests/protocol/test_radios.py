@@ -63,9 +63,29 @@ def ack_for(sent_line, src):
     return line(int(sent_line[4:6], 16), 0x02, MsgType.ACK, src, CENTRAL, 0, "0119302A")
 
 
-async def test_every_module_gets_the_same_central_address(two):
+async def test_no_module_acknowledges_by_itself(two):
+    """Two modules answering the same telegram at the same moment jam each other: the
+    device hears no acknowledgement, repeats and reports a radio error (seen with a wall
+    thermostat, 10.11.2026). The auto-ack is switched off explicitly, it may still be
+    set from an earlier session; the hub acknowledges itself, once."""
     h, main, og, rec, _ = two
-    assert "ZaC0FFEE" in main.written and "ZaC0FFEE" in og.written
+    assert main.written[:4] == ["V", "X21", "Zr", "Za000000"]
+    assert og.written[:4] == ["V", "X21", "Zr", "Za000000"]
+
+
+def acks(cul):
+    return [l for l in cul.written if l.startswith("Zf") and l[6:10] == "0202"]
+
+
+async def test_one_acknowledgement_from_the_module_that_heard_it_first(two):
+    h, main, og, rec, _ = two
+    telegram = line(0x59, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000")
+    og.feed(telegram)
+    await until(lambda: len(acks(og)) == 1)
+    main.feed(telegram)  # the same transmission, delivered a moment later by the other module
+    await asyncio.sleep(0.05)
+    assert len(acks(og)) == 1 and acks(main) == []
+    assert acks(og)[0] == f"Zf0B590202C0FFEE{PB:06X}0000"
     assert h.radio_ids == [MAIN_RADIO, "og"]
     status = h.radio_status()
     assert [s["id"] for s in status] == ["", "og"]
@@ -213,3 +233,75 @@ async def test_heard_since_is_per_module(two):
     main.feed(line(0x10, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19302A00BE"))
     await until(lambda: h.heard_since("", mark))
     assert not h.heard_since("og", mark)
+
+
+async def test_extra_modules_never_acknowledge_in_firmware_even_with_a_network_main():
+    main, og = FakeCul("V 1.26.08 a-culfw CUBE"), FakeCul("V 1.26.08 a-culfw CUBE")
+
+    async def open_main(target):
+        return await main.open(target)
+
+    open_main.network = True
+    h = MaxHub(
+        "192.0.2.50:2323", CENTRAL, devices(),
+        on_update=lambda d: None, on_button=lambda d, t: None, on_device_added=lambda d: None,
+        on_problem=lambda *a: None, open_connection=open_main,
+        radios=[RadioSpec("og", "192.0.2.60:2323", og.open)], ack_timeout=0.05,
+        transport_kwargs={"health_interval": 0},
+    )
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        assert "ZaC0FFEE" in main.written and "ZaC0FFEE" not in og.written and "Za000000" in og.written
+        # Heard by the extra module: the main module's firmware answers if it hears it too,
+        # the hub must not add a second answer.
+        og.feed(line(0x59, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+        await asyncio.sleep(0.05)
+        assert acks(og) == [] and acks(main) == []
+    finally:
+        await h.stop()
+
+
+# --- pairing through a chosen module ---
+
+
+def _ping(address=0x123ABC, serial="ABC1234567"):
+    return line(0, 0x04, MsgType.PAIR_PING, address, 0, 0, "100100" + serial.encode().hex())
+
+
+async def test_pairing_through_a_chosen_module_even_if_another_hears_it_first(two):
+    h, main, og, rec, _ = two
+    h.open_pairing(60, radio="og")
+    assert h.pairing_radio == "og"
+    main.feed(_ping())  # the main module happens to deliver it first
+    await asyncio.sleep(0.02)
+    assert 0x123ABC not in h.devices and sent(main) == []
+    og.feed(_ping())
+    await until(lambda: len(sent(og)) == 1)
+    assert h.devices[0x123ABC].radio == "og" and sent(main) == []
+
+
+async def test_pairing_through_a_chosen_module_ignores_the_others(two):
+    h, main, og, rec, _ = two
+    h.open_pairing(60, radio="og")
+    main.feed(_ping())
+    await asyncio.sleep(0.05)
+    assert 0x123ABC not in h.devices
+    assert sent(main) == [] and sent(og) == []
+
+
+async def test_pairing_without_a_module_listens_on_all_again(two):
+    h, main, og, rec, clock = two
+    h.open_pairing(60, radio="og")
+    h.open_pairing(60)
+    assert h.pairing_radio is None
+    main.feed(_ping())
+    await until(lambda: len(sent(main)) == 1)
+    assert h.devices[0x123ABC].radio == ""
+
+
+async def test_pairing_through_an_unknown_module_is_refused(two):
+    h, main, og, rec, _ = two
+    with pytest.raises(FrameError):
+        h.open_pairing(60, radio="keller")
+    assert h.pairing_remaining == 0

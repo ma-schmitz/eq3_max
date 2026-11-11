@@ -12,11 +12,13 @@ import xmlrpc.client
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import SOURCE_IGNORE, ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers import selector
+from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
 from .connection import connection_target, connection_type
 from .const import (
@@ -41,7 +43,17 @@ from .const import (
     MAX_AWAY_HOURS,
     MIN_AWAY_HOURS,
 )
-from .radios import extra_radios, new_radio_id, next_radio_number, radio_identifier, radio_items, radio_names
+from .discovery import Found, async_search_network, probe_version
+from .protocol.hub import MAIN_RADIO
+from .radios import (
+    extra_radios,
+    new_radio_id,
+    next_radio_number,
+    radio_identifier,
+    radio_items,
+    radio_names,
+    renamed,
+)
 from .homegear_import import devices_from_export, export_from_homegear, load_export
 from .protocol.devices import MaxDevice
 from .protocol.messages import MAX_TEMPERATURE, OFF_TEMPERATURE
@@ -134,6 +146,77 @@ def _network_schema(host: str = "", port: int = DEFAULT_NETWORK_PORT) -> vol.Sch
     )
 
 
+CONF_MODULE = "module"
+CONF_ENTRY = "entry"
+# MAC address of a module Home Assistant found by itself: its DHCP address may change.
+CONF_MAC = "mac"
+
+
+def _real_entries(hass) -> list[ConfigEntry]:
+    return [entry for entry in hass.config_entries.async_entries(DOMAIN) if entry.source != SOURCE_IGNORE]
+
+
+def add_radio(hass, entry: ConfigEntry, name: str, connection: dict[str, Any]) -> None:
+    """Append a further radio module to the entry and reload it."""
+    radio_id, next_number = new_radio_id(entry.data)
+    item = {"id": radio_id, CONF_NAME: name, **connection}
+    data = {**entry.data, CONF_RADIOS: [*extra_radios(entry.data), item], CONF_RADIO_NEXT: next_number}
+    hass.config_entries.async_update_entry(entry, data=data)
+    hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
+def follow_known_module(hass, mac: str, host: str) -> bool:
+    """A module found earlier (by its MAC address) reports from a new address: store the
+    new host and reload. Returns whether the MAC address belongs to a module in use."""
+    for entry in _real_entries(hass):
+        data = dict(entry.data)
+        changed = False
+        known = False
+        if data.get(CONF_MAC) == mac and connection_type(data) == CONNECTION_NETWORK:
+            known = True
+            if data[CONF_HOST] != host:
+                data[CONF_HOST] = host
+                changed = True
+        radios = extra_radios(data)
+        for item in radios:
+            if item.get(CONF_MAC) == mac and connection_type(item) == CONNECTION_NETWORK:
+                known = True
+                if item[CONF_HOST] != host:
+                    item[CONF_HOST] = host
+                    changed = True
+        if changed:
+            data[CONF_RADIOS] = radios
+            hass.config_entries.async_update_entry(entry, data=data)
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+        if known:
+            return True
+    return False
+
+
+def configured_network_targets(hass) -> set[str]:
+    """"host:port" of every network module in use by an entry: the search leaves them
+    alone (their hub holds the connection)."""
+    targets = set()
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for item in radio_items(entry.data):
+            if connection_type(item) == CONNECTION_NETWORK:
+                targets.add(connection_target(item))
+    return targets
+
+
+def _found_schema(found: list[Found]) -> vol.Schema:
+    choices = {item.target: item.label for item in found}
+    key = vol.Required(CONF_MODULE, default=found[0].target) if len(found) == 1 else vol.Required(CONF_MODULE)
+    return vol.Schema({key: vol.In(choices)})
+
+
+def _found_connection(found: list[Found], target: str) -> dict[str, Any] | None:
+    for item in found:
+        if item.target == target:
+            return {CONF_CONNECTION: CONNECTION_NETWORK, CONF_HOST: item.host, CONF_PORT: item.port}
+    return None
+
+
 class _TimeoutTransport(xmlrpc.client.Transport):
     def make_connection(self, host):
         conn = super().make_connection(host)
@@ -154,9 +237,95 @@ class MaxCulConfigFlow(ConfigFlow, domain=DOMAIN):
         self._connection: dict[str, Any] | None = None
         self._address: str | None = None
         self._devices: list[MaxDevice] = []
+        self._found: list[Found] = []
+        self._version = ""
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="user", menu_options=[CONNECTION_USB, CONNECTION_NETWORK])
+        return self.async_show_menu(step_id="user", menu_options=[CONNECTION_USB, "network_search", CONNECTION_NETWORK])
+
+    # --- found by Home Assistant (DHCP): a-culfw Cubes carry the MAC prefix 00:80:41 ---
+
+    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
+        host = discovery_info.ip
+        mac = format_mac(discovery_info.macaddress)
+        await self.async_set_unique_id(mac)
+        self._abort_if_unique_id_configured()  # ignored by the user
+        connection = {CONF_CONNECTION: CONNECTION_NETWORK, CONF_HOST: host, CONF_PORT: DEFAULT_NETWORK_PORT, CONF_MAC: mac}
+        if follow_known_module(self.hass, mac, host):
+            return self.async_abort(reason="already_configured")
+        if connection_target(connection) in configured_network_targets(self.hass):
+            # Entered by hand or found by the search: in use, its hub holds the connection.
+            return self.async_abort(reason="already_configured")
+        version = await probe_version(host, DEFAULT_NETWORK_PORT)
+        if version is None:
+            # The prefix is not exclusive, or the text port was changed.
+            return self.async_abort(reason="not_culfw")
+        self._connection = connection
+        self._version = version
+        self.context["title_placeholders"] = {"host": host}
+        return await self.async_step_discovered()
+
+    def _discovered_placeholders(self) -> dict[str, str]:
+        assert self._connection is not None
+        return {"host": self._connection[CONF_HOST], "version": self._version}
+
+    async def async_step_discovered(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if not _real_entries(self.hass):
+            return await self.async_step_discovered_new()
+        return self.async_show_menu(
+            step_id="discovered",
+            menu_options=["discovered_add", "discovered_new"],
+            description_placeholders=self._discovered_placeholders(),
+        )
+
+    async def async_step_discovered_new(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The found module becomes the main module of a new entry."""
+        if user_input is not None:
+            return await self.async_step_address()
+        return self.async_show_form(
+            step_id="discovered_new", data_schema=vol.Schema({}), description_placeholders=self._discovered_placeholders()
+        )
+
+    async def async_step_discovered_add(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The found module joins an existing entry as a further radio module."""
+        assert self._connection is not None
+        entries = {entry.entry_id: entry for entry in _real_entries(self.hass)}
+        errors: dict[str, str] = {}
+        if user_input is not None and entries:
+            entry = entries.get(user_input.get(CONF_ENTRY, next(iter(entries))))
+            name = user_input[CONF_NAME].strip()
+            if entry is None or not name:
+                errors["base"] = "name_missing"
+            elif name in radio_names(entry.data).values():
+                errors["base"] = "name_taken"
+            else:
+                add_radio(self.hass, entry, name, self._connection)
+                return self.async_abort(reason="radio_added")
+        fields: dict[Any, Any] = {vol.Required(CONF_NAME): str}
+        if len(entries) > 1:
+            fields[vol.Required(CONF_ENTRY)] = vol.In({entry_id: entry.title for entry_id, entry in entries.items()})
+        return self.async_show_form(
+            step_id="discovered_add",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+            description_placeholders=self._discovered_placeholders(),
+        )
+
+    async def async_step_network_search(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Ask the own subnet for culfw modules on port 2323 and let the user pick one."""
+        if user_input is not None:
+            connection = _found_connection(self._found, user_input[CONF_MODULE])
+            if connection is not None:
+                # It answered "V" a moment ago: no second probe.
+                self._connection = connection
+                return await self.async_step_address()
+        self._found = await async_search_network(self.hass, skip=configured_network_targets(self.hass))
+        if not self._found:
+            return await self.async_step_network_none()
+        return self.async_show_form(step_id="network_search", data_schema=_found_schema(self._found))
+
+    async def async_step_network_none(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="network_none", menu_options=["network_search", CONNECTION_NETWORK])
 
     async def async_step_usb(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -260,13 +429,19 @@ class MaxCulConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class MaxCulOptionsFlow(OptionsFlow):
+    _found: list[Found] = []
+
+    async def _search(self) -> list[Found]:
+        self._found = await async_search_network(self.hass, skip=configured_network_targets(self.hass))
+        return self._found
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return self.async_show_menu(step_id="init", menu_options=["settings", "connection", "radios"])
 
     # --- further radio modules (same central address) ---
 
     async def async_step_radios(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        options = ["radio_add_usb", "radio_add_network"]
+        options = ["radio_add_usb", "radio_search", "radio_add_network", "radio_rename"]
         if extra_radios(self.config_entry.data):
             options.append("radio_remove")
         return self.async_show_menu(step_id="radios", menu_options=options)
@@ -321,14 +496,46 @@ class MaxCulOptionsFlow(OptionsFlow):
         schema = vol.Schema({vol.Required(CONF_NAME): str}).extend(_network_schema().schema)
         return self.async_show_form(step_id="radio_add_network", data_schema=schema, errors=errors)
 
+    async def async_step_radio_search(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Search the own subnet and add a found module (it answered "V" in the search)."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = user_input[CONF_NAME].strip()
+            connection = _found_connection(self._found, user_input[CONF_MODULE])
+            if error := self._radio_name_error(name):
+                errors["base"] = error
+            elif connection is not None and not self._target_in_use(connection):
+                return self._add_radio(name, connection)
+        if not errors and not await self._search():
+            return await self.async_step_radio_none()
+        schema = vol.Schema({vol.Required(CONF_NAME): str}).extend(_found_schema(self._found).schema)
+        return self.async_show_form(step_id="radio_search", data_schema=schema, errors=errors)
+
+    async def async_step_radio_none(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="radio_none", menu_options=["radio_search", "radio_add_network"])
+
     def _add_radio(self, name: str, connection: dict[str, Any]) -> ConfigFlowResult:
         entry = self.config_entry
-        radio_id, next_number = new_radio_id(entry.data)
-        item = {"id": radio_id, CONF_NAME: name, **connection}
-        data = {**entry.data, CONF_RADIOS: [*extra_radios(entry.data), item], CONF_RADIO_NEXT: next_number}
-        self.hass.config_entries.async_update_entry(entry, data=data)
-        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        add_radio(self.hass, entry, name, connection)
         return self.async_create_entry(data=dict(entry.options))
+
+    async def async_step_radio_rename(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """A name of its own for any module, the main module included (e.g. "EG")."""
+        entry = self.config_entry
+        names = radio_names(entry.data)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                data = renamed(entry.data, user_input["radio"], user_input[CONF_NAME])
+            except ValueError as err:
+                errors["base"] = str(err)
+            else:
+                self.hass.config_entries.async_update_entry(entry, data=data)
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                return self.async_create_entry(data=dict(entry.options))
+        choices = {rid: name for rid, name in names.items()}
+        schema = vol.Schema({vol.Required("radio", default=MAIN_RADIO): vol.In(choices), vol.Required(CONF_NAME): str})
+        return self.async_show_form(step_id="radio_rename", data_schema=schema, errors=errors)
 
     async def async_step_radio_remove(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         entry = self.config_entry
@@ -373,7 +580,22 @@ class MaxCulOptionsFlow(OptionsFlow):
         )
 
     async def async_step_connection(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="connection", menu_options=["connection_usb", "connection_network"])
+        return self.async_show_menu(
+            step_id="connection", menu_options=["connection_usb", "connection_search", "connection_network"]
+        )
+
+    async def async_step_connection_search(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Search the own subnet and switch the main module to a found one."""
+        if user_input is not None:
+            connection = _found_connection(self._found, user_input[CONF_MODULE])
+            if connection is not None:
+                return self._apply_connection(connection)
+        if not await self._search():
+            return await self.async_step_connection_none()
+        return self.async_show_form(step_id="connection_search", data_schema=_found_schema(self._found))
+
+    async def async_step_connection_none(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="connection_none", menu_options=["connection_search", "connection_network"])
 
     async def async_step_connection_usb(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -425,7 +647,7 @@ class MaxCulOptionsFlow(OptionsFlow):
         """
         entry = self.config_entry
         old = (connection_type(entry.data), connection_target(entry.data))
-        data = {key: value for key, value in entry.data.items() if key not in (CONF_CONNECTION, CONF_HOST, CONF_PORT)}
+        data = {key: value for key, value in entry.data.items() if key not in (CONF_CONNECTION, CONF_HOST, CONF_PORT, CONF_MAC)}
         data.update(connection)
         self.hass.config_entries.async_update_entry(entry, data=data)
         if (connection_type(data), connection_target(data)) != old:

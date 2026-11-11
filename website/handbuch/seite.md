@@ -1,70 +1,73 @@
-# Seite „eQ-3 MAX!“
+# The "eQ-3 MAX!" panel
 
-![Seite „eQ-3 MAX!“: Funkmodule im Kopf, Gerätekarten nach Bereich](../assets/panel.png)
+![The "eQ-3 MAX!" panel: radio modules in the header, device cards by area](../assets/panel.png)
 
 
-Alles aus [Gerätekonfiguration](konfiguration.md) und [Verknüpfungen](verknuepfungen.md) (und das Anlernen) gibt es auch grafisch: Eintrag **„eQ-3 MAX!“** in der
-Seitenleiste (nur Administratoren). Auf der Geräteseite des Funkmoduls und jedes Geräts führt
-**„Besuchen“** dorthin.
+Everything from [Device configuration](konfiguration.md) and [Links](verknuepfungen.md) (and pairing) is also available graphically: the **"eQ-3 MAX!"** entry in the
+sidebar (administrators only). On the device page of the radio module and of every device,
+**"Visit"** leads there.
 
-**Kopf:** Name der Zentrale mit Zustand (verbunden / getrennt) und Knopf **„Anlernen (60 s)“**
-mit Countdown. Darunter eine Kachel je Funkmodul: USB-Pfad bzw. Netzwerkziel, Warteschlange
-und Sendezeit der letzten Stunde als Balken (Grenze 36 s; gelb ab der Hälfte, rot ab 80 %).
-Eine Leiste mit Kennzahlen zählt Thermostate, gerade heizende Thermostate (Ventil offen),
-offene Fenster, schwache Batterien und auffällige Geräte (ausstehend, nicht quittiert,
-Funkfehler); was nicht null ist, ist farbig hinterlegt.
+**Header:** name of the central unit with its state (connected / disconnected) and the
+**"Pair (60 s)"** button with countdown. Below it one tile per radio module: USB path or
+network target (the pencil next to the name renames the module), queue and the airtime of the last hour as a bar (limit 36 s; yellow
+from half, red from 80 %). A bar of key figures counts thermostats, thermostats heating
+right now (valve open), open windows, low batteries and devices needing attention (pending,
+not acknowledged, radio error); anything that is not zero is highlighted in colour.
 
-**Gerätekarten**, nach HA-Bereich gruppiert („Ohne Bereich“ zuletzt):
+**Device cards**, grouped by HA area ("No area" last):
 
-| Gerät | Karte zeigt |
+| Device | Card shows |
 |---|---|
-| Heizkörperthermostat | Ist → Soll, Modus/Preset, Ventil-Balken |
-| Wandthermostat | Ist → Soll, Modus/Preset |
-| Fensterkontakt | offen / geschlossen |
-| Eco-Taster | – |
+| Radiator thermostat | current → target, mode/preset, valve bar |
+| Wall thermostat | current → target, mode/preset |
+| Window contact | open / closed |
+| Eco button | – |
 
-Dazu bei allen: Batterie, RSSI (Balken und dBm), „zuletzt gemeldet“, Zahl der Verknüpfungen
-(bei mehreren Funkmodulen auch das Modul). Farbe und Randstreifen zeigen den Zustand:
-**orange** = Ventil offen bzw. Fenster offen, **rot** = Batterie schwach, Funkfehler oder nicht
-quittiert, ohne Streifen = Ruhe.
-Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht quittiert),
-**nicht quittiert** (Versuche ausgeschöpft, geht beim nächsten Melden erneut raus),
-**Funkfehler**, **Batterie schwach**.
+Plus on all of them: battery, RSSI (bar and dBm), "last reported", number of links
+(with several radio modules also the module). Colour and side stripe show the state:
+**orange** = valve open or window open, **red** = battery low, radio error or not
+acknowledged, no stripe = idle.
+Markers: **pending** (command, configuration or link not yet acknowledged),
+**not acknowledged** (attempts used up, goes out again on the next report),
+**Radio error**, **Battery low**.
 
-**Klick auf eine Karte** öffnet das Seitenfenster:
+**Clicking a card** opens the side panel:
 
-- **Verknüpfungen:** jeder Partner mit Zustand — verknüpft · ausstehend · wartet auf Gerät ·
-  fehlgeschlagen · abgelehnt · einseitig — darunter der Klartext (z. B. „wartet auf
-  Fensterkontakt – bitte Fenster einmal öffnen und schließen“). Knöpfe: **Lösen**,
-  bei fehlgeschlagenen **Erneut senden**, bei einseitigen **Verknüpfen**.
-  **Partner hinzufügen** bietet nur Geräte an, die sich mit diesem verknüpfen lassen und
-  noch nicht verknüpft oder beauftragt sind. Bei Fensterkontakt und Taster steht oben der
-  Hinweis, dass Änderungen erst nach dem nächsten Öffnen/Schließen bzw. Drücken rausgehen.
-- **Konfiguration** (nur Thermostate): Satz **Temperaturen** (komfort, eco, maximal, minimal,
-  offset, fenster_temperatur, fenster_dauer), beim Heizkörperthermostat zusätzlich **Ventil**
+- **Links:** each partner with its state — linked · pending · waiting for device ·
+  failed · rejected · one-sided — with the plain-text explanation below (e.g. "waiting for
+  window contact – please open and close the window once"). Buttons: **Unlink**,
+  for failed ones **Send again**, for one-sided ones **Link**.
+  **Add partner** only offers devices that can be linked with this one and are not linked
+  or requested yet. For window contacts and buttons a note at the top says that changes only
+  go out after the next opening/closing or press.
+- **Configuration** (thermostats only): set **Temperatures** (komfort, eco, maximal, minimal,
+  offset, fenster_temperatur, fenster_dauer), on radiator thermostats additionally **Valve**
   (boost_dauer, boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset).
-  - Je Wert die Quelle (**Homegear** / **Werksvorgabe** / **gesetzt**) und, wenn gesendet aber
-    nicht quittiert, „ausstehend: <Wert>“ neben dem quittierten. Das steht nur bei Werten, die
-    sich vom quittierten unterscheiden; dass der ganze Satz unterwegs ist, zeigt „Satz
-    ausstehend“ (die Entitäten führen dagegen jeden Wert des Satzes unter `ausstehend`).
-  - Mehrere Werte ändern (geänderte Felder sind blau umrandet, Werte außerhalb des Rasters
-    rot mit Hinweis), dann **„Satz senden“**. Die Seite zeigt vorher die Änderungen und die
-    **Werksvorgaben, die mitgehen** (nie vom Gerät gelesene Werte) — erst „Senden“ schickt
-    den Satz, als **ein** Telegramm. „Verwerfen“ setzt das Formular zurück.
-- Die Seite aktualisiert sich von selbst. Während man in ein Feld tippt, wartet die
-  Aktualisierung, bis man es verlässt.
-- **Wochenprogramm** (nur Thermostate, ab 0.6.0): oben die zuletzt quittierten Tage („nicht
-  geschrieben“, solange die Integration den Tag nie geschrieben hat; die Geräte melden ihr
-  Programm nicht), „In den Editor“ übernimmt einen Tag. Darunter der Editor: Tage ankreuzen
-  (oder „alle“), Punkte mit Temperatur und Bis-Uhrzeit (der letzte gilt bis 24:00, bis zu 13),
-  **„Schreiben“** wartet auf die Quittungen des Geräts. Geschrieben wird im Hintergrund: Die
-  Seite darf zwischendurch geschlossen werden, beim nächsten Öffnen steht oben, welche Tage noch
-  offen sind, ob das Funkmodul gerade auf Sendezeit wartet (dann dauert eine ganze Woche eine
-  Viertelstunde und mehr) oder warum das letzte Schreiben abgebrochen ist. Zuletzt „Auf andere Thermostate
-  kopieren“ mit dem gespeicherten Programm. Unter **Löschen** zwei Knöpfe, beide mit Nachfrage und
-  für alle sieben Tage: **Werksprogramm schreiben** (das Programm ab Werk) und **Feste Temperatur
-  schreiben** (ein Punkt bis 24:00 mit der eingegebenen Temperatur) – ein Thermostat hat immer ein
-  Programm, löschen heißt ein neues schreiben.
+  - For each value the source (**Homegear** / **Factory default** / **set**) and, if sent but
+    not acknowledged, "pending: <value>" next to the acknowledged one. This only appears for
+    values that differ from the acknowledged one; that the whole set is on its way is shown
+    by "Set pending" (the entities, by contrast, list every value of the set under `ausstehend`).
+  - Change several values (changed fields get a blue border, values off the grid turn red
+    with a hint), then **"Send set"**. The panel first shows the changes and the
+    **factory defaults that go along** (values never read from the device) — only "Send"
+    sends the set, as **one** telegram. "Discard" resets the form.
+- The panel refreshes by itself. While you are typing in a field, the refresh waits until
+  you leave it.
+- **Week program** (thermostats only, from 0.6.0): at the top the last acknowledged days
+  ("not written" as long as the integration has never written that day; the devices do not
+  report their program), "To the editor" takes over a day. Below it the editor: tick days
+  (or "all"), points with temperature and until time (the last lasts until 24:00, up to 13),
+  **"Write"** waits for the device's acknowledgements. Writing happens in the background: the
+  panel may be closed in between; when it is opened again, the top shows which days are still
+  to do, whether the radio module is waiting for airtime right now (then a whole week
+  takes a quarter of an hour and more) or why the last write was aborted. Last, "Copy to other
+  thermostats" with the stored program. Under **Clear** two buttons, both with a confirmation and
+  for all seven days: **Write factory program** (the program as shipped) and **Write fixed
+  temperature** (one point until 24:00 with the entered temperature) – a thermostat always has a
+  program, clearing means writing a new one.
 
-Nicht auf der Seite: Werksreset ([Dienste](dienste.md)), Namen und Bereiche (wie gewohnt in HA),
-Wochenprofile.
+The panel follows the user's language in Home Assistant (German or English, from 0.7.0).
+With several radio modules the module selection sits next to "Pair"
+(see [Pairing devices](anlernen.md)).
+
+Not on the panel: factory reset ([Services](dienste.md)), names and areas (as usual in HA).

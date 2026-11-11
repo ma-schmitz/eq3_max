@@ -24,7 +24,7 @@ async def test_first_step_offers_usb_and_network(hass):
     r = await init(hass)
     assert r["type"] is FlowResultType.MENU
     assert r["step_id"] == "user"
-    assert r["menu_options"] == ["usb", "network"]
+    assert r["menu_options"] == ["usb", "network_search", "network"]
 
 
 async def test_network_flow_creates_entry_with_host_and_port(hass):
@@ -134,7 +134,7 @@ async def _to_connection(hass, entry, kind):
     r = await hass.config_entries.options.async_init(entry.entry_id)
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "connection"})
     assert r["type"] is FlowResultType.MENU
-    assert r["menu_options"] == ["connection_usb", "connection_network"]
+    assert r["menu_options"] == ["connection_usb", "connection_search", "connection_network"]
     return await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": f"connection_{kind}"})
 
 
@@ -265,11 +265,18 @@ def test_connection_steps_translated():
     for name in ("strings.json", "translations/en.json", "translations/de.json"):
         data = json.loads((base / name).read_text())
         config, options = data["config"]["step"], data["options"]["step"]
-        assert set(config["user"]["menu_options"]) == {"usb", "network"}
+        assert set(config["user"]["menu_options"]) == {"usb", "network_search", "network"}
+        assert set(config["network_search"]["data"]) == {"module"}
+        assert set(config["network_none"]["menu_options"]) == {"network_search", "network"}
+        assert set(options["radio_search"]["data"]) == {"name", "module"}
+        assert set(options["radio_none"]["menu_options"]) == {"radio_search", "radio_add_network"}
+        assert set(options["connection_search"]["data"]) == {"module"}
+        assert set(options["connection_none"]["menu_options"]) == {"connection_search", "connection_network"}
         assert set(config["network"]["data"]) == {"host", "port"}
         assert set(options["init"]["menu_options"]) == {"settings", "connection", "radios"}
-        assert set(options["connection"]["menu_options"]) == {"connection_usb", "connection_network"}
-        assert set(options["radios"]["menu_options"]) == {"radio_add_usb", "radio_add_network", "radio_remove"}
+        assert set(options["connection"]["menu_options"]) == {"connection_usb", "connection_search", "connection_network"}
+        assert set(options["radios"]["menu_options"]) == {"radio_add_usb", "radio_search", "radio_add_network", "radio_rename", "radio_remove"}
+        assert set(options["radio_rename"]["data"]) == {"radio", "name"}
         assert set(options["radio_add_network"]["data"]) == {"name", "host", "port"}
         for key in ("name_missing", "name_taken", "radio_in_use"):
             assert data["options"]["error"][key]
@@ -278,7 +285,11 @@ def test_connection_steps_translated():
         assert set(options["connection_network"]["data"]) == {"host", "port"}
         assert data["options"]["error"]["cannot_connect"]
     de = json.loads((base / "translations/de.json").read_text())
-    assert de["config"]["step"]["user"]["menu_options"] == {"usb": "USB-Stick", "network": "Netzwerk (CUN, geflashter Cube)"}
+    assert de["config"]["step"]["user"]["menu_options"] == {
+        "usb": "USB-Stick",
+        "network_search": "Im Netzwerk suchen (geflashter Cube, CUN)",
+        "network": "Netzwerk: Adresse eingeben (CUN, geflashter Cube)",
+    }
     assert de["options"]["step"]["init"]["menu_options"]["connection"] == "Verbindung ändern"
 
 

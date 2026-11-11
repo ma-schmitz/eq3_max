@@ -8,7 +8,16 @@ from collections.abc import Mapping
 from typing import Any
 
 from .connection import connection_target, connection_type
-from .const import CONF_CONNECTION, CONF_HOST, CONF_NAME, CONF_PORT, CONF_RADIO_NEXT, CONF_RADIOS, MAIN_RADIO_NAME
+from .const import (
+    CONF_CONNECTION,
+    CONF_HOST,
+    CONF_MAIN_NAME,
+    CONF_NAME,
+    CONF_PORT,
+    CONF_RADIO_NEXT,
+    CONF_RADIOS,
+    MAIN_RADIO_NAME,
+)
 from .protocol.hub import MAIN_RADIO
 
 CONNECTION_KEYS = (CONF_CONNECTION, CONF_HOST, CONF_PORT)
@@ -21,11 +30,28 @@ def extra_radios(data: Mapping[str, Any]) -> list[dict[str, Any]]:
 def radio_items(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     """All modules, main first: id, name and the connection keys."""
     main = {key: data[key] for key in CONNECTION_KEYS if key in data}
-    return [{"id": MAIN_RADIO, CONF_NAME: MAIN_RADIO_NAME, **main}, *extra_radios(data)]
+    return [{"id": MAIN_RADIO, CONF_NAME: data.get(CONF_MAIN_NAME) or MAIN_RADIO_NAME, **main}, *extra_radios(data)]
 
 
 def radio_names(data: Mapping[str, Any]) -> dict[str, str]:
     return {item["id"]: item[CONF_NAME] for item in radio_items(data)}
+
+
+def renamed(data: Mapping[str, Any], radio: str, name: str) -> dict[str, Any]:
+    """Entry data with a new name for one module (the main one included). ValueError with
+    the error key: "name_missing", "name_taken" or "radio_unknown"."""
+    names = radio_names(data)
+    name = name.strip()
+    if radio not in names:
+        raise ValueError("radio_unknown")
+    if not name:
+        raise ValueError("name_missing")
+    if name in (other for rid, other in names.items() if rid != radio):
+        raise ValueError("name_taken")
+    if radio == MAIN_RADIO:
+        return {**data, CONF_MAIN_NAME: name}
+    radios = [{**item, CONF_NAME: name} if item["id"] == radio else item for item in extra_radios(data)]
+    return {**data, CONF_RADIOS: radios}
 
 
 def describe(item: Mapping[str, Any]) -> dict[str, str]:

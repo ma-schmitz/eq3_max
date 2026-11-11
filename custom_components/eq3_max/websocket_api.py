@@ -45,10 +45,12 @@ from .protocol.devices import (
 from .protocol.hub import LINK_ONE_SIDED, plan_link
 from .protocol.hub import link_status as hub_link_status
 from .protocol.messages import FACTORY_WEEK_PROFILE, DeviceType, FrameError, format_until
-from .radios import describe, radio_items, radio_names
+from .radios import describe, radio_items, radio_names, renamed
+from .errors import failed, invalid, send_ws_error
 from .services import (
     async_copy_week_profile,
     async_set_week_profile,
+    async_set_time,
     async_set_week_profile_days,
     change_link,
     resolve_max_device,
@@ -83,7 +85,7 @@ TYPE_NAMES = {
 def async_register_commands(hass: HomeAssistant) -> None:
     for command in (
         ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_radio,
-        ws_set_week_profile, ws_copy_week_profile,
+        ws_set_week_profile, ws_copy_week_profile, ws_set_time, ws_rename_radio,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -210,6 +212,8 @@ def _config(dev: MaxDevice) -> list[dict[str, Any]]:
                 "pending": _pending_change(dev, key),
             }
             for key in SET_KEYS[kind]
+            # A wall thermostat uses only the boost duration of the valve set.
+            if key in dev.config_keys
         ]
         sets.append(
             {
@@ -269,6 +273,7 @@ def _hub(ctx: _Context) -> dict[str, Any]:
         "airtime_limit": AIRTIME_LIMIT_S,
         "queue": hub.queue_length,
         "pairing_remaining": round(hub.pairing_remaining),
+        "pairing_radio": getattr(hub, "pairing_radio", None),
         "radios": _radios(ctx),
     }
 
@@ -370,7 +375,13 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 
 
 def _error(connection: websocket_api.ActiveConnection, msg: dict[str, Any], err: Exception) -> None:
-    connection.send_error(msg["id"], ERR_INVALID, str(err))
+    """A wrong request: the panel shows the translated text (translation key included)."""
+    send_ws_error(connection, msg["id"], ERR_INVALID, err)
+
+
+def _failure(connection: websocket_api.ActiveConnection, msg: dict[str, Any], err: Exception) -> None:
+    """The radio or the device did not take it."""
+    send_ws_error(connection, msg["id"], ERR_FAILED, err)
 
 
 _LINK_SCHEMA = {vol.Required("device_id"): str, vol.Required("partner_device_id"): str}
@@ -378,7 +389,9 @@ _LINK_SCHEMA = {vol.Required("device_id"): str, vol.Required("partner_device_id"
 
 def _ws_change_link(hass: HomeAssistant, connection, msg: dict[str, Any], *, unlink: bool) -> None:
     try:
-        change_link(hass, msg["device_id"], msg["partner_device_id"], unlink=unlink)
+        change_link(
+            hass, msg["device_id"], msg["partner_device_id"], unlink=unlink, force=bool(msg.get("force")) and unlink
+        )
     except HomeAssistantError as err:
         _error(connection, msg, err)
         return
@@ -393,44 +406,84 @@ def ws_link(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "eq3_max/unlink", **_LINK_SCHEMA})
+@websocket_api.websocket_command(
+    {vol.Required("type"): "eq3_max/unlink", **_LINK_SCHEMA, vol.Optional("force", default=False): bool}
+)
 @callback
 def ws_unlink(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     _ws_change_link(hass, connection, msg, unlink=True)
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "eq3_max/pair", vol.Required("entry_id"): str})
+@websocket_api.websocket_command(
+    {vol.Required("type"): "eq3_max/pair", vol.Required("entry_id"): str, vol.Optional("radio"): str}
+)
 @callback
 def ws_pair(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Open pairing for 60 s. With `radio` only that module answers new devices and they
+    are assigned to it; without, whichever module hears them first."""
     entry = hass.config_entries.async_get_entry(msg["entry_id"])
     if entry is None or entry.domain != DOMAIN or entry.state is not ConfigEntryState.LOADED:
-        connection.send_error(msg["id"], ERR_INVALID, "Funkmodul nicht gefunden oder nicht geladen")
+        _error(connection, msg, invalid("hub_not_loaded"))
         return
     hub = entry.runtime_data.hub
-    # Pairing listens on every module: one connected module is enough.
-    if not hub.any_connected:
-        connection.send_error(msg["id"], ERR_FAILED, "Funkmodul nicht verbunden")
+    radio = msg.get("radio")
+    if radio is not None and radio not in radio_names(entry.data):
+        _error(connection, msg, invalid("radio_unknown", name=radio))
         return
-    hub.open_pairing(PAIRING_SECONDS)
+    # Without a module pairing listens on every module: one connected module is enough.
+    if not (hub.radio_is_connected(radio) if radio is not None else hub.any_connected):
+        _failure(connection, msg, failed("not_connected"))
+        return
+    hub.open_pairing(PAIRING_SECONDS, radio=radio)
     connection.send_result(msg["id"], {"seconds": PAIRING_SECONDS})
     async_dispatcher_send(hass, SIGNAL_PANEL_UPDATE)
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eq3_max/rename_radio",
+        vol.Required("entry_id"): str,
+        vol.Required("radio"): str,
+        vol.Required("name"): str,
+    }
+)
+@callback
+def ws_rename_radio(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """A name of its own for a module, the main one included (same as the options step);
+    the integration reloads."""
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
+    if entry is None or entry.domain != DOMAIN or entry.state is not ConfigEntryState.LOADED:
+        _error(connection, msg, invalid("hub_not_loaded"))
+        return
+    try:
+        data = renamed(entry.data, msg["radio"], msg["name"])
+    except ValueError as err:
+        key = str(err)
+        _error(connection, msg, invalid(key, name=msg["radio"]) if key == "radio_unknown" else invalid(f"radio_{key}"))
+        return
+    hass.config_entries.async_update_entry(entry, data=data)
+    hass.config_entries.async_schedule_reload(entry.entry_id)
+    connection.send_result(msg["id"], {"name": msg["name"].strip()})
+
+
 def _validated_set(dev: MaxDevice, kind: str, values: dict[str, Any]) -> dict[str, Any]:
-    """Values on the integration's grid; ValueError with a German text otherwise."""
+    """Values on the integration's grid; translated ServiceValidationError otherwise."""
     if not dev.config_keys:
-        raise ValueError("Dieses Ger\u00e4t hat keine Konfiguration")
-    if kind == KIND_VALVE and not dev.is_heating_thermostat:
-        raise ValueError("Ventil-Einstellungen gibt es nur bei Heizk\u00f6rperthermostaten")
+        raise invalid("config_none")
+    if not any(key in dev.config_keys for key in SET_KEYS[kind]):
+        raise invalid("config_valve_only_radiator")
     if not values:
-        raise ValueError("Keine Werte angegeben")
+        raise invalid("config_no_values")
     result = {}
     for key, value in values.items():
         if key not in CONFIG_LABELS:
-            raise ValueError(f"Unbekannter Konfigurationswert: {key}")
+            raise invalid("config_key_unknown", key=key)
         if key not in SET_KEYS[kind]:
-            raise ValueError(f"{CONFIG_LABELS[key]} geh\u00f6rt nicht zum Satz {SET_TITLES[kind]}")
+            raise invalid("config_key_wrong_set", key=key)
+        if key not in dev.config_keys:
+            raise invalid("config_key_not_on_device", key=key)
         result[key] = validate_config_value(key, value)
     return result
 
@@ -447,7 +500,7 @@ def _validated_set(dev: MaxDevice, kind: str, values: dict[str, Any]) -> dict[st
 @callback
 def ws_set_config(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     try:
-        entry, dev = resolve_max_device(hass, msg["device_id"], "Das Funkmodul hat keine Konfiguration")
+        entry, dev = resolve_max_device(hass, msg["device_id"], "hub_no_config")
         values = _validated_set(dev, msg["kind"], msg["values"])
         factory_keys = entry.runtime_data.hub.set_config_set(dev.address, msg["kind"], values)
     except HomeAssistantError as err:
@@ -456,7 +509,7 @@ def ws_set_config(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     except FrameError as err:
         # Values passed the table check; the protocol's (English) detail is for the log.
         _LOGGER.debug("set_config %s rejected by the protocol: %s", msg["kind"], err)
-        connection.send_error(msg["id"], ERR_INVALID, "Ung\u00fcltiger Wert")
+        _error(connection, msg, invalid("invalid_value"))
         return
     except ValueError as err:
         _error(connection, msg, err)
@@ -471,9 +524,9 @@ def ws_set_config(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
 @callback
 def ws_set_radio(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     try:
-        entry, dev = resolve_max_device(hass, msg["device_id"], "Das Funkmodul selbst hat kein Funkmodul")
+        entry, dev = resolve_max_device(hass, msg["device_id"], "hub_no_radio")
         if msg["radio"] not in radio_names(entry.data):
-            raise ValueError("Unbekanntes Funkmodul")
+            raise invalid("radio_unknown", name=msg["radio"])
         entry.runtime_data.async_set_radio(dev.address, msg["radio"])
     except (HomeAssistantError, ValueError, FrameError) as err:
         _error(connection, msg, err)
@@ -503,17 +556,17 @@ async def ws_set_week_profile(
     try:
         if "days" in msg:
             if "weekday" in msg or "profile" in msg:
-                raise ServiceValidationError("Entweder days oder weekday und profile angeben")
+                raise invalid("week_profile_request_invalid")
             devices = await async_set_week_profile_days(hass, msg["device_id"], msg["days"])
         elif "weekday" in msg and "profile" in msg:
             devices = await async_set_week_profile(hass, msg["device_id"], msg["weekday"], msg["profile"])
         else:
-            raise ServiceValidationError("weekday und profile oder days angeben")
+            raise invalid("week_profile_request_invalid")
     except (ServiceValidationError, ValueError) as err:
         _error(connection, msg, err)
         return
     except HomeAssistantError as err:
-        connection.send_error(msg["id"], ERR_FAILED, str(err))
+        _failure(connection, msg, err)
         return
     connection.send_result(msg["id"], {"week_profile": devices[0].week_profile if devices else {}})
 
@@ -536,6 +589,22 @@ async def ws_copy_week_profile(
         _error(connection, msg, err)
         return
     except HomeAssistantError as err:
-        connection.send_error(msg["id"], ERR_FAILED, str(err))
+        _failure(connection, msg, err)
         return
     connection.send_result(msg["id"], {"targets": [t.serial for t in targets]})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "eq3_max/set_time", vol.Required("device_id"): str})
+@websocket_api.async_response
+async def ws_set_time(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Set a thermostat's clock now; waits for its acknowledgement (seconds)."""
+    try:
+        await async_set_time(hass, [msg["device_id"]])
+    except (ServiceValidationError, ValueError) as err:
+        _error(connection, msg, err)
+        return
+    except HomeAssistantError as err:
+        _failure(connection, msg, err)
+        return
+    connection.send_result(msg["id"])

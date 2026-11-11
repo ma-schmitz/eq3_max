@@ -1,12 +1,14 @@
 {
   "config": {
+    "flow_title": "MAX! Cube mit a-culfw ({host})",
     "step": {
       "user": {
         "title": "Verbindung",
         "description": "Wie ist der CUL angeschlossen?",
         "menu_options": {
           "usb": "USB-Stick",
-          "network": "Netzwerk (CUN, geflashter Cube)"
+          "network_search": "Im Netzwerk suchen (geflashter Cube, CUN)",
+          "network": "Netzwerk: Adresse eingeben (CUN, geflashter Cube)"
         }
       },
       "usb": {
@@ -51,6 +53,41 @@
       "confirm": {
         "title": "Übernahme bestätigen",
         "description": "{count} Geräte werden übernommen:\n{devices}"
+      },
+      "network_search": {
+        "title": "Gefundene Module",
+        "description": "Diese Adressen haben auf Port 2323 als culfw geantwortet. Bereits eingerichtete Module stehen nicht in der Liste.",
+        "data": {
+          "module": "Funkmodul"
+        }
+      },
+      "network_none": {
+        "title": "Nichts gefunden",
+        "description": "Im Netz von Home Assistant hat auf Port 2323 keine culfw geantwortet. Gesucht wird nur dort (höchstens 254 Adressen um die Adresse von Home Assistant) und nur auf Port 2323. Hat der Cube Strom, hängt er im LAN und ist er mit a-culfw geflasht? Sonst die Adresse selbst eingeben.",
+        "menu_options": {
+          "network_search": "Noch einmal suchen",
+          "network": "Adresse eingeben"
+        }
+      },
+      "discovered": {
+        "title": "MAX! Cube mit a-culfw gefunden",
+        "description": "Unter {host} antwortet eine culfw ({version}). Es gibt schon einen Eintrag eQ-3 MAX!: Der Cube kann dort als weiteres Funkmodul mitarbeiten (gleiche Zentralen-Adresse, kein Neuanlernen der Geräte) oder eine eigene Zentrale werden.",
+        "menu_options": {
+          "discovered_add": "Als weiteres Funkmodul hinzufügen",
+          "discovered_new": "Als eigene Zentrale einrichten"
+        }
+      },
+      "discovered_new": {
+        "title": "MAX! Cube mit a-culfw gefunden",
+        "description": "Unter {host} antwortet eine culfw ({version}). Als Funkmodul für eQ-3 MAX! einrichten? Im nächsten Schritt folgt die Zentralen-Adresse."
+      },
+      "discovered_add": {
+        "title": "Als Funkmodul hinzufügen",
+        "description": "Das Modul unter {host} ({version}) bekommt die Zentralen-Adresse des Eintrags. Geräte ordnet man ihm auf der Seite „eQ-3 MAX!“ zu.",
+        "data": {
+          "name": "Name (z. B. Obergeschoss)",
+          "entry": "Eintrag"
+        }
       }
     },
     "error": {
@@ -59,10 +96,15 @@
       "invalid_port": "Der serielle Port muss ein Gerätepfad unter /dev/ sein.",
       "invalid_address": "Die Adresse muss genau 6 Hex-Ziffern haben.",
       "cannot_read": "Die Exportdatei konnte nicht gelesen werden.",
-      "homegear_unreachable": "Homegear ist nicht erreichbar."
+      "homegear_unreachable": "Homegear ist nicht erreichbar.",
+      "name_missing": "Bitte einen Namen angeben.",
+      "name_taken": "Diesen Namen trägt schon ein Funkmodul."
     },
     "abort": {
-      "already_configured": "Diese Zentralen-Adresse ist schon eingerichtet."
+      "already_configured": "Diese Zentralen-Adresse oder dieses Funkmodul ist schon eingerichtet.",
+      "not_culfw": "Dort antwortet auf Port 2323 keine culfw.",
+      "radio_added": "Das Funkmodul wurde hinzugefügt.",
+      "already_in_progress": "Dieses Modul wird gerade schon eingerichtet."
     }
   },
   "options": {
@@ -79,7 +121,8 @@
         "description": "Eine geänderte Verbindung startet die Integration neu.",
         "menu_options": {
           "connection_usb": "USB-Stick",
-          "connection_network": "Netzwerk (CUN, geflashter Cube)"
+          "connection_search": "Im Netzwerk suchen (geflashter Cube, CUN)",
+          "connection_network": "Netzwerk: Adresse eingeben (CUN, geflashter Cube)"
         }
       },
       "connection_usb": {
@@ -113,7 +156,9 @@
         "description": "Weitere CUL-Sticks oder geflashte Cubes arbeiten mit derselben Zentralen-Adresse. Jedes Gerät sendet über das ihm zugeordnete Modul; Umstellen geht ohne Neuanlernen (Seite „eQ-3 MAX!“ oder Entität „Funkmodul“).",
         "menu_options": {
           "radio_add_usb": "USB-Stick hinzufügen",
+          "radio_search": "Im Netzwerk suchen und hinzufügen (geflashter Cube, CUN)",
           "radio_add_network": "Netzwerk-CUL hinzufügen (CUN, geflashter Cube)",
+          "radio_rename": "Funkmodul umbenennen",
           "radio_remove": "Funkmodul entfernen"
         }
       },
@@ -140,6 +185,45 @@
         "data": {
           "radio": "Funkmodul"
         }
+      },
+      "radio_search": {
+        "title": "Gefundene Module",
+        "description": "Diese Adressen haben auf Port 2323 als culfw geantwortet. Das gewählte Modul bekommt die Zentralen-Adresse dieses Eintrags.",
+        "data": {
+          "name": "Name (z. B. Obergeschoss)",
+          "module": "Funkmodul"
+        }
+      },
+      "radio_none": {
+        "title": "Nichts gefunden",
+        "description": "Im Netz von Home Assistant hat auf Port 2323 keine culfw geantwortet. Gesucht wird nur dort (höchstens 254 Adressen um die Adresse von Home Assistant) und nur auf Port 2323. Hat der Cube Strom, hängt er im LAN und ist er mit a-culfw geflasht? Sonst die Adresse selbst eingeben.",
+        "menu_options": {
+          "radio_search": "Noch einmal suchen",
+          "radio_add_network": "Adresse eingeben"
+        }
+      },
+      "connection_search": {
+        "title": "Gefundene Module",
+        "description": "Diese Adressen haben auf Port 2323 als culfw geantwortet. Eine geänderte Verbindung startet die Integration neu.",
+        "data": {
+          "module": "Funkmodul"
+        }
+      },
+      "connection_none": {
+        "title": "Nichts gefunden",
+        "description": "Im Netz von Home Assistant hat auf Port 2323 keine culfw geantwortet. Gesucht wird nur dort (höchstens 254 Adressen um die Adresse von Home Assistant) und nur auf Port 2323. Hat der Cube Strom, hängt er im LAN und ist er mit a-culfw geflasht? Sonst die Adresse selbst eingeben.",
+        "menu_options": {
+          "connection_search": "Noch einmal suchen",
+          "connection_network": "Adresse eingeben"
+        }
+      },
+      "radio_rename": {
+        "title": "Funkmodul umbenennen",
+        "description": "Einem Modul einen eigenen Namen geben, z. B. das Stockwerk, das es abdeckt. Auch das Hauptmodul lässt sich benennen.",
+        "data": {
+          "radio": "Funkmodul",
+          "name": "Name"
+        }
       }
     },
     "error": {
@@ -148,7 +232,8 @@
       "invalid_port": "Der serielle Port muss ein Gerätepfad unter /dev/ sein.",
       "name_missing": "Bitte einen Namen angeben.",
       "name_taken": "Diesen Namen trägt schon ein Funkmodul.",
-      "radio_in_use": "Dieses Funkmodul ist schon eingetragen."
+      "radio_in_use": "Dieses Funkmodul ist schon eingetragen.",
+      "radio_unknown": "Unbekanntes Funkmodul."
     },
     "abort": {
       "no_extra_radios": "Es gibt kein weiteres Funkmodul."
@@ -222,6 +307,10 @@
         "partner_device_id": {
           "name": "Partner",
           "description": "Zweites MAX!-Gerät."
+        },
+        "force": {
+          "name": "Nur Altverknüpfung an diesem Gerät",
+          "description": "Entfernt den Partner nur am ersten Gerät, auch wenn die Integration diese Verknüpfung nicht kennt. Für Überbleibsel umgezogener oder getauschter Geräte: Das Gerät funkt weiter an einen Partner, der nicht mehr antwortet, und meldet Funkfehler. Der Partner selbst bekommt nichts."
         }
       }
     },
@@ -255,6 +344,316 @@
           "name": "Ziele",
           "description": "Thermostate, die das Programm bekommen."
         }
+      }
+    },
+    "set_time": {
+      "name": "Uhr stellen",
+      "description": "Stellt die Uhr von Thermostaten jetzt auf die Ortszeit von Home Assistant und wartet auf jede Quittung. Das Wochenprogramm folgt der eigenen Uhr des Geräts. Fensterkontakte und Eco-Taster haben keine Uhr.",
+      "fields": {
+        "device_id": {
+          "name": "Thermostate",
+          "description": "Heizkörper- oder Wandthermostate."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "lowbat": {
+        "name": "Batterie"
+      },
+      "funkfehler": {
+        "name": "Funkfehler"
+      },
+      "gesperrt": {
+        "name": "gesperrt"
+      },
+      "state": {
+        "name": "Fenster"
+      },
+      "verbunden": {
+        "name": "Verbunden"
+      }
+    },
+    "sensor": {
+      "ventil": {
+        "name": "Ventil"
+      },
+      "rssi": {
+        "name": "RSSI"
+      },
+      "zuletzt_gemeldet": {
+        "name": "zuletzt gemeldet"
+      },
+      "verknuepfungen": {
+        "name": "Verknüpfungen"
+      },
+      "sendezeit_1h": {
+        "name": "Sendezeit 1h"
+      },
+      "warteschlange": {
+        "name": "Warteschlange"
+      }
+    },
+    "select": {
+      "funkmodul": {
+        "name": "Funkmodul"
+      },
+      "boost_dauer": {
+        "name": "Boost-Dauer"
+      },
+      "entkalkung_tag": {
+        "name": "Entkalkung Tag",
+        "state": {
+          "saturday": "Samstag",
+          "sunday": "Sonntag",
+          "monday": "Montag",
+          "tuesday": "Dienstag",
+          "wednesday": "Mittwoch",
+          "thursday": "Donnerstag",
+          "friday": "Freitag"
+        }
+      }
+    },
+    "number": {
+      "komfort": {
+        "name": "Komforttemperatur"
+      },
+      "eco": {
+        "name": "Eco-Temperatur"
+      },
+      "maximal": {
+        "name": "Maximaltemperatur"
+      },
+      "minimal": {
+        "name": "Minimaltemperatur"
+      },
+      "offset": {
+        "name": "Temperatur-Offset"
+      },
+      "fenster_temperatur": {
+        "name": "Fenster-auf-Temperatur"
+      },
+      "fenster_dauer": {
+        "name": "Fenster-auf-Dauer"
+      },
+      "boost_ventil": {
+        "name": "Boost-Ventilstellung"
+      },
+      "entkalkung_stunde": {
+        "name": "Entkalkung Stunde"
+      },
+      "ventil_max": {
+        "name": "Ventil maximal"
+      },
+      "ventil_offset": {
+        "name": "Ventil-Offset"
+      }
+    },
+    "button": {
+      "anlernen": {
+        "name": "Anlernen"
+      }
+    }
+  },
+  "device": {
+    "radio_module": {
+      "name": "eQ-3 MAX! Funkmodul"
+    },
+    "extra_radio_module": {
+      "name": "eQ-3 MAX! Funkmodul {name}"
+    }
+  },
+  "exceptions": {
+    "radio_error": {
+      "message": "{detail}"
+    },
+    "device_id_unknown": {
+      "message": "Unbekanntes Gerät"
+    },
+    "device_not_loaded": {
+      "message": "Das Gerät gehört zu keiner geladenen eQ-3-MAX!-Integration"
+    },
+    "device_unknown": {
+      "message": "Das Gerät ist dem Funkmodul nicht bekannt"
+    },
+    "hub_not_loaded": {
+      "message": "Funkmodul nicht gefunden oder nicht geladen"
+    },
+    "hub_cannot_reset": {
+      "message": "Das Funkmodul selbst kann nicht zurückgesetzt werden"
+    },
+    "hub_cannot_link": {
+      "message": "Das Funkmodul selbst kann nicht verknüpft werden"
+    },
+    "hub_no_week_profile": {
+      "message": "Das Funkmodul selbst hat kein Wochenprogramm"
+    },
+    "hub_no_clock": {
+      "message": "Das Funkmodul selbst hat keine Uhr"
+    },
+    "hub_no_config": {
+      "message": "Das Funkmodul hat keine Konfiguration"
+    },
+    "hub_no_radio": {
+      "message": "Das Funkmodul selbst kann keinem Funkmodul zugeordnet werden"
+    },
+    "not_connected": {
+      "message": "Funkmodul nicht verbunden"
+    },
+    "device_not_connected": {
+      "message": "{name}: Funkmodul nicht verbunden"
+    },
+    "radio_unknown": {
+      "message": "Unbekanntes Funkmodul: {name}"
+    },
+    "different_radio_modules": {
+      "message": "Die Geräte gehören zu verschiedenen Funkmodulen"
+    },
+    "reset_not_sent": {
+      "message": "Werksreset nicht gesendet"
+    },
+    "reset_not_acknowledged": {
+      "message": "Das Gerät hat den Werksreset nicht quittiert – es wurde eventuell trotzdem zurückgesetzt"
+    },
+    "reset_running": {
+      "message": "Ein Werksreset läuft bereits"
+    },
+    "link_self": {
+      "message": "Ein Gerät kann nicht mit sich selbst verknüpft werden"
+    },
+    "link_not_allowed": {
+      "message": "Diese Geräte lassen sich nicht verknüpfen"
+    },
+    "link_already_requested": {
+      "message": "Die Verknüpfung ist bereits beauftragt"
+    },
+    "unlink_already_requested": {
+      "message": "Das Lösen ist bereits beauftragt"
+    },
+    "already_linked": {
+      "message": "Die Geräte sind bereits verknüpft"
+    },
+    "not_linked": {
+      "message": "Die Geräte sind nicht verknüpft"
+    },
+    "no_week_profile": {
+      "message": "{name}: Nur Thermostate haben ein Wochenprogramm"
+    },
+    "weekday_invalid": {
+      "message": "Wochentag muss 0 (Samstag) bis 6 (Freitag) sein, nicht {day}"
+    },
+    "weekday_unknown": {
+      "message": "Unbekannter Wochentag: {days}"
+    },
+    "weekday_missing": {
+      "message": "Kein Wochentag angegeben"
+    },
+    "week_profile_day_invalid": {
+      "message": "{day}: {detail}"
+    },
+    "week_profile_busy": {
+      "message": "{name}: Wochenprogramm wird gerade geschrieben"
+    },
+    "week_profile_aborted": {
+      "message": "{name}: Wochenprogramm abgebrochen, das Funkmodul wurde angehalten"
+    },
+    "week_profile_rejected": {
+      "message": "{name}: Wochenprogramm {day} abgelehnt"
+    },
+    "week_profile_not_acknowledged": {
+      "message": "{name}: Wochenprogramm {day} nicht quittiert ({outcome})"
+    },
+    "week_profile_not_stored": {
+      "message": "Für {name} ist kein Wochenprogramm gespeichert"
+    },
+    "week_profile_request_invalid": {
+      "message": "Entweder days oder weekday und profile angeben"
+    },
+    "copy_to_self": {
+      "message": "Ein Gerät kann sein Wochenprogramm nicht auf sich selbst kopieren"
+    },
+    "copy_no_target": {
+      "message": "Kein Zielgerät angegeben"
+    },
+    "profile_point_count": {
+      "message": "1 bis {max} Punkte je Tag, nicht {count}"
+    },
+    "profile_temperature_invalid": {
+      "message": "Temperatur muss {low} bis {high} °C in Schritten von 0,5 sein, nicht {value}"
+    },
+    "profile_until_missing": {
+      "message": "Bis-Uhrzeit fehlt bei Punkt {index}"
+    },
+    "profile_until_invalid": {
+      "message": "Bis-Uhrzeit muss hh:mm sein, nicht {value}"
+    },
+    "profile_until_step": {
+      "message": "Bis-Uhrzeit muss in 5-Minuten-Schritten liegen, nicht {value}"
+    },
+    "profile_until_order": {
+      "message": "Bis-Uhrzeiten müssen aufsteigend sein"
+    },
+    "profile_last_point": {
+      "message": "Der letzte Punkt muss bis 24:00 gelten"
+    },
+    "no_clock": {
+      "message": "Dieses Gerät hat keine Uhr"
+    },
+    "clock_not_acknowledged": {
+      "message": "{name}: Uhrzeit nicht quittiert ({outcome})"
+    },
+    "end_time_not_future": {
+      "message": "Die Endzeit liegt nicht in der Zukunft"
+    },
+    "config_none": {
+      "message": "Dieses Gerät hat keine Konfiguration"
+    },
+    "config_valve_only_radiator": {
+      "message": "Ventil-Einstellungen gibt es nur bei Heizkörperthermostaten"
+    },
+    "config_no_values": {
+      "message": "Keine Werte angegeben"
+    },
+    "config_key_unknown": {
+      "message": "Unbekannter Konfigurationswert: {key}"
+    },
+    "config_key_wrong_set": {
+      "message": "{key} gehört nicht zu diesem Satz"
+    },
+    "config_key_not_on_device": {
+      "message": "{key} gibt es bei diesem Gerät nicht"
+    },
+    "config_value_range": {
+      "message": "Wert muss zwischen {low} und {high} in Schritten von {step} liegen"
+    },
+    "config_not_a_number": {
+      "message": "Keine Zahl: {value}"
+    },
+    "option_invalid": {
+      "message": "Ungültige Auswahl: {option}"
+    },
+    "invalid_value": {
+      "message": "Ungültiger Wert"
+    },
+    "radio_name_missing": {
+      "message": "Bitte einen Namen für das Funkmodul eingeben."
+    },
+    "radio_name_taken": {
+      "message": "Diesen Namen hat schon ein Funkmodul."
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": {
+        "Samstag": "Samstag",
+        "Sonntag": "Sonntag",
+        "Montag": "Montag",
+        "Dienstag": "Dienstag",
+        "Mittwoch": "Mittwoch",
+        "Donnerstag": "Donnerstag",
+        "Freitag": "Freitag",
+        "alle": "alle Tage"
       }
     }
   }

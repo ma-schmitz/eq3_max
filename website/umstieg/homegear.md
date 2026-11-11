@@ -1,122 +1,122 @@
-# Umstieg von Homegear
+# Migrating from Homegear
 
-Für Installationen mit **Homegear** und der legacy-Integration **`homematic`** in Home
-Assistant. Kein Gerät muss neu angelernt werden, die Entity-IDs bleiben.
-Überblick und Voraussetzungen: [Umstieg](index.md).
+For installations with **Homegear** and the legacy integration **`homematic`** in Home
+Assistant. No device has to be paired again, the entity IDs stay.
+Overview and requirements: [Migration](index.md).
 
-## Was übernommen wird
+## What is taken over
 
-| Bisher | In eq3_max |
+| Before | In eq3_max |
 |---|---|
-| Funkadresse der Zentrale | dieselbe Absenderadresse, kein Neuanlernen |
-| Seriennummer, Funkadresse, Typ, Firmware | Gerät in HA; Name aus den Homegear-Metadaten, sonst von der alten Entität |
-| `climate.<name>` | `climate.<name>`, Verlauf läuft weiter |
-| `binary_sensor.<name>_state` (Fensterkontakt) | `binary_sensor.<name>_state` |
+| Radio address of the central unit | the same sender address, no re-pairing |
+| Serial number, radio address, type, firmware | device in HA; name from the Homegear metadata, otherwise from the old entity |
+| `climate.<name>` | `climate.<name>`, history continues |
+| `binary_sensor.<name>_state` (window contact) | `binary_sensor.<name>_state` |
 | `binary_sensor.<name>_lowbat` | `binary_sensor.<name>_lowbat` |
-| Template-Sensor `sensor.<name>_ventil` | `sensor.<name>_ventil`, ersetzt den Template-Eintrag |
-| Bereich, Anzeigename, Symbol, Aliase, Labels, „deaktiviert“, „ausgeblendet“ | bleiben erhalten |
-| Konfiguration (Komfort, Eco, Maximal, Minimal, Offset, Fenster-auf-Temperatur, Boost, Entkalkung) | `number.*`/`select.*` mit Attribut `quelle: homegear` |
-| Verknüpfungen | Verknüpfungen je Gerät, `sensor.<name>_verknuepfungen` |
-| `homematic.keypress` der Eco-Taster | `event.<name>` — **Automationen umstellen** (Schritt 7) |
+| Template sensor `sensor.<name>_ventil` | `sensor.<name>_ventil` (valve), replaces the template entry |
+| Area, display name, icon, aliases, labels, "disabled", "hidden" | are kept |
+| Configuration (comfort, eco, maximum, minimum, offset, window-open temperature, boost, decalcification) | `number.*`/`select.*` with attribute `quelle: homegear` (source) |
+| Links | links per device, `sensor.<name>_verknuepfungen` |
+| `homematic.keypress` of the eco buttons | `event.<name>` — **switch automations over** (step 7) |
 
-**Nicht übernommen**, weil Homegear sie nicht ausgibt: Fenster-auf-Dauer, Maximalventil,
-Ventil-Offset. Sie stehen danach auf Werksvorgabe (`quelle: werksvorgabe`). Wer sie am
-Gerät geändert hatte, stellt sie in eq3_max neu ein.
+**Not taken over**, because Homegear does not output them: window-open duration, maximum
+valve opening, valve offset. Afterwards they are at the factory default (`quelle: werksvorgabe`).
+If you had changed them on the device, set them again in eq3_max.
 
-**Neu** sind `sensor.<name>_rssi`, bei Thermostaten `binary_sensor.<name>_funkfehler`,
-`…_gesperrt` und `sensor.<name>_zuletzt_gemeldet`, dazu die Funkmodul-Entitäten
-`*.eq3_max_*`.
+**New** are `sensor.<name>_rssi`, for thermostats `binary_sensor.<name>_funkfehler` (radio error),
+`…_gesperrt` (locked) and `sensor.<name>_zuletzt_gemeldet` (last seen), plus the radio module
+entities `*.eq3_max_*`.
 
-## 1. Vorbereiten (Betrieb läuft weiter) { #vorbereiten }
+## 1. Prepare (operation continues) { #vorbereiten }
 
-1. **Zentralen-Adresse ermitteln.** Sie steht als Absender in jedem Telegramm, das Homegear
-   sendet. Im Homegear-Log nach `Sending (My-MAX-CUL` suchen (Interfacename aus
+1. **Determine the central address.** It is the sender in every telegram Homegear
+   sends. Search the Homegear log for `Sending (My-MAX-CUL` (interface name from
    `families/max.conf`):
 
    ```
    0B 4E 05 40 C0FFEE A1B004 01 66
-   Länge Zähler Flags Typ  Quelle  Ziel  Gruppe Nutzlast
+   Length Counter Flags Type Source Dest  Group Payload
    ```
 
-   Hier ist die Adresse also `C0FFEE`.
+   So here the address is `C0FFEE`.
 
-2. **Geräte exportieren**, solange Homegear läuft:
+2. **Export the devices** while Homegear is running:
 
    ```bash
    python3 tools/homegear_export.py --host <homegear-host> --port 2001 --out eq3_max_export.json
    ```
 
-   Kontrolle: Stimmt die Zahl der Geräte? Haben Wandthermostat und verknüpfte Thermostate
-   einen Eintrag `links`?
+   Check: is the number of devices right? Do the wall thermostat and linked thermostats
+   have a `links` entry?
 
-   Alternativ fragt der Einrichtungsdialog Homegear direkt ab (Quelle „Homegear“). Das geht
-   nur, solange Homegear läuft. Die Datei ist der sichere Weg und bleibt für einen zweiten
-   Anlauf liegen.
+   Alternatively, the setup dialog queries Homegear directly (source "Homegear"). This only
+   works while Homegear is running. The file is the safe way and stays around for a second
+   attempt.
 
-3. **Registry-Trockenlauf.** Jede Seriennummer muss in der Entity-Registry als
-   homematic-Eintrag vorkommen (`<SERIAL>` für climate, `<SERIAL>_LOWBAT`, `<SERIAL>_STATE`).
-   Fehlende Einträge bekommen später neue IDs.
+3. **Registry dry run.** Every serial number must appear in the entity registry as a
+   homematic entry (`<SERIAL>` for climate, `<SERIAL>_LOWBAT`, `<SERIAL>_STATE`).
+   Missing entries will get new IDs later.
 
-4. **Namen prüfen.** Liefert Homegear keine Namen, übernimmt eq3_max die Anzeigenamen der
-   alten Entitäten. Andere Namen setzt man als `name` in der Exportdatei.
+4. **Check names.** If Homegear provides no names, eq3_max takes over the display names of the
+   old entities. Other names are set as `name` in the export file.
 
-5. **Gruppen** in der Exportdatei auf `0` lassen. eq3_max stellt ohne Gruppe, das klappt auch
-   bei Geräten, die Homegear mit Gruppe angesprochen hat.
+5. Leave **groups** at `0` in the export file. eq3_max addresses devices without a group; this
+   also works for devices that Homegear addressed with a group.
 
-## 2. Sichern
+## 2. Back up
 
-- HA-Vollsicherung (Einstellungen → System → Sicherungen).
-- `/config/.storage/core.entity_registry` kopieren.
-- Homegear-Verzeichnis auf dem Host sichern.
+- Full HA backup (Settings → System → Backups).
+- Copy `/config/.storage/core.entity_registry`.
+- Back up the Homegear directory on the host.
 
-## 3. HA-Konfiguration bereinigen
+## 3. Clean up the HA configuration
 
-Vorher jeweils eine `.bak`-Kopie anlegen.
+Create a `.bak` copy of each file first.
 
-- `homematic:`-Block aus `configuration.yaml` entfernen.
-- Hilfskonstrukte rund um Homegear entfernen (REST-Sensor „Homematic up“,
-  Reconnect-Automationen).
-- Template-Sensoren, die Werte aus homematic-Attributen nachbauen (`sensor.<name>_ventil`),
-  stilllegen. eq3_max liefert sie mit denselben IDs.
-- `check_config` muss fehlerfrei sein.
+- Remove the `homematic:` block from `configuration.yaml`.
+- Remove helper constructs around Homegear (REST sensor "Homematic up",
+  reconnect automations).
+- Retire template sensors that rebuild values from homematic attributes (`sensor.<name>_ventil`).
+  eq3_max provides them with the same IDs.
+- `check_config` must pass without errors.
 
-## 4. Integration einspielen
+## 4. Install the integration
 
-- `custom_components/eq3_max` nach `/config/custom_components/` kopieren.
-- Exportdatei nach `/config/eq3_max_export.json` kopieren.
+- Copy `custom_components/eq3_max` to `/config/custom_components/`.
+- Copy the export file to `/config/eq3_max_export.json`.
 
-## 5. Umschalten
+## 5. Switch over
 
-1. **Homegear stoppen.** Nur stoppen, nicht löschen (Rückweg), Autostart aus.
-2. **Funkmodul anschließen** (siehe [Hardware](../loslegen/hardware.md)):
-   - **nanoCUL:** Den Stick von Homegear an die HA-Box umstecken und den Pfad ermitteln:
-     `ls -l /dev/serial/by-path/`. Immer `by-path` nehmen, nie `by-id`.
-   - **MAX! Cube mit a-culfw:** Cube ins LAN, mit `nc <cube-ip> 2323` und `V` prüfen.
-     Homegear kann den Cube nicht nutzen, er ersetzt also den Stick.
-3. **HA neu starten.** `homematic` darf danach nicht mehr geladen sein.
-4. **Integration hinzufügen:** Einstellungen → Geräte & Dienste → „eQ-3 MAX!“
-   - Verbindung: „USB-Stick“ mit dem `by-path`-Eintrag oder „Netzwerk“ mit Cube-IP und
-     Port 2323
-   - Zentralen-Adresse: die bisherige (z. B. `C0FFEE`), auch beim Cube
-   - Quelle: JSON, `/config/eq3_max_export.json`
-   - Geräteliste bestätigen
+1. **Stop Homegear.** Only stop it, do not delete it (way back), autostart off.
+2. **Connect the radio module** (see [Hardware](../loslegen/hardware.md)):
+   - **nanoCUL:** Move the stick from Homegear to the HA box and determine the path:
+     `ls -l /dev/serial/by-path/`. Always use `by-path`, never `by-id`.
+   - **MAX! Cube with a-culfw:** Cube on the LAN, check with `nc <cube-ip> 2323` and `V`.
+     Homegear cannot use the Cube, so it replaces the stick.
+3. **Restart HA.** `homematic` must no longer be loaded afterwards.
+4. **Add the integration:** Settings → Devices & services → "eQ-3 MAX!"
+   - Connection: "USB stick" with the `by-path` entry, or network with the Cube IP and
+     port 2323
+   - Central address: the previous one (e.g. `C0FFEE`), also with the Cube
+   - Source: JSON, `/config/eq3_max_export.json`
+   - Confirm the device list
 
-## 6. Abnahme
+## 6. Acceptance test
 
-Der Reihe nach prüfen und notieren:
+Check in order and take notes:
 
-1. Alle Geräte da, alle Thermostate mit Werten, **keine `_2`-IDs**.
-2. Sollwert an einem Thermostat ändern → `ausstehend` ist nach einigen Sekunden leer.
-3. Ein Gerät, das Homegear mit Gruppe angesprochen hat, gezielt stellen → nur dieses ändert sich.
-4. Fensterkontakt auf/zu → Entität folgt.
-5. Eco-Taster drücken → `event.<name>` zeigt `auto` bzw. `eco`.
-6. Wandthermostat verstellen → er und die verknüpften Thermostate folgen.
-7. Seite **„eQ-3 MAX!“** öffnen → Verknüpfungen wie unter Homegear, Konfiguration mit
-   Quelle `homegear`.
+1. All devices present, all thermostats with values, **no `_2` IDs**.
+2. Change the target temperature on a thermostat → `ausstehend` (pending) is empty after a few seconds.
+3. Set a device that Homegear addressed with a group specifically → only this one changes.
+4. Open/close a window contact → the entity follows.
+5. Press an eco button → `event.<name>` shows `auto` or `eco`.
+6. Adjust the wall thermostat → it and the linked thermostats follow.
+7. Open the **"eQ-3 MAX!"** panel → links as under Homegear, configuration with
+   source `homegear`.
 
-## 7. Taster-Automationen umstellen
+## 7. Switch button automations over
 
-Aus `homematic.keypress` werden Event-Entitäten:
+`homematic.keypress` becomes event entities:
 
 ```yaml
 triggers:
@@ -126,27 +126,26 @@ triggers:
     not_to: unavailable
 ```
 
-`not_to: unavailable` verhindert ein Auslösen beim Neuladen der Integration. Die Taste
-unterscheidet `trigger.to_state.attributes.event_type` (`auto` oder `eco`).
+`not_to: unavailable` prevents triggering when the integration is reloaded. The button
+is distinguished by `trigger.to_state.attributes.event_type` (`auto` or `eco`).
 
-## 8. Beobachten und aufräumen
+## 8. Observe and clean up
 
-- 48 Stunden beobachten: `binary_sensor.*_funkfehler`, `sensor.eq3_max_sendezeit_1h`,
-  Log-Warnungen „no ack“.
-- Danach den Homegear-Container bzw. -Dienst entfernen.
+- Observe for 48 hours: `binary_sensor.*_funkfehler`, `sensor.eq3_max_sendezeit_1h`,
+  log warnings "no ack".
+- Then remove the Homegear container or service.
 
-Die Sendezeit-Bremse (36 s pro Stunde) ist bei neuen Einträgen eingeschaltet; so bleibt es auch bei einer culfw ohne eigene Budgetprüfung bei 1 %.
+The airtime brake (36 s per hour) is switched on for new entries; this keeps it at 1 % even with a culfw without its own budget check.
 
-## Rückweg
+## Way back
 
-!!! tip "Unter 15 Minuten zurück"
-    Solange Homegear nur gestoppt und nicht gelöscht ist, geht es so zurück:
+!!! tip "Back in under 15 minutes"
+    As long as Homegear is only stopped and not deleted, this is the way back:
 
 
-    1. Integration „eQ-3 MAX!“ löschen.
-    2. Stick zurück an den Homegear-Host, Homegear starten (wer auf den Cube umgestiegen ist,
-       braucht dafür den alten Stick). Bei Docker danach einmal neu
-       starten, damit der Container das Gerät neu greift.
-    3. `.bak`-Dateien zurückspielen, HA neu starten.
-    4. Fehlen Bereiche oder Namen: HA stoppen, gesicherte `core.entity_registry` zurückkopieren.
-
+    1. Delete the integration "eQ-3 MAX!".
+    2. Stick back to the Homegear host, start Homegear (if you switched to the Cube,
+       you need the old stick for this). With Docker, restart it once
+       afterwards so the container grabs the device again.
+    3. Restore the `.bak` files, restart HA.
+    4. If areas or names are missing: stop HA, copy the backed-up `core.entity_registry` back.

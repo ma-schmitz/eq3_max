@@ -53,9 +53,9 @@ async def test_set_week_profile_for_several_devices_and_all_days(hass, setup_ent
     ("profile", "text"),
     [
         ([{"temperature": 20, "until": "6:00"}, {"temperature": 21, "until": "24:00"}], None),  # ok: h:mm
-        ([{"temperature": 20, "until": "06:07"}, {"temperature": 21}], "5-Minuten"),
-        ([{"temperature": 20, "until": "22:00"}, {"temperature": 21, "until": "08:00"}], "aufsteigend"),
-        ([{"temperature": 20}, {"temperature": 21}], "Bis-Uhrzeit"),
+        ([{"temperature": 20, "until": "06:07"}, {"temperature": 21}], "5-minute steps"),
+        ([{"temperature": 20, "until": "22:00"}, {"temperature": 21, "until": "08:00"}], "must increase"),
+        ([{"temperature": 20}, {"temperature": 21}], "End time missing"),
         ([{"temperature": 20, "until": "22:00"}], "24:00"),
         ([{"temperature": 20, "until": "x"}], "hh:mm"),
         ([{"temperature": 3, "until": "24:00"}], "4.5"),
@@ -77,7 +77,7 @@ async def test_set_week_profile_validates_points_in_german(hass, setup_entry, fa
 
 async def test_set_week_profile_refuses_contacts_and_unknown_days(hass, setup_entry, fake_hub):
     hub = fake_hub.last
-    with pytest.raises(ServiceValidationError, match="Thermostat"):
+    with pytest.raises(ServiceValidationError, match="only thermostats"):
         await call(hass, "set_week_profile", {"device_id": device_id(hass, FK_S), "weekday": "Montag", "profile": PROFILE})
     with pytest.raises(Exception, match="Blursday|weekday|Wochentag"):
         await call(hass, "set_week_profile", {"device_id": device_id(hass, HT_S), "weekday": "Blursday", "profile": PROFILE})
@@ -86,8 +86,8 @@ async def test_set_week_profile_refuses_contacts_and_unknown_days(hass, setup_en
 
 async def test_set_week_profile_radio_failure_becomes_home_assistant_error(hass, setup_entry, fake_hub):
     hub = fake_hub.last
-    hub.week_profile_error = "ht-bad-unten: Wochenprogramm Montag nicht quittiert (no_ack)"
-    with pytest.raises(HomeAssistantError, match="nicht quittiert"):
+    hub.week_profile_error = "ht-bad-unten: week program Monday not acknowledged (no_ack)"
+    with pytest.raises(HomeAssistantError, match="not acknowledged"):
         await call(hass, "set_week_profile", {"device_id": device_id(hass, HT_S), "weekday": "Montag", "profile": PROFILE})
 
 
@@ -104,10 +104,10 @@ async def test_copy_week_profile_sends_the_stored_days_to_the_targets(hass, setu
 
 async def test_copy_week_profile_needs_a_stored_profile_and_other_targets(hass, setup_entry, fake_hub):
     hub = fake_hub.last
-    with pytest.raises(ServiceValidationError, match="kein Wochenprogramm"):
+    with pytest.raises(ServiceValidationError, match="No week program is stored"):
         await call(hass, "copy_week_profile", {"device_id": device_id(hass, HT_S), "target_device_id": device_id(hass, WT_S)})
     hub.devices[HT].week_profile = {"Montag": [{"temperature": 19.0, "until": "24:00"}]}
-    with pytest.raises(ServiceValidationError, match="selbst"):
+    with pytest.raises(ServiceValidationError, match="to itself"):
         await call(hass, "copy_week_profile", {"device_id": device_id(hass, HT_S), "target_device_id": device_id(hass, HT_S)})
     assert hub.week_profiles == []
 

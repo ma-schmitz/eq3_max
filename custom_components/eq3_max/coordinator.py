@@ -19,6 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from .connection import connection_target, connection_type, hub_connection
 from .const import (
+    CONF_MAIN_NAME,
     CONF_ADDRESS,
     CONF_BRAKE,
     CONF_DEVICES,
@@ -124,8 +125,13 @@ class MaxCulCoordinator:
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, self.address_hex)},
             manufacturer="busware / culfw",
-            model="culfw (Netzwerk)" if connection_type(self.entry.data) == CONNECTION_NETWORK else "nanoCUL868",
-            name="eQ-3 MAX! Funkmodul",
+            model="culfw (network)" if connection_type(self.entry.data) == CONNECTION_NETWORK else "nanoCUL868",
+            # With a name of its own the main module is named like the extra ones.
+            **(
+                {"translation_key": "extra_radio_module", "translation_placeholders": {"name": main_name}}
+                if (main_name := self.entry.data.get(CONF_MAIN_NAME))
+                else {"translation_key": "radio_module", "translation_placeholders": {}}
+            ),
             configuration_url=CONFIGURATION_URL,
         )
         self._hub_device_id = hub_device.id
@@ -136,8 +142,9 @@ class MaxCulCoordinator:
                 config_entry_id=self.entry.entry_id,
                 identifiers={(DOMAIN, radio_identifier(self.address_hex, item["id"]))},
                 manufacturer="busware / culfw",
-                model="culfw (Netzwerk)" if connection_type(item) == CONNECTION_NETWORK else "nanoCUL868",
-                name=f"eQ-3 MAX! Funkmodul {item['name']}",
+                model="culfw (network)" if connection_type(item) == CONNECTION_NETWORK else "nanoCUL868",
+                translation_key="extra_radio_module",
+                translation_placeholders={"name": item["name"]},
                 via_device_id=hub_device.id,
                 configuration_url=CONFIGURATION_URL,
             )

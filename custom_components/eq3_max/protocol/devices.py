@@ -33,12 +33,24 @@ IDENTITY_KEYS = (
 CONFIG_ENTRY_KEYS = ("config", "config_source")
 DEFAULT_WINDOW_OPEN_TEMPERATURE = 12.0
 
-# Device configuration (0x11 ConfigTemperatures: HT and WT; 0x12 ConfigValve: HT only).
+# Device configuration (0x11 ConfigTemperatures: HT and WT; 0x12 ConfigValve: HT, and the
+# WT for its boost duration - its display counts the boost down by its own setting).
 KIND_TEMP = "temp"
 KIND_VALVE = "valve"
 CONFIG_TEMP_KEYS = ("komfort", "eco", "maximal", "minimal", "offset", "fenster_temperatur", "fenster_dauer")
 CONFIG_VALVE_KEYS = (
     "boost_dauer", "boost_ventil", "entkalkung_tag", "entkalkung_stunde", "ventil_max", "ventil_offset",
+)
+# What a wall thermostat uses of the valve set; the rest goes along as factory values.
+CONFIG_WALL_VALVE_KEYS = ("boost_dauer",)
+# Values a room shares: thermostats linked through a wall thermostat get the same. These
+# are what the wall thermostat's own menu sets for its room when it runs without a central
+# (Pro, comfort/eco, bOS, dEC, AEr); paired with a central that menu is locked and the
+# central has to do it. The devices do not pass these on among themselves. Not shared:
+# the temperature offset and the valve limits, which belong to the single device.
+ROOM_CONFIG_KEYS = (
+    "komfort", "eco", "maximal", "minimal", "fenster_temperatur", "fenster_dauer",
+    "boost_dauer", "boost_ventil", "entkalkung_tag", "entkalkung_stunde",
 )
 # Decalcification weekday by MAX! index (0 = Saturday).
 WEEKDAYS = ("Samstag", "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag")
@@ -143,7 +155,7 @@ class MaxDevice:
     # A write in progress: weekday names not acknowledged yet (not stored).
     week_profile_writing: list[str] = field(default_factory=list)
     # Why the last write stopped early, until the next write (German, not stored).
-    week_profile_error: str | None = None
+    week_profile_error: dict[str, Any] | None = None
     # Radio module the commands to this device go through ("" = the main module).
     radio: str = ""
     # Last RSSI per radio module that heard the device ("" = the main module).
@@ -180,7 +192,7 @@ class MaxDevice:
         if self.is_heating_thermostat:
             return CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS
         if self.device_type is DeviceType.WALL_THERMOSTAT:
-            return CONFIG_TEMP_KEYS
+            return CONFIG_TEMP_KEYS + CONFIG_WALL_VALVE_KEYS
         return ()
 
     def ensure_config_defaults(self) -> None:
@@ -273,6 +285,8 @@ class MaxDevice:
             key
             for key, value in values.items()
             if key not in changed
+            # Values the device does not use (a wall thermostat's valve limits) are no news.
+            and key in self.config_keys
             and self.config_source.get(key) == SOURCE_FACTORY
             and value == self.config.get(key, FACTORY_CONFIG[key])
         ]

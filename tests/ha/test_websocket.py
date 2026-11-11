@@ -44,6 +44,7 @@ def by_serial(section):
         {"type": "eq3_max/link", "device_id": "x", "partner_device_id": "y"},
         {"type": "eq3_max/unlink", "device_id": "x", "partner_device_id": "y"},
         {"type": "eq3_max/pair", "entry_id": "x"},
+        {"type": "eq3_max/rename_radio", "entry_id": "x", "radio": "", "name": "EG"},
         {"type": "eq3_max/set_config", "device_id": "x", "kind": "temp", "values": {"komfort": 21}},
         {"type": "eq3_max/set_week_profile", "device_id": "x", "weekday": ["Montag"], "profile": [{"temperature": 21}]},
         {"type": "eq3_max/copy_week_profile", "device_id": "x", "target_device_id": ["y"]},
@@ -145,7 +146,9 @@ async def test_overview_config_sets_with_metadata(hass, setup_entry, fake_hub, h
     assert {"value": 60, "label": "60 min"} in vvalues["boost_dauer"]["options"]
     assert vvalues["entkalkung_tag"]["value"] == "Samstag"
     wt = devices["NEQ9000011"]
-    assert [s["kind"] for s in wt["config"]] == ["temp"]
+    assert [s["kind"] for s in wt["config"]] == ["temp", "valve"]
+    # Of the valve set a wall thermostat only has the boost duration.
+    assert [v["key"] for v in wt["config"][1]["values"]] == ["boost_dauer"]
     assert devices["KEQ9000001"]["config"] == []
 
 
@@ -211,15 +214,15 @@ async def test_link_and_unlink_delegate(hass, setup_entry, fake_hub, hass_ws_cli
 
 
 @pytest.mark.parametrize(
-    "partner,text",
+    "partner,key",
     [
-        (FK, "Eco-Taster und Fensterkontakt lassen sich nicht verkn\u00fcpfen"),
-        ("unknown", "Unbekanntes Ger\u00e4t"),
-        ("hub", "Das Funkmodul selbst kann nicht verkn\u00fcpft werden"),
-        (PB, "Ein Ger\u00e4t kann nicht mit sich selbst verkn\u00fcpft werden"),
+        (FK, "link_not_allowed"),
+        ("unknown", "device_id_unknown"),
+        ("hub", "hub_cannot_link"),
+        (PB, "link_self"),
     ],
 )
-async def test_link_rejects_invalid_with_german_error(hass, setup_entry, fake_hub, hass_ws_client, partner, text):
+async def test_link_rejects_invalid_with_translated_error(hass, setup_entry, fake_hub, hass_ws_client, partner, key):
     client = await hass_ws_client(hass)
     if partner == "unknown":
         partner_id = "nope"
@@ -229,14 +232,15 @@ async def test_link_rejects_invalid_with_german_error(hass, setup_entry, fake_hu
         partner_id = device_id(hass, partner)
     reply = await call(client, type="eq3_max/link", device_id=device_id(hass, PB), partner_device_id=partner_id)
     assert not reply["success"]
-    assert reply["error"]["message"] == text
+    # The panel shows the text for the key in the user's language.
+    assert reply["error"]["translation_key"] == key and reply["error"]["translation_domain"] == DOMAIN
     assert fake_hub.last.commands == []
 
 
 async def test_unlink_not_linked_german_error(hass, setup_entry, fake_hub, hass_ws_client):
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/unlink", device_id=device_id(hass, HT), partner_device_id=device_id(hass, WT))
-    assert not reply["success"] and reply["error"]["message"] == "Ger\u00e4te sind nicht verkn\u00fcpft"
+    assert not reply["success"] and reply["error"]["translation_key"] == "not_linked"
 
 
 async def test_pair_opens_pairing(hass, setup_entry, fake_hub, hass_ws_client):
@@ -249,10 +253,10 @@ async def test_pair_opens_pairing(hass, setup_entry, fake_hub, hass_ws_client):
 async def test_pair_rejects_unknown_entry_and_disconnected_hub(hass, setup_entry, fake_hub, hass_ws_client):
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/pair", entry_id="nope")
-    assert not reply["success"] and reply["error"]["message"] == "Funkmodul nicht gefunden oder nicht geladen"
+    assert not reply["success"] and reply["error"]["translation_key"] == "hub_not_loaded"
     fake_hub.last.connected = False
     reply = await call(client, type="eq3_max/pair", entry_id=setup_entry.entry_id)
-    assert not reply["success"] and reply["error"]["message"] == "Funkmodul nicht verbunden"
+    assert not reply["success"] and reply["error"]["translation_key"] == "not_connected"
     assert fake_hub.last.pairing is None
 
 
@@ -278,23 +282,25 @@ async def test_set_config_sends_one_set_and_returns_factory_keys(hass, setup_ent
 
 
 @pytest.mark.parametrize(
-    "address,kind,values,text",
+    "address,kind,values,key",
     [
-        (HT, "temp", {"komfort": 22.3}, "Komforttemperatur: Wert muss zwischen 4,5 und 30,5 in Schritten von 0,5 liegen"),
-        (HT, "temp", {"boost_dauer": 10}, "Boost-Dauer geh\u00f6rt nicht zum Satz Temperaturen"),
-        (HT, "temp", {}, "Keine Werte angegeben"),
-        (WT, "valve", {"boost_dauer": 10}, "Ventil-Einstellungen gibt es nur bei Heizk\u00f6rperthermostaten"),
-        (FK, "temp", {"komfort": 21.0}, "Dieses Ger\u00e4t hat keine Konfiguration"),
-        (HT, "temp", {"bogus": 1}, "Unbekannter Konfigurationswert: bogus"),
+        (HT, "temp", {"komfort": 22.3}, "config_value_range"),
+        (HT, "temp", {"boost_dauer": 10}, "config_key_wrong_set"),
+        (HT, "temp", {}, "config_no_values"),
+        (WT, "valve", {"ventil_max": 80}, "config_key_not_on_device"),
+        (PB, "valve", {"boost_dauer": 10}, "config_none"),
+        (FK, "temp", {"komfort": 21.0}, "config_none"),
+        (HT, "temp", {"bogus": 1}, "config_key_unknown"),
     ],
 )
-async def test_set_config_rejects_invalid_with_german_error(
-    hass, setup_entry, fake_hub, hass_ws_client, address, kind, values, text
+async def test_set_config_rejects_invalid_with_translated_error(
+    hass, setup_entry, fake_hub, hass_ws_client, address, kind, values, key
 ):
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/set_config", device_id=device_id(hass, address), kind=kind, values=values)
     assert not reply["success"]
-    assert reply["error"]["message"] == text
+    # The panel shows the text for the key in the user's language.
+    assert reply["error"]["translation_key"] == key and reply["error"]["translation_domain"] == DOMAIN
     assert fake_hub.last.commands == [] and fake_hub.last.devices[address].pending_config == {}
 
 
@@ -342,7 +348,7 @@ async def test_link_rejects_device_of_other_integration(hass, setup_entry, fake_
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/link", device_id=device_id(hass, HT), partner_device_id=foreign_device_id)
     assert not reply["success"]
-    assert reply["error"]["message"] == "Ger\u00e4t geh\u00f6rt zu keiner geladenen eQ-3-MAX!-Integration"
+    assert reply["error"]["translation_key"] == "device_not_loaded"
     assert fake_hub.last.commands == []
 
 
@@ -352,7 +358,7 @@ async def test_set_config_rejects_device_of_other_integration(
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/set_config", device_id=foreign_device_id, kind="temp", values={"komfort": 21})
     assert not reply["success"]
-    assert reply["error"]["message"] == "Ger\u00e4t geh\u00f6rt zu keiner geladenen eQ-3-MAX!-Integration"
+    assert reply["error"]["translation_key"] == "device_not_loaded"
     assert fake_hub.last.commands == []
 
 
@@ -368,7 +374,7 @@ async def test_set_config_protocol_error_german_without_detail(hass, setup_entry
     caplog.set_level("DEBUG", logger="custom_components.eq3_max.websocket_api")
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/set_config", device_id=device_id(hass, HT), kind="temp", values={"komfort": 21})
-    assert not reply["success"] and reply["error"]["message"] == "Ung\u00fcltiger Wert"
+    assert not reply["success"] and reply["error"]["translation_key"] == "invalid_value"
     assert "comfort must be" in caplog.text
 
 
@@ -391,19 +397,19 @@ async def test_set_week_profile_over_websocket(hass, setup_entry, fake_hub, hass
     assert reply["result"]["week_profile"]["Montag"][0] == {"temperature": 17.0, "until": "06:00"}
 
     reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, FK), weekday=["Montag"], profile=[{"temperature": 21}])
-    assert not reply["success"] and reply["error"]["code"] == "invalid" and "Thermostat" in reply["error"]["message"]
+    assert not reply["success"] and reply["error"]["code"] == "invalid" and reply["error"]["translation_key"] == "no_week_profile"
     reply = await call(
         client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Montag"],
         profile=[{"temperature": 21, "until": "06:07"}, {"temperature": 21}],
     )
-    assert not reply["success"] and "5-Minuten" in reply["error"]["message"]
+    assert not reply["success"] and reply["error"]["translation_key"] == "profile_until_step"
     reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Blursday"], profile=[{"temperature": 21}])
-    assert not reply["success"] and "Wochentag" in reply["error"]["message"]
+    assert not reply["success"] and reply["error"]["translation_key"] == "weekday_unknown"
     assert len(hub.week_profiles) == 1
 
-    hub.week_profile_error = "ht-bad-unten: Wochenprogramm Montag nicht quittiert (no_ack)"
+    hub.week_profile_error = "ht-bad-unten: week program Monday not acknowledged (no_ack)"
     reply = await call(client, type="eq3_max/set_week_profile", device_id=device_id(hass, HT), weekday=["Montag"], profile=[{"temperature": 21}])
-    assert not reply["success"] and reply["error"]["code"] == "failed" and "nicht quittiert" in reply["error"]["message"]
+    assert not reply["success"] and reply["error"]["code"] == "failed" and "not acknowledged" in reply["error"]["message"]
 
 
 async def test_copy_week_profile_over_websocket(hass, setup_entry, fake_hub, hass_ws_client):
@@ -412,7 +418,7 @@ async def test_copy_week_profile_over_websocket(hass, setup_entry, fake_hub, has
     hub = fake_hub.last
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/copy_week_profile", device_id=device_id(hass, HT), target_device_id=[device_id(hass, WT)])
-    assert not reply["success"] and "kein Wochenprogramm" in reply["error"]["message"]
+    assert not reply["success"] and reply["error"]["translation_key"] == "week_profile_not_stored"
     hub.devices[HT].week_profile = {"Sonntag": [{"temperature": 19.0, "until": "24:00"}]}
     reply = await call(client, type="eq3_max/copy_week_profile", device_id=device_id(hass, HT), target_device_id=[device_id(hass, WT)])
     assert reply["success"], reply
@@ -476,3 +482,33 @@ async def test_overview_shows_a_running_week_profile_write_and_the_budget_wait(h
     assert dev["week_profile_writing"] == ["Dienstag", "Mittwoch"] and dev["week_profile_error"] == "abgelehnt"
     assert dev["pending"] is True
     assert result["hub"]["radios"][0]["waiting_budget"] is True
+
+
+async def test_forced_unlink_over_websocket_and_service(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(
+        client, type="eq3_max/unlink", device_id=device_id(hass, WT), partner_device_id=device_id(hass, HT), force=True
+    )
+    assert reply["success"], reply
+    assert hub.commands[-1] == ("unlink", WT, HT, "force")
+    await hass.services.async_call(
+        DOMAIN, "unlink", {"device_id": device_id(hass, FK), "partner_device_id": device_id(hass, HT), "force": True},
+        blocking=True,
+    )
+    assert hub.commands[-1] == ("unlink", FK, HT, "force")
+
+
+async def test_set_time_over_websocket_and_service(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(client, type="eq3_max/set_time", device_id=device_id(hass, WT))
+    assert reply["success"], reply
+    assert hub.commands[-1] == ("time", WT)
+    await hass.services.async_call(DOMAIN, "set_time", {"device_id": [device_id(hass, HT), device_id(hass, WT)]}, blocking=True)
+    assert hub.commands[-2:] == [("time", HT), ("time", WT)]
+    reply = await call(client, type="eq3_max/set_time", device_id=device_id(hass, FK))
+    assert not reply["success"] and reply["error"]["translation_key"] == "no_clock"
+    hub.time_error = "wt-wohnzimmer: clock not acknowledged (no_ack)"
+    reply = await call(client, type="eq3_max/set_time", device_id=device_id(hass, WT))
+    assert not reply["success"] and "not acknowledged" in reply["error"]["message"]

@@ -21,6 +21,8 @@ class FakeTcpCul:
 
     def __init__(self, *, answer_version: bool = True, preamble: list[str] | None = None) -> None:
         self.answer_version = answer_version
+        # Answer to a bare "X" (report flags and send credit), None: stays silent.
+        self.x_answer: str | None = "21  1800"
         self.preamble = preamble or []
         self.connections = 0
         self.received: list[list[str]] = []
@@ -52,6 +54,9 @@ class FakeTcpCul:
                     break
                 text = raw.decode().strip()
                 lines.append(text)
+                if text == "X" and self.x_answer is not None:
+                    writer.write((self.x_answer + "\r\n").encode())
+                    await writer.drain()
                 if text == "V" and self.answer_version:
                     for extra in self.preamble:
                         writer.write((extra + "\r\n").encode())
@@ -253,4 +258,106 @@ async def test_open_tcp_sets_user_timeout_and_keepidle():
         assert sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT) == 120000
         writer.close()
     finally:
+        await cul.stop()
+
+
+# --- health check of a network module: a rebooted Cube leaves the connection half open ---
+
+
+async def test_idle_network_module_is_asked_and_stays_connected_when_it_answers():
+    cul = FakeTcpCul()
+    await cul.start()
+    t, ev = make("127.0.0.1", cul.port, health_interval=0.05, health_timeout=0.2)
+    try:
+        await t.start()
+        await until(lambda: t.connected)
+        await until(lambda: cul.received[0].count("X") >= 2)
+        assert cul.connections == 1 and ev["conn"] == [True]
+    finally:
+        await t.stop()
+        await cul.stop()
+
+
+async def test_network_module_that_lost_its_settings_is_initialised_again(caplog):
+    """After a restart culfw reports "00": X21, Zr and Za are gone, it would stay deaf."""
+    cul = FakeTcpCul()
+    cul.x_answer = "00  1800"
+    await cul.start()
+    t, ev = make("127.0.0.1", cul.port, health_interval=0.05, health_timeout=0.2, reconnect_delay=60.0)
+    try:
+        await t.start()
+        await until(lambda: t.connected)
+        await until(lambda: cul.connections >= 2)
+        cul.x_answer = "21  1800"
+        await until(lambda: t.connected and cul.received[1][:4] == ["V", "X21", "Zr", "ZaC0FFEE"])
+        assert "lost its settings" in caplog.text
+    finally:
+        await t.stop()
+        await cul.stop()
+
+
+async def test_network_module_that_does_not_answer_is_reconnected(caplog):
+    cul = FakeTcpCul()
+    cul.x_answer = None
+    await cul.start()
+    t, ev = make("127.0.0.1", cul.port, health_interval=0.05, health_timeout=0.1, reconnect_delay=60.0)
+    try:
+        await t.start()
+        await until(lambda: t.connected)
+        await until(lambda: cul.connections >= 2)
+        assert "X" in cul.received[0]
+        assert "does not answer" in caplog.text
+    finally:
+        await t.stop()
+        await cul.stop()
+
+
+async def test_network_module_with_traffic_is_not_asked():
+    cul = FakeTcpCul()
+    await cul.start()
+    t, ev = make("127.0.0.1", cul.port, health_interval=0.2, health_timeout=0.2)
+    try:
+        await t.start()
+        await until(lambda: t.connected)
+        for _ in range(10):
+            await cul.send("Z0EF20202A1B005C0FFEE0001193009")
+            await asyncio.sleep(0.05)
+        assert "X" not in cul.received[0]
+    finally:
+        await t.stop()
+        await cul.stop()
+
+
+async def test_serial_stick_is_never_asked():
+    from .fakes import FakeCul
+
+    cul = FakeCul()
+    t, ev = make("x", 0, open_connection=cul.open)
+    assert t.health_interval == 0
+    try:
+        await t.start()
+        await until(lambda: t.connected)
+        await asyncio.sleep(0.1)
+        assert "X" not in cul.written
+    finally:
+        await t.stop()
+
+
+def test_network_opener_switches_the_health_check_on():
+    t, _ = make("127.0.0.1", 2323)
+    assert t.health_interval == 20.0
+
+
+async def test_first_reconnect_after_a_loss_comes_quickly():
+    """A Cube that restarted is back within seconds: do not wait the full delay first."""
+    cul = FakeTcpCul()
+    await cul.start()
+    t, ev = make("127.0.0.1", cul.port, reconnect_delay=60.0, first_retry_delay=0.01, health_interval=0)
+    try:
+        await t.start()
+        await until(lambda: t.connected)
+        cul.drop_client()
+        await until(lambda: cul.connections == 2 and t.connected)
+    finally:
+        await t.stop()
         await cul.stop()

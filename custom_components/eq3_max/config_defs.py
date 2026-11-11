@@ -12,6 +12,9 @@ from typing import Any
 from homeassistant.components.number import NumberDeviceClass
 from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 
+from homeassistant.exceptions import ServiceValidationError
+
+from .errors import invalid
 from .protocol.devices import CONFIG_TEMP_KEYS, CONFIG_VALVE_KEYS, KIND_TEMP, KIND_VALVE, WEEKDAYS
 from .protocol.messages import BOOST_DURATIONS, MAX_TEMPERATURE, OFF_TEMPERATURE, OFFSET_LIMIT
 
@@ -62,23 +65,18 @@ RANGES = {
 # Select values (as stored) and their option texts.
 OPTION_VALUES: dict[str, list[tuple[Any, str]]] = {
     "boost_dauer": [(minutes, f"{minutes} min") for minutes in BOOST_DURATIONS],
-    "entkalkung_tag": [(day, day) for day in WEEKDAYS],
+    # Keys of the select options; the names come from the translations (state of
+    # entity.select.entkalkung_tag), the stored value stays the German weekday.
+    "entkalkung_tag": list(zip(WEEKDAYS, ("saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"))),
 }
 OPTIONS = {key: [text for _value, text in items] for key, items in OPTION_VALUES.items()}
 ICONS = {"boost_dauer": "mdi:timer-outline", "entkalkung_tag": "mdi:calendar-week"}
 
 
-def de_number(number: float) -> str:
-    """German number text: 4,5 / 60 / -3,5."""
-    return f"{number:g}".replace(".", ",")
-
-
-def range_text(key: str) -> str:
+def range_error(key: str) -> ServiceValidationError:
+    """The translated "value must be between ... in steps of ..." for a config value."""
     rng = RANGES[key]
-    return (
-        f"Wert muss zwischen {de_number(rng.low)} und {de_number(rng.high)} "
-        f"in Schritten von {de_number(rng.step)} liegen"
-    )
+    return invalid("config_value_range", low=f"{rng.low:g}", high=f"{rng.high:g}", step=f"{rng.step:g}")
 
 
 def config_meta(key: str) -> dict[str, Any]:
@@ -94,23 +92,22 @@ def config_meta(key: str) -> dict[str, Any]:
 
 
 def validate_config_value(key: str, value: Any) -> Any:
-    """The value on the integration's grid; ValueError with a German text otherwise."""
-    label = CONFIG_LABELS.get(key)
-    if label is None:
-        raise ValueError(f"Unbekannter Konfigurationswert: {key}")
+    """The value on the integration's grid; translated ServiceValidationError otherwise."""
+    if key not in CONFIG_LABELS:
+        raise invalid("config_key_unknown", key=key)
     if key in OPTION_VALUES:
         for option, text in OPTION_VALUES[key]:
             if value == option or value == text:
                 return option
-        raise ValueError(f"{label}: Ung\u00fcltige Auswahl ({value})")
+        raise invalid("option_invalid", option=value)
     rng = RANGES[key]
     if isinstance(value, bool):
-        raise ValueError(f"{label}: {range_text(key)}")
+        raise range_error(key)
     try:
         number = float(value)
     except (TypeError, ValueError) as err:
-        raise ValueError(f"{label}: keine Zahl ({value})") from err
+        raise invalid("config_not_a_number", value=value) from err
     steps = (number - rng.low) / rng.step
     if not rng.low <= number <= rng.high or abs(steps - round(steps)) > 1e-9:
-        raise ValueError(f"{label}: {range_text(key)}")
+        raise range_error(key)
     return number if isinstance(rng.step, float) else int(round(number))

@@ -19,6 +19,7 @@ from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
+from .errors import invalid, translated
 from .const import CONF_AWAY_HOURS, CONF_AWAY_TEMPERATURE, DEFAULT_AWAY_HOURS, DEFAULT_AWAY_TEMPERATURE
 from .entity import MaxCulEntity
 from .protocol.messages import (
@@ -42,7 +43,7 @@ def _away_end(end: datetime) -> datetime:
     """Round the end time up to MAX! resolution; the rounded value must lie ahead."""
     rounded = round_until(end)
     if rounded <= _local_now():
-        raise ServiceValidationError("Endzeit liegt nicht in der Zukunft")
+        raise invalid("end_time_not_future")
     return rounded
 
 
@@ -152,7 +153,7 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         try:
             self.coordinator.hub.set_temperature(self._address, temperature, mode, until=until)
         except FrameError as err:
-            raise ServiceValidationError(str(err)) from err
+            raise translated(err, ServiceValidationError) from err
         if mode is Mode.MANUAL and temperature is not None:
             # Only manual targets are comfort values (not boost, away or auto).
             sent = normalize_temperature(temperature)

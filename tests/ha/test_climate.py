@@ -234,8 +234,9 @@ async def test_m6_past_time_rejected_with_german_message(hass, setup_entry, fake
     await hass.config.async_set_time_zone("Europe/Berlin")
     freezer.move_to("2026-10-09T12:00:10+00:00")  # 14:00:10 Ortszeit
     hub = fake_hub.last
-    with pytest.raises(ServiceValidationError, match="Endzeit liegt nicht in der Zukunft"):
+    with pytest.raises(ServiceValidationError) as exc:
         await hass.services.async_call("eq3_max", "set_away", {ATTR_ENTITY_ID: E, "until": "2026-10-09 13:59:30"}, blocking=True)
+    assert exc.value.translation_key == "end_time_not_future"
     assert hub.commands == []
 
 

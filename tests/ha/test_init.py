@@ -263,7 +263,7 @@ async def test_factory_reset_without_ack_keeps_device(hass, setup_entry, fake_hu
     from custom_components.eq3_max.protocol.hub import ResetResult
 
     hub.reset_result = ResetResult.UNACKED
-    with pytest.raises(HomeAssistantError, match="nicht quittiert .* eventuell trotzdem zur\u00fcckgesetzt"):
+    with pytest.raises(HomeAssistantError, match="did not acknowledge the factory reset"):
         await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": device.id}, blocking=True)
     await hass.async_block_till_done()
     assert "MEQ9000007" in [d["serial"] for d in setup_entry.data["devices"]]
@@ -340,7 +340,7 @@ async def test_i3_factory_reset_refused_when_stick_not_connected(hass, setup_ent
 
     hub = fake_hub.last
     hub.connected = False
-    with pytest.raises(HomeAssistantError, match="Funkmodul nicht verbunden"):
+    with pytest.raises(HomeAssistantError, match="Radio module not connected"):
         await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": _ht_device_id(hass)}, blocking=True)
     assert hub.resets == []
 
@@ -353,7 +353,7 @@ async def test_i3_factory_reset_not_sent(hass, setup_entry, fake_hub):
 
     hub = fake_hub.last
     hub.reset_result = ResetResult.NOT_SENT
-    with pytest.raises(HomeAssistantError, match="^Werksreset nicht gesendet$"):
+    with pytest.raises(HomeAssistantError, match="^Factory reset not sent$"):
         await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": _ht_device_id(hass)}, blocking=True)
     assert "MEQ9000007" in [d["serial"] for d in setup_entry.data["devices"]]
 
@@ -365,8 +365,8 @@ async def test_m8_factory_reset_already_running_or_device_gone(hass, setup_entry
     from custom_components.eq3_max.protocol.messages import FrameError
 
     hub = fake_hub.last
-    hub.reset_error = FrameError("Werksreset l\u00e4uft bereits")
-    with pytest.raises(HomeAssistantError, match="l\u00e4uft bereits"):
+    hub.reset_error = FrameError("factory reset already running", key="reset_running")
+    with pytest.raises(HomeAssistantError, match="already running"):
         await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": _ht_device_id(hass)}, blocking=True)
     hub.reset_error = KeyError(HT)
     with pytest.raises(HomeAssistantError):
@@ -398,7 +398,7 @@ async def test_device_registry_names_follow_entry_data(hass, setup_entry, fake_h
     kept = dev_reg.async_get(user.id)
     assert kept.name == "NEQ9000010" and kept.name_by_user == "Fenster Schlafzimmer"
     hub = dev_reg.async_get_device(identifiers={(DOMAIN, setup_entry.data["address"])})
-    assert hub.name == "eQ-3 MAX! Funkmodul"
+    assert hub.name == "eQ-3 MAX! radio module"  # translated, test system runs in English
 
 
 # --- Block 2: Geraetekonfiguration ---
@@ -418,7 +418,7 @@ async def test_existing_entry_without_config_gets_factory_defaults(hass, setup_e
     hub = fake_hub.last
     assert hub.devices[HT].config == FACTORY_CONFIG
     assert set(hub.devices[HT].config_source.values()) == {"werksvorgabe"}
-    assert set(hub.devices[WT].config) == set(CONFIG_TEMP_KEYS)
+    assert set(hub.devices[WT].config) == set(CONFIG_TEMP_KEYS) | {"boost_dauer"}
     assert hub.devices[FK].config == {}
 
 
@@ -661,12 +661,12 @@ async def test_link_services_reject_with_german_validation_errors(hass, setup_en
     hub.devices[0x1590B4].links = ["MEQ9000007"]
     ht, fk, pb, wt = (_device_id(hass, s) for s in ("MEQ9000007", "NEQ9000010", "KEQ9000001", "NEQ9000011"))
     cases = [
-        ("link", fk, pb, "Fensterkontakt und Eco-Taster lassen sich nicht verkn\u00fcpfen"),
-        ("link", ht, ht, "nicht mit sich selbst"),
-        ("link", ht, wt, "bereits verkn\u00fcpft"),
-        ("unlink", ht, fk, "nicht verkn\u00fcpft"),
-        ("link", ht, "nope", "Unbekanntes Ger\u00e4t"),
-        ("link", ht, _device_id(hass, "C0FFEE"), "Funkmodul"),
+        ("link", fk, pb, "cannot be linked"),
+        ("link", ht, ht, "with itself"),
+        ("link", ht, wt, "already linked"),
+        ("unlink", ht, fk, "not linked"),
+        ("link", ht, "nope", "Unknown device"),
+        ("link", ht, _device_id(hass, "C0FFEE"), "radio module itself"),
     ]
     for action, a, b, message in cases:
         with pytest.raises(ServiceValidationError, match=message):
@@ -682,7 +682,12 @@ async def test_link_services_in_services_yaml_with_device_selectors(hass, setup_
     integration = await async_get_integration(hass, DOMAIN)
     desc = service._SERVICES_SCHEMA(service._load_services_file(integration))
     for name in ("link", "unlink"):
-        fields = desc[name]["fields"]
+        fields = dict(desc[name]["fields"])
+        # unlink: optional switch for a leftover link on one device only.
+        force = fields.pop("force", None)
+        assert (force is not None) == (name == "unlink")
+        if force is not None:
+            assert force["required"] is False and "boolean" in force["selector"]
         assert set(fields) == {"device_id", "partner_device_id"}
         for field in fields.values():
             assert field["required"] is True
@@ -698,6 +703,7 @@ def test_link_services_translated():
     for name in ("strings.json", "translations/en.json", "translations/de.json"):
         services = json.loads((base / name).read_text())["services"]
         for service_name in ("link", "unlink"):
-            assert set(services[service_name]["fields"]) == {"device_id", "partner_device_id"}
+            expected = {"device_id", "partner_device_id"} | ({"force"} if service_name == "unlink" else set())
+            assert set(services[service_name]["fields"]) == expected
     de = json.loads((base / "translations/de.json").read_text())["services"]
     assert de["link"]["name"] == "Verkn\u00fcpfen" and de["unlink"]["name"] == "Verkn\u00fcpfung l\u00f6sen"

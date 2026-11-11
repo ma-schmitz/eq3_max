@@ -1,41 +1,40 @@
-# Thermostat bedienen
+# Operating a thermostat
 
 
-## Modi
+## Modes
 
-| Modus in HA | Gerät | Wirkung |
+| Mode in HA | Device | Effect |
 |---|---|---|
-| **Heizbetrieb** (`heat`) | manuell | hält den eingestellten Sollwert |
-| **Automatik** (`auto`) | Wochenprogramm des Geräts | Gerät folgt seinem eigenen Programm |
-| **Aus** (`off`) | manuell 4,5 °C | Frostschutz |
+| **Heat** (`heat`) | manual | holds the set target |
+| **Auto** (`auto`) | the device's week program | the device follows its own program |
+| **Off** (`off`) | manual 4.5 °C | frost protection |
 
-Anzeige „Heizbetrieb (Heizbetrieb)“ bzw. „Heizbetrieb (Leerlauf)“: vor der Klammer der
-Modus, in der Klammer die aktuelle Aktion — Heizbetrieb bei offenem Ventil, Leerlauf bei
-0 %. Die Ventilstellung kommt nur, wenn sich das Ventil bewegt; nach einem Wechsel ggf. die
-Seite neu laden.
+Display "Heat (Heating)" or "Heat (Idle)": before the parentheses the mode, inside them the
+current action — Heating with the valve open, Idle at 0 %. The valve position only arrives
+when the valve moves; after a change, reload the page if needed.
 
 ## Presets
 
-| Preset | Wirkung |
+| Preset | Effect |
 |---|---|
-| **keins** | normaler Betrieb |
-| **Boost** | Ventil kurz weit auf (Dauer und Öffnung siehe Gerätekonfiguration), danach zurück |
-| **Abwesend** | feste Temperatur bis zu einer Endzeit (Modus „temporär“) |
+| **None** | normal operation |
+| **Boost** | valve wide open briefly (duration and opening see device configuration), then back |
+| **Away** | fixed temperature until an end time (mode "temporary") |
 
-**Abwesend** aus dem Thermostat-Dialog nutzt die Optionen der Integration:
-Abwesend-Temperatur (Standard **18,0 °C**) und Dauer (Standard **24 h**). Die Endzeit wird
-auf die nächste volle oder halbe Stunde **aufgerundet** (die Geräte kennen nur :00 und :30).
-Nach Ablauf kehrt das Gerät selbst in seinen vorherigen Modus zurück.
+**Away** from the thermostat dialog uses the integration options:
+away temperature (default **18.0 °C**) and duration (default **24 h**). The end time is
+**rounded up** to the next full or half hour (the devices only know :00 and :30).
+When it expires, the device returns to its previous mode by itself.
 
-**Zurück aus Abwesend oder Boost:** Modus „Heizbetrieb“ wählen oder Preset „keins“ → es gilt
-wieder der zuletzt eingestellte Komfortwert (egal ob in HA oder am Rad gesetzt; die
-Fenster-auf-Temperatur zählt nicht als Komfortwert).
+**Back from Away or Boost:** choose mode "Heat" or preset "None" → the last set comfort
+value applies again (no matter whether set in HA or on the wheel; the window-open
+temperature does not count as a comfort value).
 
-## Befehle und Quittungen
+## Commands and acknowledgements
 
-Jeder Befehl braucht etwa 1 s Weckpräambel; das Gerät quittiert ihn. Bis zur Quittung steht
-der Wert unter `ausstehend`, angezeigt wird weiterhin der zuletzt **gemeldete** Wert. Kommt
-keine Quittung, wird bis zu dreimal wiederholt (je 3 s Wartezeit), also können bis zu ~13 s
-vergehen. Bleibt es unquittiert, geht `funkfehler` an und der Befehl wird bei der nächsten
-Meldung des Geräts automatisch erneut gesendet. Mehrere schnelle Änderungen am selben Gerät:
-nur die letzte wird gesendet.
+Every command needs about 1 s of wake-up preamble; the device acknowledges it. Until the
+acknowledgement, the value is held in `ausstehend` (pending), while the display keeps
+showing the last **reported** value. Without an acknowledgement, the command is repeated up
+to three times (3 s wait each), so up to ~13 s can pass. If it stays unacknowledged,
+`funkfehler` turns on and the command is sent again automatically with the device's next
+report. Several quick changes to the same device: only the last one is sent.

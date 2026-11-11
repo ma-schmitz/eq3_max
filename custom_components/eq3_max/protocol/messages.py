@@ -58,7 +58,16 @@ class DeviceType(IntEnum):
 
 
 class FrameError(ValueError):
-    """Line is not a valid MAX! telegram."""
+    """Line is not a valid MAX! telegram, or a request the devices cannot take.
+
+    The message is English (logs). `key` and `placeholders` name the translated text
+    for the user (strings.json, section exceptions); without a key the message is shown.
+    """
+
+    def __init__(self, message: str = "", *, key: str | None = None, **placeholders: object) -> None:
+        super().__init__(message)
+        self.key = key
+        self.placeholders = {name: str(value) for name, value in placeholders.items()}
 
 
 def round_until(dt: datetime) -> datetime:

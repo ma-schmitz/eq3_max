@@ -30,7 +30,7 @@ def test_config_meta_number_and_select():
     meta = config_meta("boost_dauer")
     assert meta["type"] == "select"
     assert meta["options"][1] == {"value": 5, "label": "5 min"}
-    assert config_meta("entkalkung_tag")["options"][0] == {"value": "Samstag", "label": "Samstag"}
+    assert config_meta("entkalkung_tag")["options"][0] == {"value": "Samstag", "label": "saturday"}
 
 
 @pytest.mark.parametrize(
@@ -44,16 +44,20 @@ def test_validate_accepts_grid_values(key, value, expected):
 
 
 @pytest.mark.parametrize(
-    "key,value,text",
+    "key,value,translation_key,placeholders",
     [
-        ("komfort", 22.3, "Komforttemperatur: Wert muss zwischen 4,5 und 30,5 in Schritten von 0,5 liegen"),
-        ("fenster_dauer", 7, "Fenster-auf-Dauer: Wert muss zwischen 0 und 60 in Schritten von 5 liegen"),
-        ("boost_ventil", True, "Boost-Ventilstellung: Wert muss zwischen 0 und 100 in Schritten von 5 liegen"),
-        ("eco", "warm", "Eco-Temperatur: keine Zahl (warm)"),
-        ("boost_dauer", 45, "Boost-Dauer: Ung\u00fcltige Auswahl (45)"),
-        ("bogus", 1, "Unbekannter Konfigurationswert: bogus"),
+        ("komfort", 22.3, "config_value_range", {"low": "4.5", "high": "30.5", "step": "0.5"}),
+        ("fenster_dauer", 7, "config_value_range", {"low": "0", "high": "60", "step": "5"}),
+        ("boost_ventil", True, "config_value_range", {"low": "0", "high": "100", "step": "5"}),
+        ("eco", "warm", "config_not_a_number", {"value": "warm"}),
+        ("boost_dauer", 45, "option_invalid", {"option": "45"}),
+        ("bogus", 1, "config_key_unknown", {"key": "bogus"}),
     ],
 )
-def test_validate_rejects_with_german_text(key, value, text):
-    with pytest.raises(ValueError, match=text.replace("(", r"\(").replace(")", r"\)")):
+def test_validate_rejects_with_translated_error(key, value, translation_key, placeholders):
+    from homeassistant.exceptions import ServiceValidationError
+
+    with pytest.raises(ServiceValidationError) as exc:
         validate_config_value(key, value)
+    assert exc.value.translation_key == translation_key
+    assert exc.value.translation_placeholders == placeholders

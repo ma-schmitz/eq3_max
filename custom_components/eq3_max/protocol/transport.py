@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import socket
 import time
 from collections.abc import Awaitable, Callable
@@ -65,7 +66,19 @@ def tcp_opener(host: str, port: int, *, connect_timeout: float = TCP_CONNECT_TIM
     async def _open(_target: str):
         return await open_tcp(host, port, connect_timeout=connect_timeout)
 
+    # A network module can restart behind a connection that still looks open.
+    _open.network = True  # type: ignore[attr-defined]
     return _open
+
+
+# Network modules only: after this many seconds without any line the module is asked
+# for its report flags ("X"). A flashed Cube that restarted (power, firmware reset)
+# leaves the TCP connection half open and comes back without X21/Zr/Za: it would stay
+# deaf while looking connected until the keepalive gives up.
+HEALTH_INTERVAL_S = 20.0
+HEALTH_TIMEOUT_S = 5.0
+# Answer to a bare "X": report flags (hex) and the send credit in 10 ms units.
+_X_ANSWER = re.compile(r"^([0-9A-Fa-f]{2})\s+(\d+)$")
 
 
 class CulTransport:
@@ -91,6 +104,10 @@ class CulTransport:
         problem_after: float = 900.0,
         version_timeout: float = 5.0,
         check_interval: float = 30.0,
+        health_interval: float | None = None,
+        health_timeout: float = HEALTH_TIMEOUT_S,
+        first_retry_delay: float = 3.0,
+        auto_ack: bool = True,
     ) -> None:
         self._port = port
         self._address = address
@@ -105,6 +122,20 @@ class CulTransport:
         self._problem_after = problem_after
         self._version_timeout = version_timeout
         self._check_interval = check_interval
+        if health_interval is None:
+            health_interval = HEALTH_INTERVAL_S if getattr(open_connection, "network", False) else 0.0
+        self.health_interval = health_interval
+        self._health_timeout = health_timeout
+        self._first_retry_delay = first_retry_delay
+        # culfw acknowledges telegrams to the central address itself ("Za<address>").
+        # Only one module may do that: two acknowledgements at once collide.
+        self._auto_ack = auto_ack
+        self._health_task: asyncio.Task | None = None
+        # Any line from the module (frames, answers); reset on connect.
+        self._last_line: float | None = None
+        self._line_event = asyncio.Event()
+        # Send credit from the last "X" answer (10 ms units), None: not known.
+        self.credit: int | None = None
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._connected = False
@@ -165,15 +196,31 @@ class CulTransport:
     async def start(self) -> None:
         self._task = asyncio.create_task(self._run())
         self._watchdog = asyncio.create_task(self._watch())
+        if self.health_interval > 0:
+            self._health_task = asyncio.create_task(self._health())
 
     async def stop(self) -> None:
-        for task in (self._watchdog, self._task):
+        for task in (self._health_task, self._watchdog, self._task):
             if task is not None:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
         self._close_writer()
         self._set_connected(False)
+
+    def write_now(self, line: str) -> None:
+        """Hand a line to the port right now, without waiting for the event loop (the
+        hub's acknowledgements: the device listens for a few tens of milliseconds).
+        Serial and TCP transports send at once while their buffer is empty."""
+        if not self._connected or self._writer is None:
+            raise ConnectionError("CUL not connected")
+        try:
+            self._writer.write((line + "\n").encode())
+        except OSError as err:
+            raise ConnectionError(str(err)) from err
+        if line.startswith(("Zs", "Zf")):
+            self._last_tx = self._clock()
+        TRACE.info("-> %s", line)
 
     async def write_line(self, line: str) -> None:
         if not self._connected or self._writer is None:
@@ -189,8 +236,10 @@ class CulTransport:
 
     async def _run(self) -> None:
         while True:
+            was_connected = False
             try:
                 await self._connect()
+                was_connected = True
                 await self._read_loop()
             except asyncio.CancelledError:
                 raise
@@ -204,16 +253,52 @@ class CulTransport:
                 self._force_reopen = False
                 continue
             self._check_port_lost()
-            await asyncio.sleep(self._reconnect_delay)
+            # A module that just restarted is back within seconds; one that stays away
+            # is asked at the slow pace.
+            delay = min(self._first_retry_delay, self._reconnect_delay) if was_connected else self._reconnect_delay
+            await asyncio.sleep(delay)
+
+    async def _health(self) -> None:
+        """Ask an idle module for its report flags; reconnect if it stays silent or
+        has lost its settings (it restarted)."""
+        poll = min(self.health_interval / 2, 5.0)
+        while True:
+            await asyncio.sleep(poll)
+            try:
+                await self._health_once()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _LOGGER.exception("CUL health check error")
+
+    async def _health_once(self) -> None:
+        if not self._connected or self._writer is None or self._last_line is None:
+            return
+        if self._clock() - self._last_line < self.health_interval:
+            return
+        writer = self._writer
+        self._line_event.clear()
+        try:
+            writer.write(b"X\n")
+            await writer.drain()
+        except OSError:
+            return  # the read loop notices the broken connection
+        try:
+            await asyncio.wait_for(self._line_event.wait(), self._health_timeout)
+        except TimeoutError:
+            if self._connected and self._writer is writer:
+                _LOGGER.warning("CUL %s does not answer any more, reconnecting", self._port)
+                self._reopen()
 
     async def _connect(self) -> None:
         self._reader, self._writer = await self._open(self._port)
         self._version = await self._handshake()
-        for cmd in ("X21", "Zr", f"Za{self._address:06X}"):
+        for cmd in ("X21", "Zr", f"Za{self._address:06X}" if self._auto_ack else "Za000000"):
             self._writer.write((cmd + "\n").encode())
             await self._writer.drain()
         self._last_tx = None
         self._last_rx = None
+        self._last_line = self._clock()
         self._set_connected(True)
 
     async def _handshake(self) -> str:
@@ -246,6 +331,8 @@ class CulTransport:
             text = raw.decode(errors="replace").strip()
             if not text:
                 continue
+            self._last_line = self._clock()
+            self._line_event.set()
             if text.startswith("Z"):
                 TRACE.info("<- %s", text)
                 self._last_rx = self._clock()
@@ -258,6 +345,12 @@ class CulTransport:
                 # The scheduler reports it once per command.
                 _LOGGER.debug("culfw refused to send (LOVF)")
                 self._emit(self._on_lovf)
+            elif (answer := _X_ANSWER.match(text)) is not None:
+                self.credit = int(answer.group(2))
+                if int(answer.group(1), 16) != 0x21:
+                    # Report flags are not what the init set: the module restarted.
+                    _LOGGER.warning("CUL %s lost its settings (it restarted), initialising it again", self._port)
+                    self._reopen()
             else:
                 _LOGGER.debug("culfw: %s", text)
 

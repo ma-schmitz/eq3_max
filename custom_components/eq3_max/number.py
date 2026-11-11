@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.number import NumberEntity, NumberMode
 
-from .config_defs import RANGES, range_text
+from .config_defs import RANGES, range_error
 from .config_entity import MaxConfigEntity
 from .migration import specs_for
 
@@ -33,8 +35,8 @@ class MaxConfigNumber(MaxConfigEntity, NumberEntity):
         if rng.icon is not None:
             self._attr_icon = rng.icon
 
-    def _invalid_text(self) -> str:
-        return range_text(self._key)
+    def _invalid(self, value: Any):
+        return range_error(self._key)
 
     @property
     def native_value(self) -> float | None:

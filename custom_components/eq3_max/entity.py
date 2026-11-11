@@ -16,26 +16,35 @@ from .protocol.devices import MaxDevice
 from .protocol.messages import DeviceType
 from .radios import radio_names
 
+# Model names are not translated by Home Assistant: English, as the HA convention is.
 MODELS = {
-    DeviceType.HEATING_THERMOSTAT: "Heizkoerperthermostat",
-    DeviceType.HEATING_THERMOSTAT_PLUS: "Heizkoerperthermostat+",
-    DeviceType.WALL_THERMOSTAT: "Wandthermostat",
-    DeviceType.SHUTTER_CONTACT: "Fensterkontakt",
-    DeviceType.PUSH_BUTTON: "Eco-Taster",
+    DeviceType.HEATING_THERMOSTAT: "Radiator thermostat",
+    DeviceType.HEATING_THERMOSTAT_PLUS: "Radiator thermostat+",
+    DeviceType.WALL_THERMOSTAT: "Wall thermostat+",
+    DeviceType.SHUTTER_CONTACT: "Window contact",
+    DeviceType.PUSH_BUTTON: "Eco button",
     DeviceType.CUBE: "Cube",
 }
 
 
 class MaxCulEntity(Entity):
+    """The name is the device's name plus the entity's own, translated by Home Assistant
+    (strings.json, section entity; `label` only says whether there is one: the main
+    entity carries the device's name alone). The entity_id does not follow the language:
+    the migration registers it from the device name and the key."""
+
     _attr_should_poll = False
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: MaxCulCoordinator, device: MaxDevice, key: str, label: str | None) -> None:
         self.coordinator = coordinator
         self._address = device.address
         self._attr_unique_id = unique_id(device.serial, key)
         base = device.name or device.serial
-        self._attr_name = base if label is None else f"{base} {label}"
+        if label is None:
+            self._attr_name = None
+        else:
+            self._attr_translation_key = key
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device.serial)},
             manufacturer="eQ-3",
@@ -75,7 +84,9 @@ class MaxCulHubEntity(Entity):
         self._attr_unique_id = f"{coordinator.address_hex}_{key}"
         # Fixed entity_id instead of one slugified from the hub device name.
         self.entity_id = f"{self._platform_domain}.{DOMAIN}_{key}"
-        self._attr_name = name
+        # Name from the translations (strings.json, entity.<platform>.<key>); `name` is
+        # the German one, kept for reading the code.
+        self._attr_translation_key = key
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, coordinator.address_hex)})
 
     async def async_added_to_hass(self) -> None:

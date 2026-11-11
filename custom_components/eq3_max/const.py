@@ -18,6 +18,8 @@ CONF_NAME = "name"
 # Number of the next extra module id (ids are never reused).
 CONF_RADIO_NEXT = "radio_next"
 MAIN_RADIO_NAME = "Hauptmodul"
+# Name the user gave the main module (entry data); without it the default above.
+CONF_MAIN_NAME = "main_name"
 CONF_AWAY_TEMPERATURE = "away_temperature"
 CONF_AWAY_HOURS = "away_hours"
 DEFAULT_AWAY_TEMPERATURE = 18.0

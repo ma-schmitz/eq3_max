@@ -43,6 +43,7 @@ class FakeHub:
         self.queue_length = 0
         self.commands = []
         self.pairing = None
+        self.pairing_radio = None
         self.started = False
         self.raw_history = {}
         self.resets = []
@@ -103,6 +104,15 @@ class FakeHub:
                     self.on_update(other)
         return self.reset_result
 
+    async def set_time(self, address):
+        from custom_components.eq3_max.protocol.messages import FrameError
+
+        if not self.devices[address].is_climate:
+            raise FrameError("this device has no clock", key="no_clock")
+        if getattr(self, "time_error", None):
+            raise FrameError(self.time_error)
+        self.commands.append(("time", address))
+
     async def set_week_profile(self, address, days):
         from custom_components.eq3_max.protocol.devices import WEEKDAYS
         from custom_components.eq3_max.protocol.messages import FrameError, format_until
@@ -120,7 +130,10 @@ class FakeHub:
     def link(self, a, b):
         self._change_link("link", a, b, "add")
 
-    def unlink(self, a, b):
+    def unlink(self, a, b, force=False):
+        if force:
+            self.commands.append(("unlink", a, b, "force"))
+            return
         self._change_link("unlink", a, b, "remove")
 
     def _change_link(self, name, a, b, op):
@@ -167,8 +180,16 @@ class FakeHub:
         self.commands.append(("radio", address, radio))
         self.on_update(self.devices[address])
 
-    def open_pairing(self, seconds=60):
+    def open_pairing(self, seconds=60, radio=None):
+        from custom_components.eq3_max.protocol.messages import FrameError
+
+        if radio is not None and radio not in self.radio_connected:
+            raise FrameError(f"unknown radio module {radio!r}", key="radio_unknown", name=radio)
         self.pairing = seconds
+        self.pairing_radio = radio
+
+    def radio_is_connected(self, radio):
+        return self.connected if radio == "" else self.radio_connected.get(radio, False)
 
     @property
     def pairing_remaining(self):

@@ -10,29 +10,34 @@
   </style>
 {% endblock %}
 
-{#- Startseite: eigener Aufbau statt Doku-Spalten. -#}
+{#- Startseite: eigener Aufbau statt Doku-Spalten. Englisch und Deutsch (i18n-Plugin). -#}
 {% block tabs %}
   {{ super() }}
+  {% set de = config.theme.language == "de" %}
   <section class="e3-hero">
     <div class="e3-hero__inner">
       <div>
-        <div class="e3-hero__kicker">Home-Assistant-Integration · v{{ config.extra.version }}</div>
-        <h1>eQ-3 MAX! direkt in Home&nbsp;Assistant</h1>
-        <p>Heizkörper- und Wandthermostate, Fensterkontakte und Eco-Taster über einen CUL-Stick
-          oder einen geflashten MAX! Cube – ohne Homegear, ohne Cloud, ohne Umweg.</p>
+        <div class="e3-hero__kicker">{{ "Home-Assistant-Integration" if de else "Home Assistant integration" }} · v{{ config.extra.version }}</div>
+        <h1>{{ "eQ-3 MAX! direkt in Home&nbsp;Assistant" if de else "eQ-3 MAX! directly in Home&nbsp;Assistant" }}</h1>
+        <p>{% if de %}Heizkörper- und Wandthermostate, Fensterkontakte und Eco-Taster über einen CUL-Stick
+          oder einen geflashten MAX! Cube – ohne Homegear, ohne Cloud, ohne Umweg.{% else %}Radiator and
+          wall thermostats, window contacts and eco buttons through a CUL stick or a flashed MAX! Cube –
+          no Homegear, no cloud, no detour.{% endif %}</p>
         <div class="e3-hero__buttons">
-          <a class="e3-btn e3-btn--primary" href="{{ 'loslegen/installation/' | url }}">Installieren</a>
-          <a class="e3-btn" href="{{ 'umstieg/homegear/' | url }}">Von Homegear umsteigen</a>
+          <a class="e3-btn e3-btn--primary" href="{{ 'loslegen/installation/' | url }}">{{ "Installieren" if de else "Install" }}</a>
+          <a class="e3-btn" href="{{ 'umstieg/homegear/' | url }}">{{ "Von Homegear umsteigen" if de else "Migrate from Homegear" }}</a>
         </div>
       </div>
       <div class="e3-hero__shot">
-        <img src="{{ 'assets/panel-hero.png' | url }}" alt="Seite „eQ-3 MAX!“ in Home Assistant: Funkmodule, Gerätekarten nach Bereich">
+        <img src="{{ 'assets/panel-hero.png' | url }}" alt="{{ 'Seite „eQ-3 MAX!“ in Home Assistant: Funkmodule, Gerätekarten nach Bereich' if de else 'The eQ-3 MAX! panel in Home Assistant: radio modules, device cards by area' }}">
       </div>
     </div>
   </section>
 {% endblock %}
 
 {% block content %}
+  {% set de = config.theme.language == "de" %}
+  {% if de %}
   <div class="e3-section">
     <h2>Was eq3_max kann</h2>
     <p>Alles, was die Geräte per Funk können – in Home Assistant, mit Entitäten und eigener Seite.</p>
@@ -72,8 +77,49 @@
     </div>
   </div>
 
+  {% else %}
+  <div class="e3-section">
+    <h2>What eq3_max does</h2>
+    <p>Everything the devices can do over the air – in Home Assistant, with entities and its own panel.</p>
+    <div class="e3-grid">
+      <div class="e3-card"><div class="e3-card__icon">♻️</div><h3>Migrate without re-pairing</h3>
+        <p>Take over pairings, entity IDs, history, configuration and links from Homegear.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">📡</div><h3>Multiple radio modules</h3>
+        <p>One stick or Cube per floor. Devices switch modules with a click – nothing happens on the device.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">🔗</div><h3>Links</h3>
+        <p>Link window contacts, wall thermostats and buttons with thermostats, right from the UI.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">⚙️</div><h3>Device configuration</h3>
+        <p>Comfort, eco, offset, window-open, boost and decalcification as entities – with the source of each value.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">🖥️</div><h3>Its own panel in HA</h3>
+        <p>All devices by area, radio modules, transmit time and pairing at a glance.</p></div>
+      <div class="e3-card"><div class="e3-card__icon">🛟</div><h3>Self-healing</h3>
+        <p>Lost commands are repeated, a deaf stick is detected and reopened.</p></div>
+    </div>
+  </div>
+
+  <div class="e3-section">
+    <h2>How it fits together</h2>
+    <p>eq3_max speaks MAX! radio itself. All it needs in between is a radio module running culfw.</p>
+    <div class="e3-flow">
+      <span class="box">Thermostats · window contacts · buttons</span><span class="arrow">⇄ 868&nbsp;MHz ⇄</span>
+      <span class="box">nanoCUL (USB) or Cube with a-culfw (LAN)</span><span class="arrow">⇄</span>
+      <span class="box">eq3_max in Home Assistant</span>
+    </div>
+  </div>
+
+  <div class="e3-section">
+    <h2>In three steps</h2>
+    <p>New setup or moving from Homegear – the path is the same.</p>
+    <div class="e3-steps">
+      <div class="e3-step"><h3>Install</h3><p>Through HACS as a custom repository or by hand into <code>custom_components</code>.</p></div>
+      <div class="e3-step"><h3>Connect the radio module</h3><p>Choose a USB stick or network CUL and set the central address – when migrating, the existing one.</p></div>
+      <div class="e3-step"><h3>Take over devices</h3><p>From a Homegear export or by pairing. Entities appear right away.</p></div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="e3-footer-cta">
-    <a class="e3-btn e3-btn--primary" href="{{ 'handbuch/' | url }}">Zum Handbuch</a>
-    <p>Fragen und Fehler: <a href="{{ config.repo_url }}/issues">Issues auf GitHub</a></p>
+    <a class="e3-btn e3-btn--primary" href="{{ 'handbuch/' | url }}">{{ "Zum Handbuch" if de else "Read the manual" }}</a>
+    <p>{{ "Fragen und Fehler:" if de else "Questions and bugs:" }} <a href="{{ config.repo_url }}/issues">{{ "Issues auf GitHub" if de else "Issues on GitHub" }}</a></p>
   </div>
 {% endblock %}

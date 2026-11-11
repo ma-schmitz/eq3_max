@@ -9,20 +9,23 @@ import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
 from .devices import (
     KIND_TEMP,
+    KIND_VALVE,
     LINK_ADD,
     LINK_FAILED,
     LINK_PENDING,
     LINK_REJECTED,
     LINK_REMOVE,
     LINK_WAITING,
+    ROOM_CONFIG_KEYS,
     WEEKDAYS,
     MaxDevice,
+    config_kind,
 )
 from .messages import (
     DeviceType,
@@ -48,15 +51,27 @@ from .messages import (
     decode_set_temperature,
     decode_shutter_contact_state,
     decode_thermostat_state,
+    decode_time_information,
     decode_until,
     decode_wall_thermostat_control,
     decode_wall_thermostat_state,
+    encode_frame,
     encode_week_profile_day,
     format_until,
     link_allowed,
     normalize_temperature,
+    parse_until,
 )
-from .scheduler import LOVF_RETRY_S, PRIO_COMMAND, PRIO_REPLY, Command, Outcome, RadioScheduler
+from .scheduler import (
+    LOVF_RETRY_S,
+    PREAMBLE_S,
+    PRIO_COMMAND,
+    PRIO_REPLY,
+    Command,
+    Outcome,
+    RadioScheduler,
+    airtime,
+)
 from .transport import TRACE, CulTransport
 
 _LOGGER = logging.getLogger(__name__)
@@ -146,13 +161,12 @@ def plan_link(
     when there is nothing to do."""
     dev_a, dev_b = devices.get(a), devices.get(b)
     if dev_a is None or dev_b is None:
-        raise FrameError("Ger\u00e4t ist dem Funkmodul nicht bekannt")
+        raise FrameError("device not known to the radio module", key="device_unknown")
     if dev_a is dev_b or dev_a.serial == dev_b.serial:
-        raise FrameError("Ein Ger\u00e4t kann nicht mit sich selbst verkn\u00fcpft werden")
+        raise FrameError("a device cannot be linked with itself", key="link_self")
     if not link_allowed(dev_a.device_type, dev_b.device_type):
         raise FrameError(
-            f"{_TYPE_NAMES[dev_a.device_type]} und {_TYPE_NAMES[dev_b.device_type]} "
-            "lassen sich nicht verkn\u00fcpfen"
+            f"{dev_a.device_type.name} and {dev_b.device_type.name} cannot be linked", key="link_not_allowed"
         )
     directions = []
     queued = False
@@ -170,12 +184,12 @@ def plan_link(
             directions.append((target, partner))
     if not directions:
         if queued:
-            raise FrameError(
-                "Verkn\u00fcpfung ist bereits beauftragt" if op == LINK_ADD else "L\u00f6sen ist bereits beauftragt"
-            )
-        raise FrameError(
-            "Ger\u00e4te sind bereits verkn\u00fcpft" if op == LINK_ADD else "Ger\u00e4te sind nicht verkn\u00fcpft"
-        )
+            if op == LINK_ADD:
+                raise FrameError("link already requested", key="link_already_requested")
+            raise FrameError("removal already requested", key="unlink_already_requested")
+        if op == LINK_ADD:
+            raise FrameError("devices already linked", key="already_linked")
+        raise FrameError("devices not linked", key="not_linked")
     return directions
 
 
@@ -188,6 +202,25 @@ class ResetResult(Enum):
 MAIN_RADIO = ""
 # A telegram heard by a second module within this time is the same transmission.
 CROSS_RADIO_WINDOW_S = 1.0
+WEEKDAYS_EN = ("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+
+
+def _day(day: int) -> dict[str, str]:
+    """Weekday placeholders of a translated error: one per language."""
+    return {"day": WEEKDAYS_EN[day], "day_en": WEEKDAYS_EN[day], "day_de": WEEKDAYS[day]}
+
+# Telegrams to the central that the sender wants acknowledged: window contact state,
+# a wall thermostat's set command, push button state (what culfw's "Za" answered).
+# Status reports (0x60/0x70) are never acknowledged (as in FHEM and Homegear).
+ACKNOWLEDGED_TYPES = frozenset(
+    {int(MsgType.SHUTTER_CONTACT_STATE), int(MsgType.SET_TEMPERATURE), int(MsgType.PUSH_BUTTON_STATE)}
+)
+# Another module's copy of the same transmission arrives within this time and must not
+# be answered a second time; a repeat by the device comes seconds later and is.
+ACK_GUARD_S = 0.5
+# A device telling a time further off than this gets ours, at most once per pause.
+TIME_TOLERANCE_S = 60.0
+TIME_CORRECTION_PAUSE_S = 600.0
 
 
 @dataclass(frozen=True)
@@ -244,6 +277,8 @@ class MaxHub:
         self._ack_timeout = ack_timeout
         self._resets: dict[int, asyncio.Future[bool]] = {}
         self._pairing_until = 0.0
+        # Module that answers new devices while pairing is open (None: whichever hears them).
+        self.pairing_radio: str | None = None
         self._recent: dict[tuple[int, int, int], float] = {}
         self.raw_history: dict[int, deque[str]] = {}
         self._on_problem = on_problem
@@ -251,8 +286,15 @@ class MaxHub:
         self._lovf_delay = lovf_delay
         # Week profile writes in progress by device address; they outlive their caller.
         self._profile_jobs: dict[int, asyncio.Task[None]] = {}
+        # What each running write is writing: the same days asked for again join it.
+        self._profile_plans: dict[int, dict[int, list[bytes]]] = {}
         self._transport_kwargs = dict(transport_kwargs or {})
         self._counter = 0
+        # Who acknowledges telegrams to the central. With a USB main module the hub does
+        # (its answer is on the line within a millisecond). A network module's lines
+        # arrive 80-160 ms late, too late for a window contact, so there the firmware
+        # keeps answering by itself ("Za", 20 ms after the telegram), as up to 0.6.x.
+        self._firmware_ack = bool(getattr(open_connection, "network", False))
         # Main module first: it answers for everything the device assignment does not cover.
         self._radios: dict[str, _Radio] = {}
         for spec in (RadioSpec(MAIN_RADIO, port, open_connection), *radios):
@@ -266,6 +308,10 @@ class MaxHub:
         self._silent: set[int] = set()
         # Cross-module duplicates: (src, counter, type, payload) -> (radio id, time).
         self._heard: dict[tuple[int, int, int, int, bytes], tuple[str, float]] = {}
+        # (sender, counter, type) -> monotonic time of our acknowledgement.
+        self._acknowledged: dict[tuple[int, int, int], float] = {}
+        self._ack_guard = ACK_GUARD_S
+        self._time_corrected: dict[int, float] = {}
         self._sleeper_debounce = sleeper_debounce
         self._fast_deadline = fast_deadline
         self._fast_ack_timeout = fast_ack_timeout
@@ -290,6 +336,9 @@ class MaxHub:
         radio.transport = CulTransport(
             spec.port,
             self.address,
+            # Exactly one answer per telegram. Extra modules never answer in firmware;
+            # the main module does only when it is a network module (see _acknowledge).
+            auto_ack=spec.id == MAIN_RADIO and self._firmware_ack,
             on_frame=lambda text: self._on_line(text, spec.id),
             on_lovf=lambda: radio.scheduler.on_lovf(),
             on_connection=self._on_connection,
@@ -393,6 +442,10 @@ class MaxHub:
     def any_connected(self) -> bool:
         return any(radio.transport.connected for radio in self._radios.values())
 
+    def radio_is_connected(self, radio_id: str) -> bool:
+        radio = self._radios.get(radio_id)
+        return radio is not None and radio.transport.connected
+
     def reachable(self, address: int) -> bool:
         """The module that sends to this device is connected."""
         return self._radio_of(self.devices.get(address)).transport.connected
@@ -469,6 +522,70 @@ class MaxHub:
         kind = dev.stage_config(key, value)
         self._notify(dev)
         self._submit_config(dev, kind, dict(dev.pending_config[kind]), dev.assumed_factory(kind, (key,)))
+        self._share_with_room(dev, (key,))
+
+    def room_of(self, dev: MaxDevice) -> list[MaxDevice]:
+        """The other thermostats of the device's room: those linked with it through a
+        wall thermostat (the wall thermostat itself, and its radiators)."""
+        by_serial = _devices_by_serial(self.devices)
+
+        def partners(device: MaxDevice) -> list[MaxDevice]:
+            found = [by_serial[s] for s in device.links if s in by_serial]
+            # A half link counts as well.
+            found += [d for d in self.devices.values() if device.serial in d.links and d not in found]
+            return [d for d in found if d.is_climate]
+
+        room: list[MaxDevice] = []
+        walls = [dev] if dev.device_type is DeviceType.WALL_THERMOSTAT else [
+            d for d in partners(dev) if d.device_type is DeviceType.WALL_THERMOSTAT
+        ]
+        for wall in walls:
+            for member in (wall, *partners(wall)):
+                if member is not dev and member not in room:
+                    room.append(member)
+        return room
+
+    def _share_with_room(self, dev: MaxDevice, keys: Iterable[str]) -> None:
+        """Give the room's other thermostats the values a room shares. A boost started
+        at the wall thermostat runs by its countdown, each radiator by its own, and the
+        same goes for comfort/eco, the window settings and the decalcification: the eQ-3
+        software writes them per room. Everything else on the mates stays as it is; one
+        telegram per mate and set."""
+        shared = [key for key in keys if key in ROOM_CONFIG_KEYS]
+        if not shared:
+            return
+        for mate in self.room_of(dev):
+            changed: dict[str, list[str]] = {}
+            for key in shared:
+                if key not in mate.config_keys:
+                    continue
+                value = dev.pending_value(key)
+                if value is None:
+                    value = dev.config.get(key)
+                current = mate.pending_value(key)
+                if current is None:
+                    current = mate.config.get(key)
+                if current == value:
+                    continue
+                try:
+                    kind = mate.stage_config(key, value)
+                except FrameError as err:
+                    # E.g. a comfort temperature outside this device's own limits.
+                    _LOGGER.warning(
+                        "MAX! %s (%s): %s of %s not taken over: %s", mate.name or mate.serial, mate.serial, key,
+                        dev.name or dev.serial, err,
+                    )
+                    continue
+                changed.setdefault(kind, []).append(key)
+            for kind, changed_keys in changed.items():
+                _LOGGER.info(
+                    "MAX! %s (%s): %s follow %s (same room)", mate.name or mate.serial, mate.serial,
+                    ", ".join(changed_keys), dev.name or dev.serial,
+                )
+                self._notify(mate)
+                self._submit_config(
+                    mate, kind, dict(mate.pending_config[kind]), mate.assumed_factory(kind, changed_keys)
+                )
 
     async def _await_command(self, cmd: Command) -> Outcome:
         """Submit and wait for the command's outcome."""
@@ -492,33 +609,62 @@ class MaxHub:
         days are then not sent, `week_profile_error` keeps the reason) or the hub stops."""
         dev = self.devices.get(address)
         if dev is None:
-            raise FrameError("Ger\u00e4t ist dem Funkmodul nicht bekannt")
+            raise FrameError("device not known to the radio module", key="device_unknown")
         if not dev.is_climate:
-            raise FrameError("Nur Thermostate haben ein Wochenprogramm")
+            raise FrameError("only thermostats have a week program", key="no_week_profile", name=dev.name or dev.serial)
         encoded: dict[int, list[bytes]] = {}
         for day, points in days.items():
             if not 0 <= day < WEEK_PROFILE_DAYS:
-                raise FrameError(f"Wochentag muss 0 (Samstag) bis 6 (Freitag) sein, nicht {day}")
+                raise FrameError(f"weekday must be 0 (Saturday) to 6 (Friday), got {day}", key="weekday_invalid", day=day)
             try:
                 encoded[day] = encode_week_profile_day(points)
             except ValueError as err:
-                raise FrameError(f"{WEEKDAYS[day]}: {err}") from err
+                raise FrameError(f"{WEEKDAYS_EN[day]}: {err}", key="week_profile_day_invalid", detail=err, **_day(day)) from err
         name = dev.name or dev.serial
-        if address in self._profile_jobs:
-            raise FrameError(f"{name}: Wochenprogramm wird gerade geschrieben")
-        dev.week_profile_error = None
-        dev.week_profile_writing = [WEEKDAYS[day] for day in sorted(encoded)]
-        self._notify(dev)
-        job = asyncio.create_task(self._write_week_profile(dev, encoded, days))
-        self._profile_jobs[address] = job
+        job = self._profile_jobs.get(address)
+        if job is not None and self._profile_plans.get(address) != encoded:
+            raise FrameError(f"{name}: a week program is being written", key="week_profile_busy", name=name)
+        if job is None:
+            job = self._start_profile_job(dev, encoded, days)
+            # The room shares its program: the wall thermostat and its radiators switch
+            # each by their own copy. Mates are written alongside; a mate that is busy
+            # with other days keeps those.
+            for mate in self.room_of(dev):
+                if mate.address not in self._profile_jobs:
+                    _LOGGER.info(
+                        "MAX! %s (%s): week profile follows %s (same room)", mate.name or mate.serial,
+                        mate.serial, name,
+                    )
+                    mate_job = self._start_profile_job(mate, encoded, days)
+                    # Nobody waits for it: it reports its failure itself.
+                    mate_job.add_done_callback(lambda done: done.cancelled() or done.exception())
+                elif self._profile_plans.get(mate.address) != encoded:
+                    _LOGGER.warning(
+                        "MAX! %s (%s): busy with another week profile, does not follow %s",
+                        mate.name or mate.serial, mate.serial, name,
+                    )
+        # Else: the same days are being written already (as a room mate): wait for that.
         try:
             await asyncio.shield(job)
         except asyncio.CancelledError:
             if job.cancelled():
-                raise FrameError(f"{name}: Wochenprogramm abgebrochen, das Funkmodul wurde angehalten") from None
+                raise FrameError(
+                    f"{name}: week program aborted, the radio module was stopped", key="week_profile_aborted", name=name
+                ) from None
             # Nobody may be left to fetch the outcome; the job reports failures itself.
             job.add_done_callback(lambda done: done.cancelled() or done.exception())
             raise
+
+    def _start_profile_job(
+        self, dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]]
+    ) -> asyncio.Task[None]:
+        dev.week_profile_error = None
+        dev.week_profile_writing = [WEEKDAYS[day] for day in sorted(encoded)]
+        self._notify(dev)
+        job = asyncio.create_task(self._write_week_profile(dev, encoded, days))
+        self._profile_jobs[dev.address] = job
+        self._profile_plans[dev.address] = encoded
+        return job
 
     async def _write_week_profile(
         self, dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]]
@@ -539,9 +685,15 @@ class MaxHub:
                         )
                     )
                     if outcome is Outcome.NAK:
-                        raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} abgelehnt")
+                        raise FrameError(
+                            f"{name}: week program {WEEKDAYS_EN[day]} refused", key="week_profile_rejected",
+                            name=name, **_day(day),
+                        )
                     if outcome is not Outcome.ACKED:
-                        raise FrameError(f"{name}: Wochenprogramm {WEEKDAYS[day]} nicht quittiert ({outcome.value})")
+                        raise FrameError(
+                            f"{name}: week program {WEEKDAYS_EN[day]} not acknowledged ({outcome.value})",
+                            key="week_profile_not_acknowledged", name=name, outcome=outcome.value, **_day(day),
+                        )
                 dev.week_profile[WEEKDAYS[day]] = [
                     {"temperature": point.temperature, "until": format_until(point.until)} for point in days[day]
                 ]
@@ -549,12 +701,20 @@ class MaxHub:
                 _LOGGER.info("MAX! %s (%s): week profile %s acknowledged", name, dev.serial, WEEKDAYS[day])
                 self._notify(dev)
         except FrameError as err:
-            missing = ", ".join(dev.week_profile_writing)
-            dev.week_profile_error = f"{err}; nicht geschrieben: {missing}"
-            _LOGGER.warning("MAX! %s (%s): %s", name, dev.serial, dev.week_profile_error)
+            # For the panel: the reason as translation key plus the days not written.
+            dev.week_profile_error = {
+                "message": str(err),
+                "key": err.key,
+                "placeholders": dict(err.placeholders),
+                "missing": list(dev.week_profile_writing),
+            }
+            _LOGGER.warning(
+                "MAX! %s (%s): %s; not written: %s", name, dev.serial, err, ", ".join(dev.week_profile_writing)
+            )
             raise
         finally:
             self._profile_jobs.pop(address, None)
+            self._profile_plans.pop(address, None)
             if dev.week_profile_writing:
                 dev.week_profile_writing = []
                 self._notify(dev)
@@ -568,6 +728,7 @@ class MaxHub:
         assumed = dev.stage_config_set(kind, values)
         self._notify(dev)
         self._submit_config(dev, kind, dict(dev.pending_config[kind]), assumed)
+        self._share_with_room(dev, values)
         return assumed
 
     def _submit_pending_config(self, dev: MaxDevice, kinds: Iterable[str] | None = None) -> None:
@@ -584,7 +745,7 @@ class MaxHub:
         if assumed:
             # The device takes whole sets only: unknown values go out as assumed factory settings.
             _LOGGER.warning(
-                "MAX! %s (%s): Sende angenommene Werksvorgaben mit: %s",
+                "MAX! %s (%s): sending assumed factory values along: %s",
                 dev.name or dev.serial, dev.serial, ", ".join(assumed),
             )
         if kind == KIND_TEMP:
@@ -623,9 +784,31 @@ class MaxHub:
         separately). Sleeping devices get theirs after their next telegram."""
         self._change_link(a, b, LINK_ADD)
 
-    def unlink(self, a: int, b: int) -> None:
-        """Remove the link in both directions (RemoveLinkPartner)."""
-        self._change_link(a, b, LINK_REMOVE)
+    def unlink(self, a: int, b: int, *, force: bool = False) -> None:
+        """Remove the link in both directions (RemoveLinkPartner).
+
+        `force` removes partner b from device a only, whether or not the integration
+        knows that link: for leftovers a device still carries (moved or swapped
+        thermostats), which make it retry and report radio errors. The other device
+        gets nothing."""
+        if not force:
+            self._change_link(a, b, LINK_REMOVE)
+            return
+        target, partner = self.devices.get(a), self.devices.get(b)
+        if target is None or partner is None:
+            raise FrameError("device not known to the radio module", key="device_unknown")
+        if target is partner or target.serial == partner.serial:
+            raise FrameError("a device cannot be linked with itself", key="link_self")
+        if not link_allowed(target.device_type, partner.device_type):
+            raise FrameError(
+                f"{target.device_type.name} and {partner.device_type.name} cannot be linked", key="link_not_allowed"
+            )
+        current = target.link_op(partner.serial)
+        if current is not None and current["op"] == LINK_REMOVE and current["state"] not in (LINK_FAILED, LINK_REJECTED):
+            raise FrameError("removal already requested", key="unlink_already_requested")
+        self._queue_link(target, partner.serial, partner.address, partner.device_type, LINK_REMOVE)
+        self._notify(target)
+        self._notify(partner)
 
     def _change_link(self, a: int, b: int, op: str) -> None:
         for target, partner in plan_link(self.devices, a, b, op):
@@ -663,6 +846,12 @@ class MaxHub:
         return f"link:{dev.address}:{partner_address}"
 
     def _start_links(self, dev: MaxDevice) -> None:
+        # Refused removals of partners that are no known links (forced ones, from before
+        # they were dropped right away): nothing is outstanding there.
+        dev.pending_links = [
+            op for op in dev.pending_links
+            if not (op["op"] == LINK_REMOVE and op["state"] == LINK_REJECTED and op["partner"] not in dev.links)
+        ]
         if dev.is_sleeper:
             # Whatever was on air at shutdown waits for the device again.
             for entry in dev.pending_links:
@@ -749,7 +938,12 @@ class MaxHub:
         current = dev.link_op(partner)
         if current is None or current["op"] != op:
             return
-        if cmd.outcome is Outcome.NAK:
+        if cmd.outcome is Outcome.NAK and op == LINK_REMOVE and partner not in dev.links:
+            # A forced removal of a partner we do not know of either: the device does
+            # not carry it, there is nothing left to do.
+            dev.drop_link_op(partner)
+            _LOGGER.info("MAX! %s (%s): no partner %s to remove (refused)", name, dev.serial, partner)
+        elif cmd.outcome is Outcome.NAK:
             # The device refused: no automatic resend, only a new request.
             dev.set_link_state(partner, op, LINK_REJECTED)
             _LOGGER.warning("MAX! %s (%s): link %s %s rejected", name, dev.serial, op, partner)
@@ -783,7 +977,7 @@ class MaxHub:
         if dev is None:
             raise FrameError(f"unknown device {address:06X}")
         if address in self._resets:
-            raise FrameError("Werksreset l\u00e4uft bereits")
+            raise FrameError("factory reset already running", key="reset_running")
         done: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
         unlinked: list[MaxDevice] = []
 
@@ -836,7 +1030,12 @@ class MaxHub:
         self._notify(None)
         return ResetResult.ACKED
 
-    def open_pairing(self, seconds: float = 60) -> None:
+    def open_pairing(self, seconds: float = 60, radio: str | None = None) -> None:
+        """Accept new devices for `seconds`. With `radio` only that module answers them
+        and they are assigned to it (pair a device on the floor that module covers)."""
+        if radio is not None and radio not in self._radios:
+            raise FrameError(f"unknown radio module {radio!r}", key="radio_unknown", name=radio)
+        self.pairing_radio = radio
         self._pairing_until = self._now() + seconds
 
     @property
@@ -928,7 +1127,7 @@ class MaxHub:
                 self._silent.add(suspect)
                 dev = self.devices.get(suspect)
                 _LOGGER.warning(
-                    "MAX! %s: antwortet nicht, der Funk funktioniert aber - Geraet pruefen (Reichweite, Batterie, \"InS\")",
+                    "MAX! %s: does not answer although the radio works - check the device (range, battery, \"InS\")",
                     suspect if dev is None else f"{dev.name or dev.serial} ({dev.serial})",
                 )
 
@@ -946,7 +1145,7 @@ class MaxHub:
         if last_rx is not None and last_rx >= cmd.first_sent_at:
             return
         if radio.transport.request_reopen():
-            _LOGGER.warning("CUL empfaengt nach dem Senden nichts mehr - Port wird neu geoeffnet (%s)", radio.port)
+            _LOGGER.warning("CUL receives nothing after sending, reopening the port (%s)", radio.port)
             self._suspects[cmd.dst] = radio.id
 
     def _on_connection(self, connected: bool) -> None:
@@ -971,8 +1170,12 @@ class MaxHub:
         except FrameError as err:
             _LOGGER.debug("ignoring line: %s", err)
             return
+        # First of all: the sender listens for its acknowledgement only for a moment.
+        self._acknowledge(frame, radio)
         self._note_heard(frame.src, radio)
-        if self._heard_elsewhere(frame, radio):
+        if self._pairing_only_through_other(frame, radio):
+            return
+        if self._heard_elsewhere(frame, radio) and not self._pairing_through(frame, radio):
             return
         try:
             self._handle(frame, radio)
@@ -981,6 +1184,61 @@ class MaxHub:
         if frame.src in self.devices:
             history = self.raw_history.setdefault(frame.src, deque(maxlen=RAW_HISTORY_LEN))
             history.append(text)
+
+    def _acknowledge(self, frame: Frame, radio_id: str) -> None:
+        """Answer a telegram to the central: once, through the module that delivered it
+        first (it hears the device), right away and without wake-up preamble.
+
+        The hub does this instead of culfw's auto-ack ("Za"): with several modules each
+        would answer at the same moment and jam the other, and the wall thermostat does
+        not take culfw's form (flags 00). This is the form Homegear sent: flags 02, the
+        telegram's counter, payload 00."""
+        if frame.dst != self.address or frame.src == self.address:
+            return
+        kind = int(frame.msg_type)
+        # A wall thermostat whose clock was set by hand passes its time on to the central
+        # (with payload) and wants that acknowledged like a command; without an answer it
+        # repeats three times and reports a radio error. An empty one is a request.
+        time_told = kind == int(MsgType.TIME_INFORMATION) and bool(frame.payload)
+        if not time_told and (kind not in ACKNOWLEDGED_TYPES or self._firmware_ack):
+            # Not to be answered, or the main module's firmware answers it.
+            return
+        now = time.monotonic()
+        self._acknowledged = {k: t for k, t in self._acknowledged.items() if now - t < self._ack_guard}
+        key = (frame.src, frame.counter, int(frame.msg_type))
+        if key in self._acknowledged:
+            return
+        radio = self._radios.get(radio_id)
+        if radio is None or not radio.transport.connected:
+            return
+        self._acknowledged[key] = now
+        ack = Frame(frame.counter, 0x02, MsgType.ACK, self.address, frame.src, 0, b"\x00")
+        try:
+            # Written here and now: processing the telegram (state changes, automations)
+            # comes after, or a window contact has stopped listening by then.
+            radio.transport.write_now("Zf" + encode_frame(ack))
+        except ConnectionError as err:
+            _LOGGER.debug("acknowledgement to %06X not sent: %s", ack.dst, err)
+            return
+        radio.scheduler.book_airtime(airtime(ack, fast=True))
+
+    def _is_new_pairing(self, frame: Frame) -> bool:
+        """A pairing request to nobody in particular while pairing through one module."""
+        return (
+            self.pairing_radio is not None
+            and frame.msg_type == MsgType.PAIR_PING
+            and frame.dst != self.address
+            and self._now() < self._pairing_until
+        )
+
+    def _pairing_only_through_other(self, frame: Frame, radio: str) -> bool:
+        """Pairing goes through another module: this copy of a request is not answered."""
+        return self._is_new_pairing(frame) and radio != self.pairing_radio
+
+    def _pairing_through(self, frame: Frame, radio: str) -> bool:
+        """The chosen module's copy of a pairing request counts even if another module
+        delivered the same transmission first."""
+        return self._is_new_pairing(frame) and radio == self.pairing_radio
 
     def _notify(self, dev: MaxDevice | None) -> None:
         try:
@@ -1077,6 +1335,8 @@ class MaxHub:
             status = False
             if frame.dst == self.address and not frame.payload:
                 self._reply_time(frame.src)
+            elif frame.dst == self.address:
+                self._check_told_time(dev, frame)
         else:
             status = False
             _LOGGER.debug("unhandled message type %02X from %06X", kind, frame.src)
@@ -1136,6 +1396,100 @@ class MaxHub:
             )
         )
 
+    async def set_time(self, address: int) -> None:
+        """Set a thermostat's clock now and wait for its acknowledgement; FrameError
+        (German) when it has no clock or stays silent. The telegram carries the time at
+        which the device reads it: the data follow the 1 s wake-up preamble, and a repeat
+        is built with the time of the repeat."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError("device not known to the radio module", key="device_unknown")
+        if not dev.is_climate:
+            raise FrameError("this device has no clock", key="no_clock")
+        outcome = await self._await_command(
+            Command(
+                dst=address,
+                build=lambda c: build_time_information(
+                    c, self.address, address, self._local_now() + timedelta(seconds=PREAMBLE_S)
+                ),
+                key=f"time:{address}",
+                fresh=True,
+                deaf_probe=True,
+            )
+        )
+        name = dev.name or dev.serial
+        if outcome is not Outcome.ACKED:
+            raise FrameError(
+                f"{name}: clock not acknowledged ({outcome.value})", key="clock_not_acknowledged",
+                name=name, outcome=outcome.value,
+            )
+        _LOGGER.info("MAX! %s (%s): clock set", name, dev.serial)
+
+    def _restore(self, dev: MaxDevice) -> None:
+        """Put back on a factory-reset device what the integration knows of it: its side
+        of the links (the partners still carry theirs), both configuration sets, the
+        setpoint and the stored week program. Runs once the device took the pong."""
+        name = dev.name or dev.serial
+        _LOGGER.warning("MAX! %s (%s): paired again after a factory reset, restoring it", name, dev.serial)
+        by_serial = _devices_by_serial(self.devices)
+        partners = [by_serial[s] for s in dev.links if s in by_serial]
+        dev.links = []
+        dev.pending_links = []
+        for partner in partners:
+            self._queue_link(dev, partner.serial, partner.address, partner.device_type, LINK_ADD)
+        for kind in (KIND_TEMP, KIND_VALVE):
+            if any(config_kind(key) == kind for key in dev.config_keys):
+                dev.pending_config[kind] = dev.config_set(kind)
+                dev.clear_config_failed(kind)
+        self._submit_pending_config(dev)
+        target = dev.pending_target if dev.has_pending and dev.pending_target is not None else dev.target
+        if (
+            dev.is_climate
+            and dev.mode is Mode.MANUAL
+            and target is not None
+            # The window-open temperature is no setpoint to keep: it was a passing state,
+            # and a linked device would hand it on to its room.
+            and target != dev.window_open_temperature
+        ):
+            # After the reset it runs its factory program in automatic mode.
+            dev.set_pending(target, Mode.MANUAL, None)
+            self._submit_set(dev, target, Mode.MANUAL, None)
+        if dev.is_climate and dev.week_profile and dev.address not in self._profile_jobs:
+            days: dict[int, list[ProfilePoint]] = {}
+            encoded: dict[int, list[bytes]] = {}
+            try:
+                for day_name, points in dev.week_profile.items():
+                    day = WEEKDAYS.index(day_name)
+                    days[day] = [ProfilePoint(float(p["temperature"]), parse_until(p["until"])) for p in points]
+                    encoded[day] = encode_week_profile_day(days[day])
+            except (KeyError, ValueError) as err:
+                _LOGGER.warning("MAX! %s (%s): stored week profile not usable: %s", name, dev.serial, err)
+            else:
+                job = self._start_profile_job(dev, encoded, days)
+                job.add_done_callback(lambda done: done.cancelled() or done.exception())
+        self._notify(dev)
+
+    def _check_told_time(self, dev: MaxDevice, frame: Frame) -> None:
+        """A device tells us its time (clock set by hand): if it is off, send ours. Its
+        repeats of the telling and our own correction must not start another one."""
+        try:
+            told = decode_time_information(frame.payload)
+        except FrameError as err:
+            _LOGGER.debug("time from %06X not readable: %s", frame.src, err)
+            return
+        off = abs((told - self._local_now()).total_seconds())
+        if off <= TIME_TOLERANCE_S:
+            return
+        now = time.monotonic()
+        last = self._time_corrected.get(frame.src)
+        if last is not None and now - last < TIME_CORRECTION_PAUSE_S:
+            return
+        self._time_corrected[frame.src] = now
+        _LOGGER.info(
+            "MAX! %s (%s): its clock is %.0f s off, sending the time", dev.name or dev.serial, dev.serial, off
+        )
+        self._reply_time(frame.src)
+
     def _handle_pair(self, frame: Frame, radio: str = MAIN_RADIO) -> None:
         ping = decode_pair_ping(frame.payload)
         known = self.devices.get(frame.src) or next(
@@ -1173,14 +1527,33 @@ class MaxHub:
             known.firmware = ping.firmware
             self._notify(known)
         src = frame.src
+        if to_me:
+            # A device that restarted (new batteries) asks for the time and pings its
+            # central right after. It is waiting for the pong now, not for the time: a
+            # time reply still being repeated would keep the pong off the air for seconds.
+            self._scheduler_for(src).abandon_key(f"time:{src}")
+
+        # A device we know that pings nobody in particular has lost its central: it was
+        # reset to factory settings (it keeps address and serial).
+        was_reset = known is not None and not to_me
+
+        def pong_done(ok: bool) -> None:
+            if added is not None:
+                # Report a new device only once the pong is off the air: the caller
+                # reloads the integration, which must not cut the pairing short.
+                self._safe(self._on_device_added, added)
+            if ok and was_reset and src in self.devices:
+                self._restore(self.devices[src])
+            if ok and (to_me or was_reset) and src in self.devices:
+                # Back in touch: now it listens, and its clock starts from nothing.
+                self._reply_time(src)
+
         self._submit(
             Command(
                 dst=src,
                 build=lambda c: build_pair_pong(c, self.address, src),
                 priority=PRIO_REPLY,
                 key=f"pong:{src}",
-                # Report a new device only once the pong is off the air: the caller
-                # reloads the integration, which must not cut the pairing short.
-                on_done=None if added is None else (lambda _ok: self._safe(self._on_device_added, added)),
+                on_done=pong_done,
             )
         )

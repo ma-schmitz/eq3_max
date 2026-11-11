@@ -56,7 +56,7 @@ async def test_hub_device_name(hass, setup_entry, fake_hub):
     from custom_components.eq3_max.const import DOMAIN
 
     hub_device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "C0FFEE")})
-    assert hub_device.name == "eQ-3 MAX! Funkmodul"
+    assert hub_device.name == "eQ-3 MAX! radio module"  # translated, test system runs in English
     assert hub_device.manufacturer == "busware / culfw"
 
 
@@ -93,3 +93,29 @@ async def test_links_sensor_counts_complete_pairs_and_lists_pending(hass, setup_
     assert st.attributes["ausstehend"] == [
         "fk-schlafzimmer: wartet auf Fensterkontakt \u2013 bitte Fenster einmal \u00f6ffnen und schlie\u00dfen"
     ]
+
+
+async def test_entity_names_follow_the_language_ids_do_not(hass, setup_entry, fake_hub):
+    """Names come from the translations; entity_ids are built from device name and key,
+    so automations and the documentation use the same ids in every language."""
+    import json
+    from pathlib import Path
+
+    from custom_components.eq3_max.const import DOMAIN
+
+    assert hass.states.get("sensor.ht_bad_unten_ventil").attributes["friendly_name"] == "ht-bad-unten Valve"
+    assert hass.states.get("binary_sensor.ht_bad_unten_funkfehler").attributes["friendly_name"] == "ht-bad-unten Radio error"
+    assert hass.states.get("climate.ht_bad_unten").attributes["friendly_name"] == "ht-bad-unten"
+    assert hass.states.get("sensor.eq3_max_sendezeit_1h").attributes["friendly_name"].endswith("Airtime 1h")
+    base = Path(__file__).parents[2] / "custom_components" / DOMAIN
+    en = json.loads((base / "translations/en.json").read_text())["entity"]
+    de = json.loads((base / "translations/de.json").read_text())["entity"]
+    assert json.loads((base / "strings.json").read_text())["entity"] == en
+    assert {p: set(v) for p, v in en.items()} == {p: set(v) for p, v in de.items()}
+    assert de["sensor"]["ventil"]["name"] == "Ventil" and de["binary_sensor"]["funkfehler"]["name"] == "Funkfehler"
+    # Every entity with a name of its own has a translation.
+    from homeassistant.helpers import entity_registry as er
+
+    for entry in er.async_entries_for_config_entry(er.async_get(hass), setup_entry.entry_id):
+        if entry.translation_key is not None:
+            assert entry.translation_key in en[entry.domain], entry.entity_id

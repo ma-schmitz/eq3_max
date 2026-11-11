@@ -516,3 +516,38 @@ async def test_waiting_for_budget_while_the_brake_holds(setup):
     clock.t += 3601
     await until(lambda: len(sender.lines) == 1)
     assert not sched.waiting_for_budget
+
+
+# --- never hand the stick a telegram while it is still transmitting the last one ---
+
+
+async def test_next_send_waits_until_the_abandoned_one_is_off_the_air():
+    """A reply given up for a more urgent one (time reply for a pairing pong) left the
+    stick with a second "Zs" 180 ms into the 1 s preamble of the first: the nanoCUL hung
+    until it was unplugged (10.11.2026)."""
+    sender = Sender()
+    sched = RadioScheduler(sender, ack_timeout=5.0, clock=FakeClock(), budget_poll=0.01)
+    task = asyncio.create_task(sched.run())
+    try:
+        sched.submit(Command(dst=DEV, build=frame, key="time"))
+        await until(lambda: len(sender.lines) == 1)
+        assert sched.busy_for == pytest.approx(airtime(frame(1)) + 0.05, abs=0.05)
+        sched.submit(Command(dst=DEV, build=frame, key="pong"))
+        assert sched.abandon_key("time") is True
+        await asyncio.sleep(0.3)
+        assert len(sender.lines) == 1  # held back: the first telegram is still on air
+        await until(lambda: len(sender.lines) == 2, timeout=2.0)
+        assert sched.waited_for_air == 1
+    finally:
+        task.cancel()
+
+
+async def test_a_send_after_the_usual_wait_is_not_held_back(setup):
+    sched, sender, clock = setup
+    done = []
+    sched.submit(Command(dst=DEV, build=frame, on_done=done.append))
+    await until(lambda: len(sender.lines) == 1)
+    sched.on_ack(DEV, 1, True)  # the answer shows the telegram is through
+    sched.submit(Command(dst=DEV, build=frame, on_done=done.append))
+    await until(lambda: len(sender.lines) == 2)
+    assert sched.waited_for_air == 0

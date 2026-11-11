@@ -1,68 +1,97 @@
 # Hardware
 
-eq3_max braucht ein **Funkmodul mit culfw** (868 MHz, MAX!-Unterstützung). Zwei Wege:
+eq3_max needs a **radio module with culfw** (868 MHz, MAX! support). Two options:
 
-| | nanoCUL | MAX! Cube mit a-culfw |
+| | nanoCUL | MAX! Cube with a-culfw |
 |---|---|---|
-| Anschluss | USB an der HA-Box | Netzwerk (LAN) oder USB |
-| Firmware | culfw (z. B. `1.66 nanoCUL868`) | a-culfw für den Cube |
-| Einrichtung | Verbindung „USB-Stick“, Port aus `/dev/serial/by-path/` | Verbindung „Netzwerk“, Host und Port 2323 |
-| Funkbudget (1 %) | eq3_max bremst auf 36 s pro Stunde (Standard); culfw mit Budgetprüfung lehnt zusätzlich selbst ab (`LOVF`) | a-culfw hält es selbst ein (`LOVF`) |
-| Stand | im Dauerbetrieb erprobt | in zwei weiteren Installationen mit geflashten Cubes im Einsatz |
+| Connection | USB on the HA box | network (LAN) or USB |
+| Firmware | culfw (e.g. `1.66 nanoCUL868`) | a-culfw for the Cube |
+| Setup | connection "USB stick", port from `/dev/serial/by-path/` | found on the network ("Search the network" or discovered by Home Assistant itself), otherwise host and port 2323 |
+| Radio budget (1 %) | eq3_max throttles to 36 s per hour (default); culfw with budget check additionally refuses by itself (`LOVF`) | a-culfw enforces it itself (`LOVF`) |
+| Status | proven in continuous operation | in use in two further installations with flashed Cubes |
 
-!!! info "Beide sind austauschbar – und mischbar"
-    Die Geräte merken sich nicht das Funkmodul, sondern die **Zentralen-Adresse**, und die
-    setzt eq3_max beim Start (`Za<Adresse>`). Wechsel nanoCUL ↔ Cube: Optionen →
-    „Verbindung ändern“, nichts neu anlernen. Mehrere gleichzeitig, z. B. eins pro Etage:
-    siehe [Mehrere Funkmodule](../handbuch/funkmodule.md).
+!!! info "Both are interchangeable – and can be mixed"
+    The devices do not remember the radio module but the **central address**, and
+    eq3_max sets it at startup (`Za<address>`). Switching nanoCUL ↔ Cube: options →
+    "Change connection", nothing needs to be paired again. Several at once, e.g. one per floor:
+    see [Multiple radio modules](../handbuch/funkmodule.md).
 
 ## nanoCUL (USB)
 
-- Viele nanoCULs haben einen CH341-Wandler (USB-ID `1a86:7523`) **ohne Seriennummer**.
-  Deshalb immer `/dev/serial/by-path/…` wählen, nie `by-id`.
-- 38400 Baud, Init-Folge `V`, `X21`, `Zr`, `Za<Adresse>`. Gesendet wird mit `Zs`.
+- Many nanoCULs have a CH341 converter (USB ID `1a86:7523`) **without a serial number**.
+  So always choose `/dev/serial/by-path/…`, never `by-id`.
+- 38400 baud, init sequence `V`, `X21`, `Zr`, `Za000000` (from 0.7.0; the integration
+  sends the acknowledgements to window contacts, buttons and wall thermostats itself with
+  `Zf`; if the main module is a network module, it stays at `Za<address>` with the
+  acknowledgement from the firmware). Commands go out with `Zs`.
 
-!!! note "Funkbudget: höchstens 1 % Sendezeit"
-    Im 868-MHz-Band darf jeder Sender höchstens 1 % der Zeit senden, also 36 s pro Stunde.
-    eq3_max misst das (`sensor.eq3_max_sendezeit_1h`) und hält es mit der **Bremse** ein,
-    die bei neuen Einträgen eingeschaltet ist. Manche culfw-Builds (`nocredits`) prüfen das
-    Budget nicht selbst – dann sorgt allein die Bremse dafür; sie sollte an bleiben.
+!!! note "Radio budget: at most 1 % airtime"
+    In the 868 MHz band every transmitter may send at most 1 % of the time, i.e. 36 s per hour.
+    eq3_max measures this (`sensor.eq3_max_sendezeit_1h`, "Airtime 1h") and keeps to it with
+    the **brake**, which is switched on for new entries. Some culfw builds do not check the
+    budget themselves – then the brake alone takes care of it; it should stay on.
 
-    Die Firmware rechnet strenger als die Bremse: a-culfw hält höchstens **9 s Sendezeit
-    auf Vorrat** (nach einem Neustart des Moduls 4,5 s) und füllt 10 ms je Sekunde nach.
-    Ist der Vorrat leer, lehnt sie das Senden ab (`LOVF`). eq3_max wartet dann und versucht
-    es alle 10 s wieder; ein Telegramm mit Weckpräambel (rund 1,1 s) geht nach knapp zwei
-    Minuten hinaus. Verloren geht nichts, es dauert nur: Ein ganzes
-    [Wochenprogramm](../handbuch/dienste.md) (7 bis 14 Telegramme) braucht so eine
-    Viertelstunde und mehr. Auf der Seite „eQ-3 MAX!“ steht am Funkmodul solange
-    „wartet auf Sendezeit“, im Log einmal je Befehl `culfw refused to send … (LOVF)`.
+    The firmware keeps its own credit and refills 10 ms per second. How much it keeps in
+    reserve depends on the device (a-culfw source code): **nanoCUL and CUL 9 s**,
+    **MAX! Cube and MapleCUN 36 s**; after a restart of the module it is half of that.
+    When the reserve is empty, it refuses to send (`LOVF`). eq3_max then waits and retries
+    every 10 s; a telegram with wake-up preamble (about 1.1 s) goes out after just under two
+    minutes. Nothing is lost, it just takes time: a whole
+    [week program](../handbuch/dienste.md) (7 to 14 telegrams) fits into the Cube's
+    reserve, on the nanoCUL it takes a quarter of an hour and more. Meanwhile the
+    "eQ-3 MAX!" panel shows "waiting for airtime" on the radio module, and the log shows
+    `culfw refused to send … (LOVF)` once per command.
 
-!!! warning "Empfängt nach dem Senden nichts mehr? Erst den USB-Port wechseln."
-    Wirkt der Stick taub – die Firmware antwortet, Senden geht, aber der Empfang bricht
-    nach dem ersten Senden weg –, liegt das oft nicht am Stick, sondern am USB-Port: Seine
-    Spannung bricht unter dem Sendestrom ein. Anderer Port, kurzes Verlängerungskabel oder
-    aktiver Hub. Danach den neuen `by-path`-Pfad in den Optionen wählen.
+!!! warning "Nothing received after sending? Change the USB port first."
+    If the stick seems deaf – the firmware answers, sending works, but reception drops out
+    after the first transmission –, the cause is often not the stick but the USB port: its
+    voltage collapses under the transmit current. Use another port, a short extension cable or an
+    active hub. Then choose the new `by-path` path in the options.
 
-## MAX! Cube mit a-culfw (Netzwerk)
+## MAX! Cube with a-culfw (network)
 
-Der MAX! Cube hat denselben Funkchip wie ein CUL. Mit **a-culfw** geflasht spricht er das
-gleiche Textprotokoll wie der nanoCUL, nur über TCP. Vorteil: Er kann per Netzwerkkabel
-dort stehen, wo der Funk gut ist.
+The MAX! Cube has the same radio chip as a CUL. Flashed with **a-culfw**, it speaks the
+same text protocol as the nanoCUL, just over TCP. Advantage: connected by network cable,
+it can sit wherever radio reception is good.
 
-1. **Flashen** nach der Anleitung des a-culfw-Projekts (Abschnitt MAX! Cube). Die
-   eQ-3-Firmware geht dabei verloren, `maxcube` und die eQ-3-Software funktionieren danach
-   nicht mehr.
-2. **Ins LAN** hängen, IP-Adresse im Router nachsehen und fest vergeben.
-3. **Prüfen:** `nc <cube-ip> 2323`, dann `V` eingeben – Antwort etwa `V 1.26.08 a-culfw CUBE`.
-4. **In eq3_max:** Verbindung „Netzwerk (CUN, geflashter Cube)“, Host = IP, Port 2323.
-5. Die Option **„Sendezeit auf 36 s pro Stunde begrenzen“** eingeschaltet lassen (Standard
-   bei neuen Einträgen). a-culfw prüft das Budget zusätzlich selbst und lässt höchstens 9 s
-   am Stück zu; bei mehr Funkverkehr verweigert sie das Senden (`LOVF`), eq3_max wartet dann
-   und sendet, sobald wieder Zeit frei ist (siehe Hinweis oben).
+1. **Flash** it following the instructions of the a-culfw project (section MAX! Cube). The
+   eQ-3 firmware is lost in the process; `maxcube` and the eQ-3 software no longer work
+   afterwards.
+2. **Connect it to the LAN.** The Cube gets its address via DHCP; ideally assign a fixed
+   one in the router.
 
-Fällt die Verbindung weg, merkt eq3_max das nach etwa 90 s und verbindet neu; nach 15
-Minuten erscheint die Reparaturmeldung „CUL nicht erreichbar“. Empfängt der Cube nichts
-mehr, hilft nur ein Neustart des Cubes – ein Neuverbinden setzt sein Funkmodul nicht zurück.
+    !!! warning "Power only from a power supply, not from a router or computer"
+        If the Cube is on the LAN and at the same time draws its power from a USB port
+        that addresses it as a device (FRITZ!Box, NAS, Raspberry Pi, PC), **it restarts
+        again and again during radio operation**: commands stay unacknowledged, the radio
+        module turns red at intervals. This is a known, open bug in a-culfw. Remedy: a
+        simple USB power supply or a pure charging cable without data lines.
 
-Ein Cube mit **Original-Firmware** geht nicht; er spricht ein eigenes Protokoll, dafür gibt
-es die HA-Integration `maxcube`.
+3. **In eq3_max:** after a short while Home Assistant reports the Cube by itself under
+   "Discovered" (from 0.7.0). Otherwise choose **"Search the network"** during setup, or
+   enter the address manually (host = IP, port 2323).
+4. **Check manually** if it is not found: `nc <cube-ip> 2323`, then type `V` –
+   the answer is something like `V 1.26.08 a-culfw … CUBe`.
+
+    !!! note "How the Cube is found"
+        a-culfw does not announce itself on the network. eq3_max therefore queries the
+        addresses in Home Assistant's network on port 2323 with `V`. Home Assistant
+        recognises the Cube by itself from its network address: a-culfw assigns
+        `00:80:41:xx:xx:xx` on first start. If the IP address of a Cube found this way
+        changes later, eq3_max updates it by itself.
+5. Leave the option **"Limit airtime to 36 s per hour"** switched on (default
+   for new entries). a-culfw additionally checks the budget itself (Cube reserve 36 s);
+   once it is used up, it refuses to send (`LOVF`), eq3_max then waits and sends
+   as soon as time is available again (see the note above).
+
+If the Cube restarts (power failure, firmware), eq3_max notices this from 0.7.0 after about
+half a minute: a network module from which nothing has arrived for 20 s is asked for its
+state and set up again if necessary. The log then shows `lost its settings (it
+restarted)` or `does not answer any more`.
+
+If the connection drops, eq3_max notices after about 90 s and reconnects; after 15
+minutes the repair issue "CUL not reachable" appears. If the Cube no longer receives
+anything, only restarting the Cube helps – reconnecting does not reset its radio module.
+
+A Cube with **original firmware** does not work; it speaks a protocol of its own, for that
+there is the HA integration `maxcube`.

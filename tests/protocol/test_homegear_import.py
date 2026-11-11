@@ -142,9 +142,11 @@ def test_import_offset_and_boost_index_tables():
     assert (dev.config["entkalkung_tag"], dev.config["entkalkung_stunde"]) == ("Freitag", 0)
 
 
-def test_import_wall_thermostat_has_only_temperature_config():
+def test_import_wall_thermostat_has_temperature_config_and_boost_duration():
     dev = devices_from_export(_export(3, REAL_HT_VALUES))[0]
-    assert set(dev.config) == {"komfort", "eco", "maximal", "minimal", "offset", "fenster_temperatur", "fenster_dauer"}
+    assert set(dev.config) == {
+        "komfort", "eco", "maximal", "minimal", "offset", "fenster_temperatur", "fenster_dauer", "boost_dauer",
+    }
     assert dev.config["komfort"] == 21.5 and dev.config_source["komfort"] == "homegear"
 
 

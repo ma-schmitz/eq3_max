@@ -261,7 +261,8 @@ def test_factory_config_values():
 
 def test_config_keys_per_device_type():
     assert ht().config_keys == CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS
-    assert wt().config_keys == CONFIG_TEMP_KEYS
+    # The wall thermostat counts its boost down by its own duration; no valve otherwise.
+    assert wt().config_keys == CONFIG_TEMP_KEYS + ("boost_dauer",)
     fk = MaxDevice(1, "X", DeviceType.SHUTTER_CONTACT)
     assert fk.config_keys == ()
 
@@ -276,7 +277,7 @@ def test_ensure_config_defaults_marks_werksvorgabe_and_keeps_known():
     assert {d.config_source[k] for k in FACTORY_CONFIG if k != "komfort"} == {"werksvorgabe"}
     w = wt()
     w.ensure_config_defaults()
-    assert set(w.config) == set(CONFIG_TEMP_KEYS) and set(w.config_source) == set(CONFIG_TEMP_KEYS)
+    assert set(w.config) == set(CONFIG_TEMP_KEYS) | {"boost_dauer"} and set(w.config_source) == set(CONFIG_TEMP_KEYS) | {"boost_dauer"}
 
 
 def test_stage_config_builds_whole_set_keeping_other_values():
@@ -332,11 +333,11 @@ def test_stage_config_rejects_invalid_without_pending(key, value):
     assert d.pending_config == {}
 
 
-def test_wall_thermostat_has_no_valve_config():
+def test_wall_thermostat_has_only_the_boost_duration_of_the_valve_config():
     w = wt()
     w.ensure_config_defaults()
     with pytest.raises(FrameError):
-        w.stage_config("boost_dauer", 10)
+        w.stage_config("boost_ventil", 60)
 
 
 def test_commit_config_sets_source_gesetzt_and_clears_matching_pending():
@@ -584,11 +585,13 @@ def test_stage_config_set_rejects_invalid_without_pending(kind, values):
     assert d.pending_config == {} and d.config_failed == ["temp"]
 
 
-def test_stage_config_set_valve_not_on_wall_thermostat():
+def test_stage_config_set_valve_on_wall_thermostat_only_takes_the_boost_duration():
     d = MaxDevice(address=0x1590B4, serial="NEQ9000011", device_type=DeviceType.WALL_THERMOSTAT)
     d.ensure_config_defaults()
     with pytest.raises(FrameError):
-        d.stage_config_set("valve", {"boost_dauer": 10})
+        d.stage_config_set("valve", {"ventil_max": 80})
+    assert d.stage_config_set("valve", {"boost_dauer": 10}) == []
+    assert d.pending_config["valve"]["boost_dauer"] == 10
     assert d.stage_config_set("temp", {"offset": -1.0})
     assert d.pending_config["temp"]["offset"] == -1.0
 
