@@ -646,13 +646,13 @@
   "selector": {
     "weekday": {
       "options": {
-        "Samstag": "Saturday",
-        "Sonntag": "Sunday",
-        "Montag": "Monday",
-        "Dienstag": "Tuesday",
-        "Mittwoch": "Wednesday",
-        "Donnerstag": "Thursday",
-        "Freitag": "Friday",
+        "samstag": "Saturday",
+        "sonntag": "Sunday",
+        "montag": "Monday",
+        "dienstag": "Tuesday",
+        "mittwoch": "Wednesday",
+        "donnerstag": "Thursday",
+        "freitag": "Friday",
         "alle": "all days"
       }
     }

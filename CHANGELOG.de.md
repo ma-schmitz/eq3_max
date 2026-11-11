@@ -7,6 +7,15 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.7.1] – 2026-11-11
+
+### Behoben
+
+- Die Wochentags-Auswahl der Wochenprogramm-Aktionen hatte Schlüssel mit Großbuchstaben
+  (`Montag`), die Home Assistant für Übersetzungen nicht annimmt (hassfest schlug fehl, die
+  Auswahl blieb unübersetzt). Die Werte sind jetzt klein geschrieben (`montag` …); die Aktionen
+  nehmen wie bisher jede Schreibweise an.
+
 ## [0.7.0] – 2026-11-11
 
 ### Hinzugefügt

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] – 2026-11-11
+
+### Fixed
+
+- The weekday selection of the week program actions used option keys with capital letters
+  (`Montag`), which Home Assistant does not accept for translations (hassfest failed, the
+  selection was not translated). The options are now lower case (`montag` …); the actions
+  accept any capitalisation as before.
+
 ## [0.7.0] – 2026-11-11
 
 ### Added

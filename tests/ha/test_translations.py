@@ -43,3 +43,13 @@ def test_weekday_follows_the_language():
     assert translated(err, language="de").translation_placeholders["day"] == "Montag"
     assert translated(err, language="en").translation_placeholders["day"] == "Monday"
     assert translated(err).translation_placeholders["day"] == "Monday"
+
+
+def test_selector_option_keys_are_valid_for_hassfest():
+    """hassfest: translation keys only [a-z0-9-_], not starting/ending with - or _."""
+    import re
+
+    data = json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8"))
+    for selector in data.get("selector", {}).values():
+        for key in selector["options"]:
+            assert re.fullmatch(r"[a-z0-9]([a-z0-9_-]*[a-z0-9])?", key), key

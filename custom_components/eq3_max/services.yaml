@@ -67,19 +67,19 @@ set_week_profile:
           multiple: true
     weekday:
       required: true
-      example: "Montag"
+      example: "montag"
       selector:
         select:
           multiple: true
           translation_key: weekday
           options:
-            - Samstag
-            - Sonntag
-            - Montag
-            - Dienstag
-            - Mittwoch
-            - Donnerstag
-            - Freitag
+            - samstag
+            - sonntag
+            - montag
+            - dienstag
+            - mittwoch
+            - donnerstag
+            - freitag
             - alle
     profile:
       required: true
