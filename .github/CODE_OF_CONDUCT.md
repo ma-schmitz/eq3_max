@@ -59,13 +59,10 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement through GitHub:
-
-* For a specific issue, pull request, discussion or comment: use the **⋯** menu
-  → **Report content** → **Report to repository admins**.
-* For anything else: open a private report via
-  [Security → Report a vulnerability](https://github.com/ma-schmitz/eq3_max/security/advisories/new)
-  and start the title with "Code of conduct".
+reported to the community leaders responsible for enforcement privately via
+[Security → Report a vulnerability](https://github.com/ma-schmitz/eq3_max/security/advisories/new);
+please start the title with "Code of conduct". Content that violates GitHub's own
+rules can additionally be reported to GitHub via the **⋯** menu → **Report content**.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
