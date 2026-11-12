@@ -1,0 +1,80 @@
+name: Bug report
+description: Something does not work as described.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! English or German – both are fine (Deutsch ist willkommen).
+        Please check the [FAQ](https://ma-schmitz.github.io/eq3_max/faq/) first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: eq3_max version
+      placeholder: "0.7.1"
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.11.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: radio
+    attributes:
+      label: Radio module
+      multiple: true
+      options:
+        - nanoCUL / CUL (USB)
+        - MAX! Cube with a-culfw (network)
+        - MAX! Cube with a-culfw (USB)
+        - CUN / other network module
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware of the radio module
+      description: In the diagnostics under `version`, or as a tooltip on the radio module in the "eQ-3 MAX!" panel.
+      placeholder: "V 1.66 nanoCUL868"
+  - type: dropdown
+    id: devices
+    attributes:
+      label: Affected device types
+      multiple: true
+      options:
+        - Radiator thermostat
+        - Wall thermostat
+        - Window contact
+        - Eco button
+        - Not device-specific
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        Relevant lines from the Home Assistant log. For radio problems please enable debug logging first:
+        `logger.set_level` with `custom_components.eq3_max: debug`, reproduce, then copy the lines.
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Settings → Devices & services → eQ-3 MAX! → ⋮ → Download diagnostics (or on the affected device).
+        Drag the file in here. It contains device addresses and serial numbers, but no passwords.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Migration from Homegear/maxcube? Several radio modules? Recently changed USB port?

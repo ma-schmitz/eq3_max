@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation and FAQ
+    url: https://ma-schmitz.github.io/eq3_max/faq/
+    about: Many questions (12 °C, radio budget, acknowledgements, USB port) are answered here.
+  - name: Questions and ideas (Discussions)
+    url: https://github.com/ma-schmitz/eq3_max/discussions
+    about: Setup questions, hardware experiences, "is this possible?" – please ask here instead of opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/ma-schmitz/eq3_max/security/advisories/new
+    about: Please report security issues privately, not as a public issue.

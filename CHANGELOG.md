@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Community files: issue forms (bug report, feature request), pull request template,
+  CONTRIBUTING.md, code of conduct (Contributor Covenant 2.1), SECURITY.md with private
+  vulnerability reporting; GitHub Discussions for questions.
+
 ## [0.7.1] – 2026-11-11
 
 ### Fixed

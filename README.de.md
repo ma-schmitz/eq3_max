@@ -264,6 +264,9 @@ Umstieg von Homegear: siehe `website/umstieg/`.
 
 ## Entwicklung
 
+Beiträge sind willkommen – siehe [CONTRIBUTING.md](.github/CONTRIBUTING.md) (englisch, Issues gern auf Deutsch).
+Fragen in die [Discussions](https://github.com/ma-schmitz/eq3_max/discussions), Sicherheitslücken vertraulich (siehe [SECURITY.md](.github/SECURITY.md)).
+
     uv venv -p 3.14 .venv && uv pip install -p .venv -r requirements_test.txt
     .venv/bin/pytest
 

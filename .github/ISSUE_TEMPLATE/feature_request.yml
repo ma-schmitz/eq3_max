@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea or a missing device setting.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or German – both are fine (Deutsch ist willkommen).
+        For open questions or "would this be possible?", the [Discussions](https://github.com/ma-schmitz/eq3_max/discussions) are a better place.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to achieve?
+      description: Describe the situation, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How should it look in Home Assistant or in the "eQ-3 MAX!" panel?
+  - type: textarea
+    id: protocol
+    attributes:
+      label: Protocol knowledge
+      description: Do you know how the device does it (FHEM, Homegear, eQ-3 software, sniffed telegrams)? Very welcome.

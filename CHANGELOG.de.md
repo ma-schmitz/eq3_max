@@ -7,6 +7,11 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- Community-Dateien: Issue-Formulare (Fehlerbericht, Wunsch), Vorlage für Pull Requests,
+  CONTRIBUTING.md, Verhaltenskodex (Contributor Covenant 2.1), SECURITY.md mit vertraulicher
+  Meldung von Sicherheitslücken; GitHub Discussions für Fragen.
+
 ## [0.7.1] – 2026-11-11
 
 ### Behoben
