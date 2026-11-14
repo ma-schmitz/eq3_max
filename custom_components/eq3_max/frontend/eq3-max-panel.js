@@ -230,6 +230,11 @@ const EN = {
   "Partner auswählen …": "Choose partner …",
   "kein weiteres Gerät möglich": "no further device possible",
   "Keine Verknüpfungen.": "No links.",
+  "Mit allen Geräten im Bereich verknüpfen ({n})": "Link with all devices in the area ({n})",
+  "Verknüpft dieses Gerät mit allen passenden Geräten, die in Home Assistant im selben Bereich stehen.":
+    "Links this device with all suitable devices in the same Home Assistant area.",
+  "Diese Verknüpfungen werden beauftragt:": "These links will be requested:",
+  "{n} Verknüpfungen beauftragt.": "{n} links requested.",
   "Temperatur für die Komfort-Taste am Gerät und das Preset „Komfort“. Gilt für den ganzen Raum.":
     "Temperature of the comfort button on the device and of the preset \"Comfort\". Applies to the whole room.",
   "Absenktemperatur für die Eco-Taste, den Eco-Taster und das Preset „Eco“. Gilt für den ganzen Raum.":
@@ -1901,7 +1906,7 @@ class Eq3MaxPanel extends HTMLElement {
 
     const select = h("select", { "data-focus": `cand:${dev.serial}`, "aria-label": t("Partner auswählen") },
       h("option", { value: "" }, dev.candidates.length ? t("Partner auswählen …") : t("kein weiteres Gerät möglich")),
-      dev.candidates.map((c) => h("option", { value: c.serial }, c.name)));
+      dev.candidates.map((c) => h("option", { value: c.serial }, c.area ? `${c.name} · ${c.area}` : c.name)));
     if (this._candidate && dev.candidates.some((c) => c.serial === this._candidate)) select.value = this._candidate;
     select.addEventListener("change", () => { this._candidate = select.value; this._render(); });
     const chosen = dev.candidates.find((c) => c.serial === select.value);
@@ -1924,9 +1929,36 @@ class Eq3MaxPanel extends HTMLElement {
             },
           }, t("Verknüpfen"))),
         h("div", { class: "sub", style: "margin-top:6px;color:var(--e3-muted);font-size:12px" },
-          t("Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind."))),
+          t("Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind.")),
+        this._renderAreaLink(dev)),
       dev.config && dev.config.length ? this._renderGroup(dev) : null,
     ];
+  }
+
+  _renderAreaLink(dev) {
+    const partners = dev.area_candidates || [];
+    if (!partners.length) return null;
+    const key = `arealink:${dev.serial}`;
+    const confirm = this._areaConfirm === dev.serial;
+    const busy = this._busy.has(key) || !dev.device_id;
+    const run = async () => {
+      this._areaConfirm = null;
+      for (const partner of partners) {
+        await this._call(key, { type: "eq3_max/link", device_id: dev.device_id, partner_device_id: partner.device_id });
+      }
+      this._showToast(t("{n} Verknüpfungen beauftragt.", { n: partners.length }));
+    };
+    return h("div", { style: "margin-top:10px" },
+      h("button", {
+        class: "action", disabled: busy, title: t("Verknüpft dieses Gerät mit allen passenden Geräten, die in Home Assistant im selben Bereich stehen."),
+        onclick: () => { this._areaConfirm = confirm ? null : dev.serial; this._render(); },
+      }, icon("mdi:link-plus"), " ", t("Mit allen Geräten im Bereich verknüpfen ({n})", { n: partners.length })),
+      confirm ? h("div", { class: "confirm" },
+        h("div", {}, t("Diese Verknüpfungen werden beauftragt:")),
+        h("ul", {}, partners.map((p) => h("li", {}, `${dev.name} ↔ ${p.name}`))),
+        h("div", { class: "setfoot" },
+          h("button", { class: "action", onclick: () => { this._areaConfirm = null; this._render(); } }, t("Abbrechen")),
+          h("button", { class: "action primary", disabled: busy, onclick: run }, t("Verknüpfen")))) : null);
   }
 
   _renderGroup(dev) {

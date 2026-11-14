@@ -133,8 +133,21 @@ class _Context:
         dev = self.by_serial.get(serial)
         return serial if dev is None else (dev.name or dev.serial)
 
+    def area_id(self, serial: str) -> str | None:
+        device = self.device_entry(serial)
+        return None if device is None else device.area_id
+
+    def area_name(self, serial: str) -> str | None:
+        area_id = self.area_id(serial)
+        area = None if area_id is None else self.area_reg.async_get_area(area_id)
+        return None if area is None else area.name
+
     def ref(self, serial: str) -> dict[str, Any]:
-        return {"serial": serial, "name": self.name(serial), "device_id": self.device_id(serial)}
+        return {
+            "serial": serial, "name": self.name(serial), "device_id": self.device_id(serial),
+            # Same names are told apart by their area (issue #7).
+            "area": self.area_name(serial),
+        }
 
     def main_entity(self, dev: MaxDevice) -> str | None:
         specs = specs_for(dev)
@@ -191,6 +204,15 @@ def _candidates(ctx: _Context, dev: MaxDevice) -> list[dict[str, Any]]:
             continue
         result.append(ctx.ref(other.serial))
     return sorted(result, key=lambda item: item["name"].lower())
+
+
+def _area_candidates(ctx: _Context, dev: MaxDevice) -> list[dict[str, Any]]:
+    """Candidates in the same Home Assistant area: what "link with all devices in the
+    area" would link (issue #7)."""
+    area_id = ctx.area_id(dev.serial)
+    if area_id is None:
+        return []
+    return [c for c in _candidates(ctx, dev) if ctx.area_id(c["serial"]) == area_id]
 
 
 def _pending_change(dev: MaxDevice, key: str) -> Any:
@@ -257,6 +279,7 @@ def _device(ctx: _Context, dev: MaxDevice) -> dict[str, Any]:
         "state": _state(ctx, dev, entity_id),
         "links": links,
         "candidates": _candidates(ctx, dev),
+        "area_candidates": _area_candidates(ctx, dev),
         "config": _config(dev),
         # Measured temperature polling: radiator thermostats only (None = not offered).
         "poll_minutes": dev.poll_minutes if dev.is_heating_thermostat else None,

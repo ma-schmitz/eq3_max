@@ -38,7 +38,10 @@ Markers: **pending** (command, configuration or link not yet acknowledged),
   window contact – please open and close the window once"). Buttons: **Unlink**,
   for failed ones **Send again**, for one-sided ones **Link**.
   **Add partner** only offers devices that can be linked with this one and are not linked
-  or requested yet. For window contacts and buttons a note at the top says that changes only
+  or requested yet; each one shows its area (from 0.8.1).
+  **Link with all devices in the area** (from 0.8.1) links the device with all suitable devices
+  of the same Home Assistant area and lists beforehand what will be requested.
+  For window contacts and buttons a note at the top says that changes only
   go out after the next opening/closing or press.
 - **Configuration** (thermostats only): set **Temperatures** (komfort, eco, maximal, minimal,
   offset, fenster_temperatur, fenster_dauer), on radiator thermostats additionally **Valve**

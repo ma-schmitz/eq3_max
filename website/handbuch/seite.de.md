@@ -38,7 +38,9 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
   Fensterkontakt – bitte Fenster einmal öffnen und schließen“). Knöpfe: **Lösen**,
   bei fehlgeschlagenen **Erneut senden**, bei einseitigen **Verknüpfen**.
   **Partner hinzufügen** bietet nur Geräte an, die sich mit diesem verknüpfen lassen und
-  noch nicht verknüpft oder beauftragt sind. Bei Fensterkontakt und Taster steht oben der
+  noch nicht verknüpft oder beauftragt sind; hinter jedem steht sein Bereich (ab 0.8.1).
+  **Mit allen Geräten im Bereich verknüpfen** (ab 0.8.1) verknüpft das Gerät mit allen
+  passenden Geräten desselben Home-Assistant-Bereichs und listet vorher auf, was beauftragt wird. Bei Fensterkontakt und Taster steht oben der
   Hinweis, dass Änderungen erst nach dem nächsten Öffnen/Schließen bzw. Drücken rausgehen.
 - **Konfiguration** (nur Thermostate): Satz **Temperaturen** (komfort, eco, maximal, minimal,
   offset, fenster_temperatur, fenster_dauer), beim Heizkörperthermostat zusätzlich **Ventil**

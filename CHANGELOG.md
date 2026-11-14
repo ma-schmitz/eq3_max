@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.1] – 2026-11-14
+
+### Added
+- **Area in the partner list** of the "eQ-3 MAX!" page ("Radiator · Living room"): devices with
+  the same name can be told apart (#7).
+- **"Link with all devices in the area"**: links a device with all suitable devices in the same
+  Home Assistant area (wall thermostat ↔ radiators, window contact/button ↔ thermostats); the page
+  lists the links before they are requested (#7).
+
 ## [0.8.0] – 2026-11-14
 
 ### Added

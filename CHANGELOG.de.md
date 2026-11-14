@@ -7,6 +7,15 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.1] – 2026-11-14
+
+### Hinzugefügt
+- **Bereich in der Partnerliste** der Seite „eQ-3 MAX!“ („Heizkörper · Wohnzimmer“): Geräte mit
+  gleichem Namen lassen sich unterscheiden (#7).
+- **„Mit allen Geräten im Bereich verknüpfen“**: verknüpft ein Gerät mit allen passenden Geräten
+  desselben Home-Assistant-Bereichs (Wandthermostat ↔ Heizkörper, Fensterkontakt/Taster ↔
+  Thermostate); die Seite zeigt vorher, welche Verknüpfungen beauftragt werden (#7).
+
 ## [0.8.0] – 2026-11-14
 
 ### Hinzugefügt

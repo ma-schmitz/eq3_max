@@ -168,7 +168,7 @@ async def test_overview_links_and_candidates(hass, setup_entry, fake_hub, hass_w
     client = await hass_ws_client(hass)
     devices = by_serial((await overview(client))["entries"][0])
     ht = devices["MEQ9000007"]
-    assert ht["links"]["partners"] == [{"serial": "NEQ9000011", "name": "wt-wohnzimmer", "device_id": device_id(hass, WT)}]
+    assert ht["links"]["partners"] == [{"serial": "NEQ9000011", "name": "wt-wohnzimmer", "device_id": device_id(hass, WT), "area": None}]
     [pending] = ht["links"]["pending"]
     assert pending["serial"] == "NEQ9000010" and pending["name"] == "fk-schlafzimmer"
     assert pending["device_id"] == device_id(hass, FK)
@@ -176,7 +176,7 @@ async def test_overview_links_and_candidates(hass, setup_entry, fake_hub, hass_w
     assert pending["text"].startswith("wartet auf Fensterkontakt")
     # Already linked (WT) or already requested (FK): only the eco button is left.
     assert [c["serial"] for c in ht["candidates"]] == ["KEQ9000001"]
-    assert ht["candidates"][0] == {"serial": "KEQ9000001", "name": "taster", "device_id": device_id(hass, PB)}
+    assert ht["candidates"][0] == {"serial": "KEQ9000001", "name": "taster", "device_id": device_id(hass, PB), "area": None}
     # Contacts and buttons link only to thermostats.
     assert {c["serial"] for c in devices["KEQ9000001"]["candidates"]} == {"MEQ9000007", "NEQ9000011"}
     assert {c["serial"] for c in devices["NEQ9000010"]["candidates"]} == {"NEQ9000011"}
@@ -553,3 +553,27 @@ async def test_set_poll_and_overview(hass, setup_entry, fake_hub, hass_ws_client
     assert hub.commands[-1] == ("poll", HT, 30)
     reply = await call(client, type="eq3_max/set_poll", device_id=device_id(hass, WT), minutes=30)
     assert not reply["success"]
+
+
+async def test_candidates_show_area_and_area_partners(hass, setup_entry, fake_hub, hass_ws_client):
+    """Issue #7: same names can only be told apart by their area; and all devices of the
+    area that a link would be accepted for, for one button."""
+    from homeassistant.helpers import area_registry as ar
+
+    areas = ar.async_get(hass)
+    living = areas.async_create("Wohnzimmer")
+    bedroom = areas.async_create("Schlafzimmer")
+    reg = dr.async_get(hass)
+    reg.async_update_device(device_id(hass, WT), area_id=living.id)
+    reg.async_update_device(device_id(hass, HT), area_id=living.id)
+    fk = next(a for a, d in fake_hub.last.devices.items() if d.device_type.name == "SHUTTER_CONTACT")
+    reg.async_update_device(device_id(hass, fk), area_id=bedroom.id)
+    client = await hass_ws_client(hass)
+    devices = by_serial((await overview(client))["entries"][0])
+    wt = devices["NEQ9000011"]
+    assert {c["serial"]: c["area"] for c in wt["candidates"]}["MEQ9000007"] == "Wohnzimmer"
+    assert [c["serial"] for c in wt["area_candidates"]] == ["MEQ9000007"]
+    fake_hub.last.devices[WT].links = ["MEQ9000007"]
+    fake_hub.last.devices[HT].links = ["NEQ9000011"]
+    devices = by_serial((await overview(client))["entries"][0])
+    assert devices["NEQ9000011"]["area_candidates"] == []  # already linked
