@@ -42,7 +42,9 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
   Hinweis, dass Änderungen erst nach dem nächsten Öffnen/Schließen bzw. Drücken rausgehen.
 - **Konfiguration** (nur Thermostate): Satz **Temperaturen** (komfort, eco, maximal, minimal,
   offset, fenster_temperatur, fenster_dauer), beim Heizkörperthermostat zusätzlich **Ventil**
-  (boost_dauer, boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset).
+  (boost_dauer, boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset),
+  beim Wandthermostat **Ventil** nur mit boost_dauer und zusätzlich **Anzeige**
+  (Soll- oder Ist-Temperatur im Display, ab 0.8.0).
   - Je Wert die Quelle (**Homegear** / **Werksvorgabe** / **gesetzt**) und, wenn gesendet aber
     nicht quittiert, „ausstehend: <Wert>“ neben dem quittierten. Das steht nur bei Werten, die
     sich vom quittierten unterscheiden; dass der ganze Satz unterwegs ist, zeigt „Satz
@@ -51,6 +53,13 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
     rot mit Hinweis), dann **„Satz senden“**. Die Seite zeigt vorher die Änderungen und die
     **Werksvorgaben, die mitgehen** (nie vom Gerät gelesene Werte) — erst „Senden“ schickt
     den Satz, als **ein** Telegramm. „Verwerfen“ setzt das Formular zurück.
+  - Jeder Wert hat einen **Mouseover-Text**, der erklärt, was er am Gerät bewirkt; das **ⓘ**
+    daneben klappt dieselbe Erklärung auf (für Handy und Tablet, ab 0.8.0).
+  - Beim Heizkörperthermostat darunter **„Ist-Temperatur abfragen“** (aus, alle 15 min … 4 h,
+    ab 0.8.0), siehe [Gerätekonfiguration](konfiguration.md#ist-temperatur-abfragen-ab-080).
+- **Gruppen-ID** (im Reiter Verknüpfungen, nur Thermostate, ab 0.8.0): aktuelle ID, ausstehende
+  ID, **Setzen**, **Entfernen** und **Für den Raum vergeben**, siehe
+  [Verknüpfungen](verknuepfungen.md#gruppen-id-ab-080).
 - Die Seite aktualisiert sich von selbst. Während man in ein Feld tippt, wartet die
   Aktualisierung, bis man es verlässt.
 - **Wochenprogramm** (nur Thermostate, ab 0.6.0): oben die zuletzt quittierten Tage („nicht

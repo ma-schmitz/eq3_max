@@ -23,6 +23,7 @@ MODELS = {
     DeviceType.WALL_THERMOSTAT: "Wall thermostat+",
     DeviceType.SHUTTER_CONTACT: "Window contact",
     DeviceType.PUSH_BUTTON: "Eco button",
+    DeviceType.PLUG_ADAPTER: "Plug adapter (not supported yet)",
     DeviceType.CUBE: "Cube",
 }
 

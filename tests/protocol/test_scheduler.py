@@ -551,3 +551,35 @@ async def test_a_send_after_the_usual_wait_is_not_held_back(setup):
     sched.submit(Command(dst=DEV, build=frame, on_done=done.append))
     await until(lambda: len(sender.lines) == 2)
     assert sched.waited_for_air == 0
+
+
+async def test_two_modules_never_send_at_the_same_time():
+    """Two modules near each other must not transmit at once: their telegrams overlap,
+    and with the same retry interval they overlap again on every attempt (14.11.2026:
+    WT on one module, its radiator on the other, both configs lost)."""
+    events = []
+
+    class Logged(Sender):
+        def __init__(self, name):
+            super().__init__()
+            self.name = name
+
+        async def __call__(self, line):
+            events.append(("send", self.name, asyncio.get_running_loop().time()))
+            await super().__call__(line)
+
+    lock = asyncio.Lock()
+    a, b = Logged("a"), Logged("b")
+    sa = RadioScheduler(a, ack_timeout=0.05, clock=FakeClock(), air_lock=lock)
+    sb = RadioScheduler(b, ack_timeout=0.05, clock=FakeClock(), air_lock=lock)
+    tasks = [asyncio.create_task(sa.run()), asyncio.create_task(sb.run())]
+    try:
+        sa.submit(Command(dst=DEV, build=frame))
+        sb.submit(Command(dst=0x123456, build=lambda c: frame(c, dst=0x123456)))
+        await until(lambda: len(a.lines) >= 1 and len(b.lines) >= 1, timeout=1.0)
+        sends = [e for e in events if e[0] == "send"]
+        # The second module waits for the first's acknowledgement window (0.05 s).
+        assert sends[1][2] - sends[0][2] >= 0.045
+    finally:
+        for task in tasks:
+            task.cancel()

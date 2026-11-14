@@ -655,3 +655,39 @@ def test_factory_week_profile_matches_fhem_default():
     for day in range(7):
         [part] = m.encode_week_profile_day(m.FACTORY_WEEK_PROFILE[day])
         assert part.hex().upper() == (weekend if day in (0, 1) else weekday), day
+
+
+# --- Display of a wall thermostat (0x82 SetDisplayActualTemperature) ---
+
+from custom_components.eq3_max.protocol.messages import build_set_display  # noqa: E402
+
+
+def test_build_set_display_measured_and_target():
+    assert encode_frame(build_set_display(0x01, 0x123456, 0xABCDEF, True)) == "0B010082123456ABCDEF0004"
+    assert encode_frame(build_set_display(0x01, 0x123456, 0xABCDEF, False)) == "0B010082123456ABCDEF0000"
+
+
+def test_wall_thermostat_state_reports_display():
+    # Recorded from a wall thermostat that shows the measured temperature.
+    assert decode_wall_thermostat_state(bytes.fromhex("59042B00D841")).display_actual is True
+    assert decode_wall_thermostat_state(bytes.fromhex("19002A00D841")).display_actual is False
+    assert decode_wall_thermostat_control(bytes.fromhex("2AD2")).display_actual is None
+
+
+from custom_components.eq3_max.protocol.messages import build_remove_group_id, build_set_group_id  # noqa: E402
+
+
+def test_build_group_id_telegrams():
+    assert encode_frame(build_set_group_id(0x01, 0x123456, 0xABCDEF, 3)) == "0B010022123456ABCDEF0003"
+    assert encode_frame(build_remove_group_id(0x01, 0x123456, 0xABCDEF)) == "0B010023123456ABCDEF0000"
+    with pytest.raises(FrameError):
+        build_set_group_id(0x01, 0x123456, 0xABCDEF, 0)
+
+
+from custom_components.eq3_max.protocol.messages import build_wake_up, decode_pair_ping  # noqa: E402
+
+
+def test_wake_up_and_plug_adapter_ping():
+    assert encode_frame(build_wake_up(0x01, 0x123456, 0xABCDEF)) == "0B0100F1123456ABCDEF003F"
+    ping = decode_pair_ping(bytes.fromhex("100800") + b"PLG1234567")
+    assert ping.device_type is DeviceType.PLUG_ADAPTER and ping.serial == "PLG1234567"

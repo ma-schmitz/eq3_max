@@ -91,6 +91,7 @@ class RadioScheduler:
         wait_ready: Callable[[], Awaitable[None]] | None = None,
         on_finished: Callable[[Command], None] | None = None,
         next_counter: Callable[[], int] | None = None,
+        air_lock: asyncio.Lock | None = None,
     ) -> None:
         self._send_line = send_line
         self._ack_timeout = ack_timeout
@@ -109,6 +110,10 @@ class RadioScheduler:
         # Several modules share one central address: one counter for all of them, so an
         # ACK can never match commands of two modules at once.
         self._next_counter = next_counter
+        # Shared by the modules of one hub: only one of them transmits and waits for its
+        # acknowledgement at a time. Modules near each other would otherwise overlap, and
+        # with the same retry interval on every attempt again (14.11.2026).
+        self._air_lock = air_lock
         self._inflight: tuple[int, int] | None = None
         self._inflight_cmd: Command | None = None
         self._abandoned = False
@@ -303,53 +308,59 @@ class RadioScheduler:
                         _LOGGER.exception("cannot encode command for %06X", cmd.dst)
                         cmd.outcome = Outcome.ERROR
                         return False
-                await self._wait_for_air()
-                self._ack_event.clear()
-                self._lovf = False
-                self._inflight = (frame.dst, frame.counter) if cmd.expects_ack else None
+                if self._air_lock is not None:
+                    await self._air_lock.acquire()
                 try:
-                    await self._send_line(line)
-                except ConnectionError as err:
-                    _LOGGER.debug("send failed: %s", err)
-                    attempts += 1
-                    if attempts > retries:
-                        cmd.outcome = Outcome.NOT_SENT
-                        return False
-                    await asyncio.sleep(ack_timeout)
-                    continue
-                first_attempt = cmd.first_sent_at is None
-                if first_attempt:
-                    cmd.first_sent_at = self._clock()
-                cmd.sent += 1
-                booked = (self._clock(), cost)
-                self._airtime.append(booked)
-                # Busy for the telegram's airtime plus a little margin for turning the
-                # radio around - but never longer than the wait for its acknowledgement,
-                # after which the next attempt was always sent.
-                self._busy_until = asyncio.get_running_loop().time() + min(cost + 0.05, ack_timeout)
-                self._changed()
-                if not cmd.expects_ack:
-                    cmd.outcome = Outcome.SENT
-                    return True
-                try:
-                    await asyncio.wait_for(self._ack_event.wait(), ack_timeout)
-                except TimeoutError:
+                    await self._wait_for_air()
+                    self._ack_event.clear()
+                    self._lovf = False
+                    self._inflight = (frame.dst, frame.counter) if cmd.expects_ack else None
+                    try:
+                        await self._send_line(line)
+                    except ConnectionError as err:
+                        _LOGGER.debug("send failed: %s", err)
+                        attempts += 1
+                        if attempts > retries:
+                            cmd.outcome = Outcome.NOT_SENT
+                            return False
+                        await asyncio.sleep(ack_timeout)
+                        continue
+                    first_attempt = cmd.first_sent_at is None
+                    if first_attempt:
+                        cmd.first_sent_at = self._clock()
+                    cmd.sent += 1
+                    booked = (self._clock(), cost)
+                    self._airtime.append(booked)
+                    # Busy for the telegram's airtime plus a little margin for turning the
+                    # radio around - but never longer than the wait for its acknowledgement,
+                    # after which the next attempt was always sent.
+                    self._busy_until = asyncio.get_running_loop().time() + min(cost + 0.05, ack_timeout)
+                    self._changed()
+                    if not cmd.expects_ack:
+                        cmd.outcome = Outcome.SENT
+                        return True
+                    try:
+                        await asyncio.wait_for(self._ack_event.wait(), ack_timeout)
+                    except TimeoutError:
+                        if self._acked is not None:
+                            return self._ack_result(cmd)
+                        if self._abandoned:
+                            cmd.outcome = Outcome.ABANDONED
+                            return False
+                        attempts += 1
+                        if attempts > retries:
+                            _LOGGER.warning("no ack from %06X for counter %02X", frame.dst, frame.counter)
+                            cmd.outcome = Outcome.NO_ACK
+                            return False
+                        continue
                     if self._acked is not None:
                         return self._ack_result(cmd)
                     if self._abandoned:
                         cmd.outcome = Outcome.ABANDONED
                         return False
-                    attempts += 1
-                    if attempts > retries:
-                        _LOGGER.warning("no ack from %06X for counter %02X", frame.dst, frame.counter)
-                        cmd.outcome = Outcome.NO_ACK
-                        return False
-                    continue
-                if self._acked is not None:
-                    return self._ack_result(cmd)
-                if self._abandoned:
-                    cmd.outcome = Outcome.ABANDONED
-                    return False
+                finally:
+                    if self._air_lock is not None:
+                        self._air_lock.release()
                 # LOVF: the stick did not transmit. Take the attempt back, wait for its
                 # budget to refill, then send the same frame again. An ack arriving during
                 # this delay is caught by the check at the loop top.

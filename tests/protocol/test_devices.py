@@ -262,7 +262,7 @@ def test_factory_config_values():
 def test_config_keys_per_device_type():
     assert ht().config_keys == CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS
     # The wall thermostat counts its boost down by its own duration; no valve otherwise.
-    assert wt().config_keys == CONFIG_TEMP_KEYS + ("boost_dauer",)
+    assert wt().config_keys == CONFIG_TEMP_KEYS + ("boost_dauer", "anzeige")
     fk = MaxDevice(1, "X", DeviceType.SHUTTER_CONTACT)
     assert fk.config_keys == ()
 
@@ -620,3 +620,54 @@ def test_running_week_profile_write_is_not_stored():
     assert "week_profile_writing" not in data and "week_profile_error" not in data
     back = MaxDevice.from_dict({**data, "week_profile_writing": ["Montag"], "week_profile_error": "x"})
     assert back.week_profile_writing == [] and back.week_profile_error is None
+
+
+# --- Display setting of the wall thermostat ---
+
+from custom_components.eq3_max.protocol.devices import KIND_DISPLAY  # noqa: E402
+from custom_components.eq3_max.protocol.messages import FrameError, WallThermostatState  # noqa: E402
+
+
+def _wall_state(display_actual):
+    return WallThermostatState(bits=None, target=21.0, measured=None, display_actual=display_actual)
+
+
+def test_display_is_unknown_until_reported():
+    d = wt()
+    d.ensure_config_defaults()
+    assert "anzeige" not in d.config and "anzeige" not in d.config_source
+    assert "anzeige" not in ht().config_keys
+
+
+def test_stage_display_and_invalid_value():
+    d = wt()
+    assert d.stage_config("anzeige", "ist") == KIND_DISPLAY
+    assert d.pending_config[KIND_DISPLAY] == {"anzeige": "ist"}
+    assert d.encode_config(KIND_DISPLAY, {"anzeige": "ist"}) == b"\x04"
+    assert d.assumed_factory(KIND_DISPLAY) == []
+    with pytest.raises(FrameError):
+        d.stage_config("anzeige", "beides")
+    with pytest.raises(FrameError):
+        ht().stage_config("anzeige", "ist")
+
+
+def test_reported_display_sets_value_and_confirms_pending():
+    d = wt()
+    d.apply_wall_state(_wall_state(False))
+    assert d.config["anzeige"] == "soll" and d.config_source["anzeige"] == "gemeldet"
+    d.stage_config("anzeige", "ist")
+    d.mark_config_failed(KIND_DISPLAY)
+    d.apply_wall_state(_wall_state(False))  # still the old value: stays pending
+    assert KIND_DISPLAY in d.pending_config and d.config["anzeige"] == "soll"
+    d.apply_wall_state(_wall_state(True))
+    assert d.config["anzeige"] == "ist" and d.pending_config == {} and d.config_failed == []
+    d.apply_wall_state(_wall_state(None))  # 0x42 does not carry it
+    assert d.config["anzeige"] == "ist"
+
+
+def test_failed_display_set_survives_storage():
+    d = wt()
+    d.stage_config("anzeige", "ist")
+    d.mark_config_failed(KIND_DISPLAY)
+    again = MaxDevice.from_dict(d.to_dict())
+    assert again.pending_config == {KIND_DISPLAY: {"anzeige": "ist"}} and again.config_failed == [KIND_DISPLAY]

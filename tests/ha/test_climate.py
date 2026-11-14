@@ -428,3 +428,113 @@ async def test_native_temperature_members_without_deprecation(hass, setup_entry,
         with caplog.at_level(logging.WARNING):
             type("MaxClimateProbe", (MaxClimate,), {})
         assert "deprecated" not in caplog.text
+
+
+async def test_presets_comfort_and_eco(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    dev = hub.devices[HT]
+    dev.config["komfort"], dev.config["eco"] = 21.5, 16.5
+    await push(hass, hub, HT, target=19.0, mode=Mode.MANUAL)
+    st = hass.states.get(E)
+    assert {"comfort", "eco"} <= set(st.attributes["preset_modes"]) and st.attributes["preset_mode"] == "none"
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "comfort"}, blocking=True)
+    assert hub.commands[-1] == (HT, 21.5, Mode.MANUAL) and dev.last_comfort == 21.5
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "eco"}, blocking=True)
+    # Eco is no comfort value: heat after away/boost goes back to comfort, not eco.
+    assert hub.commands[-1] == (HT, 16.5, Mode.MANUAL) and dev.last_comfort == 21.5
+    await push(hass, hub, HT, target=16.5, mode=Mode.MANUAL)
+    assert hass.states.get(E).attributes["preset_mode"] == "eco"
+    await push(hass, hub, HT, target=21.5, mode=Mode.MANUAL)
+    assert hass.states.get(E).attributes["preset_mode"] == "comfort"
+    # The automatic program on the comfort value is no preset.
+    await push(hass, hub, HT, target=21.5, mode=Mode.AUTO)
+    assert hass.states.get(E).attributes["preset_mode"] == "none"
+
+
+async def test_open_window_wins_over_eco_preset(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    dev = hub.devices[HT]
+    dev.config["eco"] = dev.config["fenster_temperatur"] = 12.0
+    await push(hass, hub, HT, target=12.0, mode=Mode.MANUAL)
+    assert hass.states.get(E).attributes["preset_mode"] == "none"
+
+
+async def test_wall_thermostat_comfort_preset(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    hub.devices[WT].config["komfort"] = 22.0
+    await hass.services.async_call(
+        "climate", "set_preset_mode", {ATTR_ENTITY_ID: "climate.wt_wohnzimmer", "preset_mode": "comfort"}, blocking=True
+    )
+    assert hub.commands[-1] == (WT, 22.0, Mode.MANUAL)
+
+
+# --- attributes for the thermostat card ---
+
+from homeassistant.helpers import entity_registry as er  # noqa: E402
+
+from custom_components.eq3_max.const import CONF_ALLOW_USER_WEEK_PROFILE, DOMAIN  # noqa: E402
+
+from .conftest import FK  # noqa: E402
+
+CARD_ATTRS = (
+    "fenster", "raum", "wochenprogramm", "wochenprogramm_schreibt", "wochenprogramm_fehler",
+    "einstellungen_frei", "wochenprogramm_frei",
+)
+
+
+def _fk_entity(hass):
+    return er.async_get(hass).async_get_entity_id("binary_sensor", DOMAIN, "NEQ9000010_state")
+
+
+async def test_card_attributes_defaults(hass, setup_entry, fake_hub):
+    st = hass.states.get(E)
+    assert st.attributes["fenster"] == [] and st.attributes["raum"] == []
+    assert st.attributes["wochenprogramm"] == {} and st.attributes["wochenprogramm_schreibt"] == []
+    assert st.attributes["wochenprogramm_fehler"] is None
+    assert st.attributes["einstellungen_frei"] is True and st.attributes["wochenprogramm_frei"] is True
+
+
+async def test_card_attributes_window_room_and_week(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    fk = _fk_entity(hass)
+    assert fk is not None
+    # FK linked to the wall thermostat only; the radiator is in the wall thermostat's room.
+    hub.devices[WT].links = ["MEQ9000007", "NEQ9000010"]
+    hub.devices[HT].links = ["NEQ9000011"]
+    hub.devices[FK].links = ["NEQ9000011"]  # a link counts once both sides acknowledged it
+    hub.devices[HT].week_profile = {"Montag": [{"temperature": 17.0, "until": "24:00"}]}
+    hub.devices[HT].week_profile_writing = ["Dienstag"]
+    await push(hass, hub, HT, target=21.0, mode=Mode.MANUAL)
+    st = hass.states.get(E)
+    assert st.attributes["fenster"] == [fk]
+    assert st.attributes["raum"] == ["climate.wt_wohnzimmer"]
+    assert st.attributes["wochenprogramm"] == {"Montag": [{"temperature": 17.0, "until": "24:00"}]}
+    assert st.attributes["wochenprogramm_schreibt"] == ["Dienstag"]
+    await push(hass, hub, WT)
+    assert hass.states.get("climate.wt_wohnzimmer").attributes["fenster"] == [fk]
+
+
+async def test_card_attributes_not_recorded(hass, setup_entry, fake_hub):
+    from custom_components.eq3_max.climate import MaxClimate
+
+    assert set(CARD_ATTRS) <= set(MaxClimate._unrecorded_attributes)
+
+
+async def test_option_change_updates_flags_without_reload(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    hass.config_entries.async_update_entry(setup_entry, options={**setup_entry.options, CONF_ALLOW_USER_WEEK_PROFILE: False})
+    await hass.async_block_till_done()
+    assert fake_hub.last is hub  # no reload
+    assert hass.states.get(E).attributes["wochenprogramm_frei"] is False
+
+
+async def test_week_program_change_reaches_the_state_machine(hass, setup_entry, fake_hub):
+    """The hub changes dev.week_profile in place; the attribute must not share that
+    object, or the new state equals the old one and the frontend gets no update."""
+    hub = fake_hub.last
+    await push(hass, hub, HT, target=21.0, mode=Mode.MANUAL)
+    old = hass.states.get(E).attributes["wochenprogramm"]
+    hub.devices[HT].week_profile["Montag"] = [{"temperature": 17.0, "until": "24:00"}]
+    await push(hass, hub, HT)
+    assert old == {}
+    assert hass.states.get(E).attributes["wochenprogramm"] == {"Montag": [{"temperature": 17.0, "until": "24:00"}]}

@@ -19,13 +19,14 @@ from .const import CONF_MAIN_NAME, DOMAIN, MAIN_RADIO_NAME
 from .migration import specs_for, unique_id
 from .protocol.messages import FrameError
 from .protocol.hub import MAIN_RADIO
+from .permissions import async_check_allowed
 from .radios import radio_names
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
     coordinator = entry.runtime_data
     entities: list[SelectEntity] = [
-        MaxConfigSelect(coordinator, device, spec.key)
+        MaxPollSelect(coordinator, device) if spec.key == "ist_abfragen" else MaxConfigSelect(coordinator, device, spec.key)
         for device in coordinator.hub.devices.values()
         for spec in specs_for(device)
         if spec.domain == "select"
@@ -72,6 +73,7 @@ class MaxRadioSelect(MaxCulEntity, SelectEntity):
         return {self._attr_keys[radio]: self.device.rssi_by_radio.get(radio) for radio in self._names}
 
     async def async_select_option(self, option: str) -> None:
+        await async_check_allowed(self.hass, self.coordinator.entry, self._context, "admin")
         radio = next((radio for radio, name in self._names.items() if name == option), None)
         if radio is None:
             raise invalid("radio_unknown", name=option)
@@ -109,4 +111,28 @@ class MaxConfigSelect(MaxConfigEntity, SelectEntity):
                 raise invalid("option_invalid", option=option) from err
         else:
             value = next((stored for stored, text in OPTION_VALUES[self._key] if text == option), option)
-        self._set(value)
+        await self._async_set(value)
+
+
+class MaxPollSelect(MaxCulEntity, SelectEntity):
+    """How often eq3_max makes a radiator thermostat report its measured temperature:
+    it moves the target by 0.5 until the device sent its status, then back. Costs battery."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:thermometer-auto"
+    _attr_options = ["off", "15", "30", "60", "120", "240"]
+
+    def __init__(self, coordinator, device) -> None:
+        super().__init__(coordinator, device, "ist_abfragen", "Ist-Temperatur abfragen")
+
+    @property
+    def current_option(self) -> str:
+        minutes = self.device.poll_minutes
+        return str(minutes) if minutes else "off"
+
+    async def async_select_option(self, option: str) -> None:
+        await async_check_allowed(self.hass, self.coordinator.entry, self._context, "config")
+        try:
+            self.coordinator.hub.set_poll(self._address, 0 if option == "off" else int(option))
+        except (FrameError, ValueError) as err:
+            raise invalid("option_invalid", option=option) from err

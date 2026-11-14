@@ -49,7 +49,7 @@ _CLIMATE_DIAG = [
 ]
 
 # Device configuration: select for the value lists, number for the rest.
-SELECT_CONFIG_KEYS = ("boost_dauer", "entkalkung_tag")
+SELECT_CONFIG_KEYS = ("boost_dauer", "entkalkung_tag", "anzeige")
 
 
 def _config_specs(keys: tuple[str, ...]) -> list[EntitySpec]:
@@ -61,6 +61,8 @@ def specs_for(device: MaxDevice) -> list[EntitySpec]:
         return [
             EntitySpec("climate", "climate", ""), EntitySpec("sensor", "ventil", None), *_DIAG, *_CLIMATE_DIAG,
             *_config_specs(CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS),
+            # Poll the measured temperature (the device reports it only on its own changes).
+            EntitySpec("select", "ist_abfragen", None),
         ]
     if device.device_type is DeviceType.WALL_THERMOSTAT:
         # device.config_keys: the temperatures and, of the valve set, the boost duration.
@@ -69,6 +71,9 @@ def specs_for(device: MaxDevice) -> list[EntitySpec]:
         return [EntitySpec("binary_sensor", "state", "_STATE"), *_DIAG]
     if device.device_type is DeviceType.PUSH_BUTTON:
         return [EntitySpec("event", "event", None), *_DIAG]
+    if device.device_type is DeviceType.PLUG_ADAPTER:
+        # Not supported yet: only that it is there and how well it is heard (mains, no battery).
+        return [EntitySpec("sensor", "rssi", None), EntitySpec("sensor", "zuletzt_gemeldet", None)]
     return []
 
 

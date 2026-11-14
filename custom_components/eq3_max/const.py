@@ -22,6 +22,9 @@ MAIN_RADIO_NAME = "Hauptmodul"
 CONF_MAIN_NAME = "main_name"
 CONF_AWAY_TEMPERATURE = "away_temperature"
 CONF_AWAY_HOURS = "away_hours"
+# Whether users without admin rights may change device settings / week programs (default: yes).
+CONF_ALLOW_USER_CONFIG = "allow_user_config"
+CONF_ALLOW_USER_WEEK_PROFILE = "allow_user_week_profile"
 DEFAULT_AWAY_TEMPERATURE = 18.0
 DEFAULT_AWAY_HOURS = 24
 MIN_AWAY_HOURS = 1

@@ -9,6 +9,8 @@ from homeassistant.components.climate import (
     ATTR_HVAC_MODE,
     PRESET_AWAY,
     PRESET_BOOST,
+    PRESET_COMFORT,
+    PRESET_ECO,
     PRESET_NONE,
     ClimateEntity,
     ClimateEntityFeature,
@@ -17,15 +19,20 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .errors import invalid, translated
-from .const import CONF_AWAY_HOURS, CONF_AWAY_TEMPERATURE, DEFAULT_AWAY_HOURS, DEFAULT_AWAY_TEMPERATURE
+from .const import DOMAIN, CONF_AWAY_HOURS, CONF_AWAY_TEMPERATURE, DEFAULT_AWAY_HOURS, DEFAULT_AWAY_TEMPERATURE
 from .entity import MaxCulEntity
+from .migration import unique_id
+from .permissions import user_allowed_flags
+from .protocol.hub import link_status, room_of
 from .protocol.messages import (
     MAX_TEMPERATURE,
     OFF_TEMPERATURE,
     FrameError,
+    DeviceType,
     Mode,
     normalize_temperature,
     round_until,
@@ -64,7 +71,7 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
     _attr_min_temp = OFF_TEMPERATURE
     _attr_max_temp = MAX_TEMPERATURE
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.AUTO, HVACMode.OFF]
-    _attr_preset_modes = [PRESET_NONE, PRESET_BOOST, PRESET_AWAY]
+    _attr_preset_modes = [PRESET_NONE, PRESET_COMFORT, PRESET_ECO, PRESET_BOOST, PRESET_AWAY]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
@@ -72,8 +79,47 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_ON
     )
 
+    # For the thermostat card; large (week program) or rarely changing, not for the recorder.
+    _unrecorded_attributes = frozenset(
+        {
+            "fenster", "raum", "wochenprogramm", "wochenprogramm_schreibt", "wochenprogramm_fehler",
+            "einstellungen_frei", "wochenprogramm_frei",
+        }
+    )
+
     def __init__(self, coordinator, device) -> None:
         super().__init__(coordinator, device, "climate", None)
+
+    def _entity_id(self, domain: str, serial: str, key: str) -> str | None:
+        return er.async_get(self.hass).async_get_entity_id(domain, DOMAIN, unique_id(serial, key))
+
+    def _card_attributes(self) -> dict[str, Any]:
+        """What the thermostat card shows: window contacts of the device and of its room,
+        the room's thermostats, the stored week program and the user permissions."""
+        dev = self.device
+        devices = self.coordinator.hub.devices
+        by_serial = {d.serial: d for d in devices.values()}
+        room = room_of(devices, dev)
+        contacts: list[str] = []
+        for member in (dev, *room):
+            for serial in link_status(devices, member).partners:
+                other = by_serial.get(serial)
+                if other is not None and other.device_type is DeviceType.SHUTTER_CONTACT:
+                    entity_id = self._entity_id("binary_sensor", serial, "state")
+                    if entity_id and entity_id not in contacts:
+                        contacts.append(entity_id)
+        config, week = user_allowed_flags(self.coordinator.entry)
+        return {
+            "fenster": sorted(contacts),
+            "raum": [e for e in (self._entity_id("climate", d.serial, "climate") for d in room) if e],
+            # Copies: the hub changes these in place, a shared object would make the new
+            # state equal the old one and the frontend would never get the change.
+            "wochenprogramm": {day: [dict(p) for p in points] for day, points in dev.week_profile.items()},
+            "wochenprogramm_schreibt": list(dev.week_profile_writing),
+            "wochenprogramm_fehler": None if dev.week_profile_error is None else dict(dev.week_profile_error),
+            "einstellungen_frei": config,
+            "wochenprogramm_frei": week,
+        }
 
     @property
     def native_current_temperature(self) -> float | None:
@@ -111,6 +157,14 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
             return PRESET_BOOST
         if self.device.mode is Mode.TEMPORARY:
             return PRESET_AWAY
+        dev = self.device
+        if dev.mode is Mode.MANUAL and dev.target is not None and dev.target != dev.window_open_temperature:
+            # Manual on the stored comfort/eco value: what the device's own buttons and
+            # FHEM do (SetTemperature MANUAL with that value). An open window wins.
+            if dev.target == dev.config.get("komfort"):
+                return PRESET_COMFORT
+            if dev.target == dev.config.get("eco"):
+                return PRESET_ECO
         return PRESET_NONE
 
     @property
@@ -124,6 +178,7 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         }
         if self.device.is_heating_thermostat:
             attrs["valve"] = self.device.valve
+        attrs.update(self._card_attributes())
         return attrs
 
     def _base_target(self) -> float | None:
@@ -148,13 +203,21 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
             return float(configured)
         return DEFAULT_ON_TEMPERATURE
 
-    def _send(self, temperature: float | None, mode: Mode, until: datetime | None = None) -> None:
+    def _configured(self, key: str) -> float:
+        value = self.device.config.get(key)
+        if value is None:
+            raise invalid("invalid_value")
+        return float(value)
+
+    def _send(
+        self, temperature: float | None, mode: Mode, until: datetime | None = None, *, comfort: bool = True
+    ) -> None:
         assert self.coordinator.hub is not None
         try:
             self.coordinator.hub.set_temperature(self._address, temperature, mode, until=until)
         except FrameError as err:
             raise translated(err, ServiceValidationError) from err
-        if mode is Mode.MANUAL and temperature is not None:
+        if comfort and mode is Mode.MANUAL and temperature is not None:
             # Only manual targets are comfort values (not boost, away or auto).
             sent = normalize_temperature(temperature)
             if sent > OFF_TEMPERATURE:
@@ -195,6 +258,13 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         if preset_mode == PRESET_AWAY:
             hours = int(self.coordinator.entry.options.get(CONF_AWAY_HOURS, DEFAULT_AWAY_HOURS))
             self._send(self._away_temperature(), Mode.TEMPORARY, _away_end(_local_now() + timedelta(hours=hours)))
+            return
+        if preset_mode == PRESET_COMFORT:
+            self._send(self._configured("komfort"), Mode.MANUAL)
+            return
+        if preset_mode == PRESET_ECO:
+            # Eco is a setback, no comfort value to return to after away/boost.
+            self._send(self._configured("eco"), Mode.MANUAL, comfort=False)
             return
         if preset_mode != PRESET_BOOST and self._base_mode() in (Mode.TEMPORARY, Mode.BOOST):
             self._send(self._comfort(), Mode.MANUAL)

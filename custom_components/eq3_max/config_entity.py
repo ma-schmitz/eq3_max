@@ -9,6 +9,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from .config_defs import CONFIG_LABELS
 from .errors import invalid
+from .permissions import async_check_allowed
 from .entity import MaxCulEntity
 from .protocol.messages import FrameError
 
@@ -43,8 +44,9 @@ class MaxConfigEntity(MaxCulEntity):
         """The translated error for a value the device does not take."""
         return invalid("invalid_value")
 
-    def _set(self, value: Any) -> None:
+    async def _async_set(self, value: Any) -> None:
         assert self.coordinator.hub is not None
+        await async_check_allowed(self.hass, self.coordinator.entry, self._context, "config")
         try:
             self.coordinator.hub.set_config(self._address, self._key, value)
         except FrameError as err:

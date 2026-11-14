@@ -7,6 +7,66 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.0] – 2026-11-14
+
+### Hinzugefügt
+- **Anzeige am Wandthermostat: Soll- oder Ist-Temperatur.** Neue Auswahl
+  `select.<gerät>_anzeige` (Kategorie Konfiguration) und Satz **Anzeige** auf der Seite
+  „eQ-3 MAX!“. Am Gerät selbst ist der Menüpunkt „S-A“ gesperrt, solange es an einer
+  Zentrale angelernt ist; die Integration setzt die Anzeige deshalb per Funk (Telegramm 0x82,
+  wie FHEM). Der Wandthermostat meldet die Einstellung in seinem vollen Status selbst: Bis zu
+  dieser Meldung (Quelle `gemeldet`) oder der Quittung (Quelle `gesetzt`) ist der Wert
+  unbekannt, eine Werksvorgabe wird nicht angenommen. Gewünscht in Discussion #5.
+- **Presets „Komfort“ und „Eco“** an jedem Thermostat: Handbetrieb auf der Komfort- bzw.
+  Eco-Temperatur der Gerätekonfiguration (Telegramm 0x40, wie FHEM). Wird auch angezeigt,
+  wenn der Sollwert auf anderem Weg dort landet; ein offenes Fenster geht vor. Eco zählt nicht
+  als Komfortwert für die Rückkehr nach Abwesend/Boost.
+- **Gruppen-ID**: je Thermostat setzen (0x22) oder entfernen (0x23), oder „Für den Raum
+  vergeben“ für ein Thermostat und die mit ihm verknüpften (freie oder schon gemeinsame ID).
+  Gilt nach der Quittung, sonst erneut mit der nächsten Meldung, nach Werksreset
+  zurückgegeben. „Für den Raum vergeben“ entfernt dieselbe ID einmal bei allen anderen Thermostaten
+  (die Geräte melden ihre Gruppe nicht; eine alte aus Cube-/Homegear-Zeiten würde mitschalten). Panel:
+  Reiter Verknüpfungen; WebSocket-Befehl `eq3_max/set_group`.
+- **Zwischenstecker (BC-TS-Sw-Pl, Gerätetyp 8)** wird angelernt statt als unbekannter Typ
+  verworfen: erscheint mit RSSI und „zuletzt gemeldet“, seine Telegramme stehen für einen
+  Mitschnitt im Log (INFO). Steuerung folgt.
+- **Attribute für die Thermostatkarte** (`eq3-max-thermostat-card`, eigenes Repo) an jedem
+  Thermostat: `fenster` (Fensterkontakte des Geräts und seines Raums), `raum` (Thermostate
+  des Raums), `wochenprogramm`, `wochenprogramm_schreibt`, `wochenprogramm_fehler`,
+  `einstellungen_frei`, `wochenprogramm_frei`. Nicht im Recorder.
+- **Optionen „Benutzer ohne Admin-Rechte dürfen Geräteeinstellungen / Wochenprogramme
+  ändern“** (beide Vorgabe an). Die Integration setzt sie durch: Entitäten und Dienste lehnen
+  Benutzer ohne Admin-Rechte ab, wenn aus; Automationen und Admins dürfen immer.
+- **Ist-Temperatur abfragen** bei Heizkörperthermostaten: `select.<gerät>_ist_abfragen`
+  (aus, alle 15/30/60/120/240 min). Nur wenn das Gerät nicht von selbst gemeldet hat: Sollwert
+  +0,5 °C, bis es seinen Status schickt (etwa 1 min), dann zurück; in HA unsichtbar.
+- **Erklärtexte** zu jedem Einstellwert auf der Seite „eQ-3 MAX!“: Mouseover-Text und ein ⓘ,
+  das ihn aufklappt (für Handy und Tablet).
+- WakeUp-Telegramm (0xF1) im Protokoll und im Hub (`wake_up`); noch nicht von selbst
+  genutzt, ob es bei Telegrammserien hilft, wird erst gemessen.
+
+### Behoben
+- **Mehrere Funkmodule senden nicht mehr gleichzeitig.** Jedes Modul hatte seine eigene
+  Warteschlange; eine raumweite Änderung (Wandthermostat an einem Modul, Heizkörper am anderen)
+  ging auf beiden innerhalb von Millisekunden raus, die Telegramme überlagerten sich, und mit
+  gleichem Wiederholtakt bei jedem Versuch erneut – keins der Geräte quittierte, beide zeigten
+  Funkfehler. Jetzt sendet immer nur ein Modul und wartet seine Quittung ab.
+
+### Geändert
+- **Werksreset, Verknüpfen, Lösen und die Funkmodul-Auswahl nur noch für Administratoren.**
+  Automationen, die durch ihren Auslöser laufen (ohne Benutzer), dürfen weiter; ein von einem
+  Benutzer gestartetes Skript gilt als dieser Benutzer. Bisher konnte jeder HA-Benutzer
+  diese Dienste aufrufen.
+
+## [0.7.2] – 2026-11-13
+
+### Behoben
+- Ein Eco-Taster wiederholt einen Druck, dessen Quittung er nicht angenommen hat, mit
+  derselben Nummer, manchmal erst 8–12 s später. Wiederholungen wurden nur 5 s lang
+  herausgefiltert; eine späte zählte als zweiter Druck, und eine Automation, die ein Licht
+  umschaltet, schaltete es gleich wieder zurück. Wiederholungen werden jetzt 30 s lang
+  erkannt; ein neuer Druck hat immer eine neue Nummer.
+
 ### Hinzugefügt
 - Community-Dateien: Issue-Formulare (Fehlerbericht, Wunsch), Vorlage für Pull Requests,
   CONTRIBUTING.md, Verhaltenskodex (Contributor Covenant 2.1), SECURITY.md mit vertraulicher

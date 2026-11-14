@@ -43,3 +43,25 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   ```
   Der alte Partner bekommt nichts gesendet. Bei Fensterkontakten wartet auch dieser Auftrag
   auf das nächste Fenster-Ereignis.
+
+## Gruppen-ID (ab 0.8.0)
+
+Thermostate einer Gruppe übernehmen Stellbefehle gemeinsam: Die Integration schickt sie dann
+mit Gruppenkennung, und alle Geräte der Gruppe stellen sich um. Auf der Seite „eQ-3 MAX!“ im
+Reiter **Verknüpfungen** unter **Gruppen-ID**:
+
+- **Setzen**: eine ID 1–255 eintragen; **Entfernen** nimmt sie wieder weg.
+- **Für den Raum vergeben**: dieses Thermostat und alle mit ihm verknüpften Thermostate
+  bekommen eine gemeinsame ID, die sonst kein Gerät hat (haben sie schon eine gemeinsame,
+  bleibt es bei der). Alle **anderen** Thermostate bekommen dabei einmal „Gruppe entfernen“:
+  Die Geräte melden ihre Gruppe nicht, und eine alte ID aus Cube- oder Homegear-Zeiten würde
+  sonst ein fremdes Thermostat mitschalten.
+
+Die neue ID gilt erst, wenn das Gerät sie quittiert hat; bis dahin steht sie als
+„ausstehend“ da, ohne Quittung geht sie beim nächsten Melden des Geräts erneut raus.
+Nach einem Werksreset bekommt das Gerät seine ID automatisch zurück.
+
+**Wozu?** Ein Sollwert, den HA an den Wandthermostat schickt, reicht dieser erst mit seiner
+nächsten Runde an die Heizkörper weiter (gemessen 2–5 min). Mit einer gemeinsamen Gruppe
+übernehmen alle Geräte des Raums ihn aus einem Telegramm (gemessen 1–2 min, die Heizkörper
+hören nur in Abständen).

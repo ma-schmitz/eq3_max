@@ -54,7 +54,7 @@ Später unter **Konfigurieren**:
 
 | Menüpunkt | Inhalt |
 |---|---|
-| Einstellungen | Sendezeit-Bremse (36 s pro Stunde und Modul, bei neuen Einträgen an), Abwesend-Temperatur (18,0 °C) und -Dauer (24 h) |
+| Einstellungen | Sendezeit-Bremse (36 s pro Stunde und Modul, bei neuen Einträgen an), Abwesend-Temperatur (18,0 °C) und -Dauer (24 h), ab 0.8.0 die Freigaben für Benutzer ohne Admin-Rechte |
 | Verbindung ändern | USB ↔ Netzwerk oder anderer Port/Host, ohne die Integration neu anzulegen |
 | Funkmodule | weitere Sticks oder Cubes hinzufügen und entfernen, siehe [Mehrere Funkmodule](../handbuch/funkmodule.md) |
 

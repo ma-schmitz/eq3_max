@@ -234,6 +234,8 @@ class MaxCulCoordinator:
                 updated.pop("window_open_temperature", None)
             if device.links or "links" in item:
                 updated["links"] = list(device.links)
+            if device.group or item.get("group"):
+                updated["group"] = device.group
             # A module removed in the options is gone from the entry before the reload:
             # never write its id back.
             if (device.radio or "radio" in item) and device.radio in radio_names(self.entry.data):

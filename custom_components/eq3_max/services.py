@@ -13,6 +13,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import service
 
+from .permissions import async_check_allowed
 from .errors import failed, invalid, translated
 from .const import DOMAIN
 from .protocol.devices import WEEKDAYS, MaxDevice
@@ -90,6 +91,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
 async def _async_factory_reset(call: ServiceCall) -> None:
     from .coordinator import async_forget_device  # noqa: PLC0415
 
+    await async_check_allowed(call.hass, None, call.context, "admin")
     hass = call.hass
     dev_reg = dr.async_get(hass)
     device = dev_reg.async_get(call.data[ATTR_DEVICE_ID])
@@ -148,10 +150,12 @@ def resolve_max_device(hass: HomeAssistant, device_id: str, hub_key: str = "hub_
 
 
 async def _async_link(call: ServiceCall) -> None:
+    await async_check_allowed(call.hass, None, call.context, "admin")
     change_link(call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_PARTNER_DEVICE_ID], unlink=False)
 
 
 async def _async_unlink(call: ServiceCall) -> None:
+    await async_check_allowed(call.hass, None, call.context, "admin")
     change_link(
         call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_PARTNER_DEVICE_ID], unlink=True,
         force=call.data.get(ATTR_FORCE, False),
@@ -318,7 +322,14 @@ async def async_copy_week_profile(hass: HomeAssistant, device_id: str, target_id
     return [target for _, target in targets]
 
 
+async def _check_week_profile(call: ServiceCall, device_ids: list[str]) -> None:
+    for device_id in device_ids:
+        entry, _device = resolve_max_device(call.hass, device_id, hub_key="hub_no_week_profile")
+        await async_check_allowed(call.hass, entry, call.context, "week_profile")
+
+
 async def _async_set_week_profile(call: ServiceCall) -> None:
+    await _check_week_profile(call, call.data[ATTR_DEVICE_ID])
     await async_set_week_profile(call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_WEEKDAY], call.data[ATTR_PROFILE])
 
 
@@ -344,4 +355,5 @@ async def _async_set_time(call: ServiceCall) -> None:
 
 
 async def _async_copy_week_profile(call: ServiceCall) -> None:
+    await _check_week_profile(call, call.data[ATTR_TARGET_DEVICE_ID])
     await async_copy_week_profile(call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_TARGET_DEVICE_ID])

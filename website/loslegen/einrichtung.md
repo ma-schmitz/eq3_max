@@ -54,7 +54,7 @@ Later under **Configure**:
 
 | Menu item | Content |
 |---|---|
-| "Settings" | Airtime brake (36 s per hour and module, on for new entries), away temperature (18.0 °C) and away duration (24 h) |
+| "Settings" | Airtime brake (36 s per hour and module, on for new entries), away temperature (18.0 °C) and away duration (24 h), from 0.8.0 the permissions for users without admin rights |
 | "Change connection" | USB ↔ network or a different port/host, without creating the integration again |
 | "Radio modules" | add and remove further sticks or Cubes, see [Multiple radio modules](../handbuch/funkmodule.md) |
 

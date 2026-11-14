@@ -42,7 +42,9 @@ Markers: **pending** (command, configuration or link not yet acknowledged),
   go out after the next opening/closing or press.
 - **Configuration** (thermostats only): set **Temperatures** (komfort, eco, maximal, minimal,
   offset, fenster_temperatur, fenster_dauer), on radiator thermostats additionally **Valve**
-  (boost_dauer, boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset).
+  (boost_dauer, boost_ventil, entkalkung_tag, entkalkung_stunde, ventil_max, ventil_offset);
+  on wall thermostats **Valve** only with boost_dauer, plus **Display** (set or current
+  temperature on the display, from 0.8.0).
   - For each value the source (**Homegear** / **Factory default** / **set**) and, if sent but
     not acknowledged, "pending: <value>" next to the acknowledged one. This only appears for
     values that differ from the acknowledged one; that the whole set is on its way is shown
@@ -51,6 +53,13 @@ Markers: **pending** (command, configuration or link not yet acknowledged),
     with a hint), then **"Send set"**. The panel first shows the changes and the
     **factory defaults that go along** (values never read from the device) — only "Send"
     sends the set, as **one** telegram. "Discard" resets the form.
+  - Every value has a **hover text** explaining what it does on the device; the **ⓘ** next to
+    it unfolds the same explanation (for phones and tablets, from 0.8.0).
+  - On radiator thermostats below it **"Poll current temperature"** (off, every 15 min … 4 h,
+    from 0.8.0), see [Device configuration](konfiguration.md#poll-the-current-temperature-from-080).
+- **Group id** (in the Links tab, thermostats only, from 0.8.0): current id, pending id,
+  **Set**, **Remove** and **Assign for the room**, see
+  [Links](verknuepfungen.md#group-id-from-080).
 - The panel refreshes by itself. While you are typing in a field, the refresh waits until
   you leave it.
 - **Week program** (thermostats only, from 0.6.0): at the top the last acknowledged days

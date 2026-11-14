@@ -182,3 +182,19 @@ connection restarts the integration, the settings do not.
 | Limit airtime to 36 s per hour | on (new entries) | keeps to the legal limit of 36 s per hour (1 %); commands may then wait |
 | Away temperature | 18.0 °C | for the preset "Away" |
 | Away duration (hours) | 24 h | for the preset "Away" |
+| Users without admin rights may change device settings | on | comfort/eco, offset, window, boost, valve, display (entities, thermostat card); from 0.8.0 |
+| Users without admin rights may change week programs | on | `set_week_profile`, `copy_week_profile`, thermostat card; from 0.8.0 |
+
+## Who may do what (from 0.8.0)
+
+Home Assistant has no rights per entity: every user may call every service. eq3_max
+therefore checks the caller itself:
+
+- **Administrators only:** `factory_reset`, `link`, `unlink` and the choice of radio module.
+- **By option** (see above, open by default): device settings and week programs.
+- **Always open:** temperature, mode, presets, `set_away`, `set_time`.
+
+Automations run by their triggers have no user and may do everything. If a user starts a
+script or automation by hand (dashboard button, "Run"), the call counts as that user and is
+checked like them. A rejected call says
+"Only administrators may do this" or points to the option.

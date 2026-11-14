@@ -144,11 +144,15 @@
         "data": {
           "brake": "Limit airtime to 36 s per hour",
           "away_temperature": "Away temperature",
-          "away_hours": "Away duration (hours)"
+          "away_hours": "Away duration (hours)",
+          "allow_user_config": "Users without admin rights may change device settings",
+          "allow_user_week_profile": "Users without admin rights may change week programs"
         },
         "data_description": {
           "away_temperature": "Target temperature of the preset away.",
-          "away_hours": "The preset away ends after this many hours, rounded up to the next half hour."
+          "away_hours": "The preset away ends after this many hours, rounded up to the next half hour.",
+          "allow_user_config": "Comfort/eco, offset, window, boost, valve and display, e.g. from the thermostat card. Temperature and mode stay open to everyone; admins and automations may always.",
+          "allow_user_week_profile": "Writing week programs (service set_week_profile/copy_week_profile, thermostat card)."
         }
       },
       "radios": {
@@ -413,6 +417,24 @@
           "thursday": "Thursday",
           "friday": "Friday"
         }
+      },
+      "anzeige": {
+        "name": "Display",
+        "state": {
+          "setpoint": "Set temperature",
+          "actual": "Current temperature"
+        }
+      },
+      "ist_abfragen": {
+        "name": "Poll current temperature",
+        "state": {
+          "off": "off",
+          "15": "every 15 min",
+          "30": "every 30 min",
+          "60": "every hour",
+          "120": "every 2 hours",
+          "240": "every 4 hours"
+        }
       }
     },
     "number": {
@@ -641,6 +663,24 @@
     },
     "radio_name_taken": {
       "message": "A radio module already has this name."
+    },
+    "hub_no_group": {
+      "message": "The radio module has no group id"
+    },
+    "group_not_on_device": {
+      "message": "Only thermostats take a group id"
+    },
+    "group_none_free": {
+      "message": "No free group id left"
+    },
+    "not_allowed_config": {
+      "message": "Only administrators may change device settings (option of the integration)"
+    },
+    "not_allowed_week_profile": {
+      "message": "Only administrators may change week programs (option of the integration)"
+    },
+    "not_allowed_admin": {
+      "message": "Only administrators may do this"
     }
   },
   "selector": {

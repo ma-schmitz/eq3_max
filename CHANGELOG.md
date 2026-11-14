@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] – 2026-11-14
+
+### Added
+- **Wall thermostat display: set or current temperature.** New select
+  `select.<device>_anzeige` (category configuration) and set **Display** on the "eQ-3 MAX!"
+  page. The wall thermostat's own menu item "S-A" is locked while it is paired with a
+  central, so the integration sets it by radio (telegram 0x82, as FHEM does). The device
+  reports the setting itself in its full status: the value is unknown until that report
+  (source `gemeldet`) or the acknowledgement (source `gesetzt`); no factory value is assumed.
+  Requested in Discussion #5.
+- **Presets "Comfort" and "Eco"** on every thermostat: manual mode at the comfort or eco
+  temperature of the device configuration (telegram 0x40, as FHEM does). Shown as well when
+  the target gets there another way; an open window wins. Eco is no comfort value to return
+  to after Away/Boost.
+- **Group id**: set (0x22) or remove (0x23) per thermostat, or "Assign for the room" for a
+  thermostat and the thermostats linked with it (one free or already common id). Counts
+  after the acknowledgement, resent with the next report otherwise, given back after a
+  factory reset. "Assign for the room" removes that id once from all other thermostats (devices
+  do not report their group; an old one from Cube/Homegear times would follow the room). Panel: tab
+  Links; websocket command `eq3_max/set_group`.
+- **Plug adapter (BC-TS-Sw-Pl, device type 8)** is paired instead of being dropped as an
+  unknown type: shown with RSSI and "last seen", its telegrams logged at INFO for a capture.
+  Not controlled yet.
+- **Attributes for the thermostat card** (`eq3-max-thermostat-card`, own repository) on every
+  thermostat: `fenster` (window contacts of the device and its room), `raum` (thermostats of
+  the room), `wochenprogramm`, `wochenprogramm_schreibt`, `wochenprogramm_fehler`,
+  `einstellungen_frei`, `wochenprogramm_frei`. Not recorded by the recorder.
+- **Options "Users without admin rights may change device settings / week programs"**
+  (both on by default). Enforced by the integration: entities and services refuse users
+  without admin rights when off; automations and admins always may.
+- **Poll the current temperature** of radiator thermostats: `select.<device>_ist_abfragen`
+  (off, every 15/30/60/120/240 min). Only when the device did not report by itself: target
+  +0.5 °C until it sends its status (about 1 min), then back; invisible in Home Assistant.
+- **Explanations** for every setting on the "eQ-3 MAX!" page: hover text and an ⓘ that unfolds
+  it (for phones and tablets).
+- WakeUp telegram (0xF1) in the protocol and the hub (`wake_up`); not used on its own yet,
+  whether it helps with series of telegrams is to be measured first.
+
+### Fixed
+- **Several radio modules no longer transmit at the same time.** Each module had its own queue;
+  a room-wide change (wall thermostat on one module, radiator on the other) went out on both
+  within milliseconds, the telegrams overlapped, and with the same retry interval they did so on
+  every attempt – neither device acknowledged and both showed a radio error. Now one module
+  transmits and waits for its acknowledgement at a time.
+
+### Changed
+- **Factory reset, link, unlink and the radio module selection are for administrators only.**
+  Automations run by their triggers (no user) still may; a script a user starts counts as that user. Before, every Home Assistant user could
+  call these services.
+
+## [0.7.2] – 2026-11-13
+
+### Fixed
+- A push button repeats a press whose acknowledgement it did not take, with the same
+  counter, sometimes only 8–12 s later. Repeats were filtered for 5 s only, so a late one
+  counted as a second press, and an automation toggling a light switched it back. Repeats
+  are now recognised for 30 s; a new press always has a new counter.
+
 ### Added
 - Community files: issue forms (bug report, feature request), pull request template,
   CONTRIBUTING.md, code of conduct (Contributor Covenant 2.1), SECURITY.md with private

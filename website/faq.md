@@ -21,6 +21,17 @@
     [Multiple radio modules](handbuch/funkmodule.md). 0x60/0x70 are broadcasts and are
     not acknowledged.
 
+??? question "The wall thermostat only shows the set temperature, the menu item "S-A" is missing"
+    While the wall thermostat is paired with a central (here the CUL), it locks its
+    configuration menu; "S-A" (switch set/current) does not appear. The central sets the
+    display by radio: from 0.8.0 via `select.…_anzeige` or on the "eQ-3 MAX!" page, tab
+    Configuration, set **Display** (see [Device configuration](handbuch/konfiguration.md)).
+
+??? question "Is the MAX! plug adapter supported?"
+    From 0.8.0 it is paired and appears with RSSI and "last seen"; it cannot be controlled
+    yet, as nothing documents the telegrams it sends. Its telegrams are in the log ("plug
+    adapter, not supported yet"). A capture in an issue helps to add it.
+
 ??? question "A thermostat suddenly shows 12 °C"
     Usually it is the **window-open detection of the thermostat itself**: if the measured
     temperature drops quickly, it assumes an open window and goes to the window-open

@@ -280,7 +280,9 @@ def test_connection_steps_translated():
         assert set(options["radio_add_network"]["data"]) == {"name", "host", "port"}
         for key in ("name_missing", "name_taken", "radio_in_use"):
             assert data["options"]["error"][key]
-        assert set(options["settings"]["data"]) == {"brake", "away_temperature", "away_hours"}
+        assert set(options["settings"]["data"]) == {
+            "brake", "away_temperature", "away_hours", "allow_user_config", "allow_user_week_profile",
+        }
         assert "port" in options["connection_usb"]["data"]
         assert set(options["connection_network"]["data"]) == {"host", "port"}
         assert data["options"]["error"]["cannot_connect"]

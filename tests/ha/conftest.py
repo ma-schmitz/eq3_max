@@ -171,6 +171,29 @@ class FakeHub:
         return [main, *({"id": r.id, "target": r.port, "connected": self.radio_connected[r.id],
                          "version": "V 1.26.08 a-culfw CUBE", "airtime": 0.0, "queue": 0} for r in self.radios)]
 
+    def set_group(self, address, group):
+        dev = self.devices[address]
+        dev.pending_group = group
+        self.commands.append(("group", address, group))
+        self.on_update(dev)
+
+    def set_room_group(self, address):
+        dev = self.devices[address]
+        room = [dev] + [d for d in self.devices.values() if d is not dev and d.is_climate and (dev.serial in d.links or d.serial in dev.links)]
+        for member in room:
+            self.set_group(member.address, 7)
+        return room
+
+    def set_poll(self, address, minutes):
+        from custom_components.eq3_max.protocol.messages import FrameError
+
+        dev = self.devices[address]
+        if not dev.is_heating_thermostat or minutes not in (0, 15, 30, 60, 120, 240):
+            raise FrameError("no poll")
+        dev.poll_minutes = minutes
+        self.commands.append(("poll", address, minutes))
+        self.on_update(dev)
+
     def set_radio(self, address, radio):
         from custom_components.eq3_max.protocol.messages import FrameError
 

@@ -13,6 +13,8 @@ On the device page of each thermostat under **Configuration**:
 | `number.…_boost_ventil` | Valve opening during boost | ✓ | – |
 | `select.…_entkalkung_tag`, `number.…_entkalkung_stunde` | Weekly valve decalcification | ✓ | – |
 | `number.…_ventil_max` / `_ventil_offset` | Maximum opening, valve offset (%) | ✓ | – |
+| `select.…_anzeige` | Display shows set or current temperature | – | ✓ (from 0.8.0) |
+| `select.…_ist_abfragen` | Poll the current temperature (off, 15 min … 4 h) | ✓ (from 0.8.0) | – |
 
 **Good to know:**
 
@@ -20,8 +22,13 @@ On the device page of each thermostat under **Configuration**:
   change one value, the integration sends the whole set with the other stored values.
 - The devices do **not** report their configuration back. What is shown is the last
   **acknowledged** state; a value sent but not yet acknowledged is held in `ausstehend` (pending).
+  **Exception display:** the wall thermostat reports itself whether it shows the set or the
+  current temperature. Until its first report `select.…_anzeige` is unknown (no assumed
+  factory default). It cannot be changed on the device: its menu (item "S-A") is locked
+  while the wall thermostat is paired with a central.
 - Attribute **`quelle`** (source): `homegear` (from the import), `werksvorgabe` (assumed
-  factory default, never confirmed) or `gesetzt` (acknowledged by the device). When factory
+  factory default, never confirmed), `gesetzt` (acknowledged by the device) or `gemeldet`
+  (reported by the device itself, display only). When factory
   defaults are sent along, the log says "sending assumed factory values along: …"; after the
   acknowledgement they are `gesetzt`.
 - Values must lie on the grid (0.5 °C or 5 min/5 %); 21.3 °C is rejected.
@@ -47,3 +54,21 @@ On the device page of each thermostat under **Configuration**:
     This costs one telegram per set for each affected device. Devices whose values already
     differ today stay that way until the value is changed once. Thermostats without a wall
     thermostat stay on their own.
+
+## Poll the current temperature (from 0.8.0)
+
+A radiator thermostat reports its measured temperature only in its status, and it sends
+that only when something changes on it (valve, target, mode). In a room without a wall
+thermostat the current temperature therefore often stands still for hours.
+
+With `select.…_ist_abfragen` eq3_max nudges the device at a fixed interval, but only when
+no report came by itself in that time: target up by 0.5 °C (down at the upper limit), wait
+until the device sends its status with the measured temperature (measured: 20 s to a little
+over 3 min, depending on the device; eq3_max gives up after 5 min), then back. In automatic mode it returns to automatic. Home Assistant keeps showing the real
+target during the nudge; a command of your own in that time wins.
+
+- **Cost:** two telegrams per nudge (airtime, battery); the valve motor usually does not
+  move. Skipped when away, in boost, with a window open, a pending command or little airtime.
+- Wall thermostats do not need it, they report their temperature every few minutes.
+- A quick back and forth (target or mode back after a second) does **not** make the device
+  report; it has to keep the changed target for about a minute.

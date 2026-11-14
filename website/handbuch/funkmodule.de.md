@@ -16,6 +16,10 @@ USB-Sticks und geflashte Cubes (Netzwerk) lassen sich mischen.
       wechseln mit auf das neue Modul.
     - Jedes Modul hat **sein eigenes Funkbudget** (1 % = 36 s pro Stunde). Wartet ein Modul
       auf Sendezeit, steht das an seiner Kachel.
+    - **Es sendet immer nur ein Modul** (ab 0.8.0) und wartet seine Quittung ab, bevor ein
+      anderes dran ist. Zwei Module nebeneinander würden sich sonst überlagern – bei einer
+      raumweiten Änderung (Wandthermostat an einem Modul, Heizkörper am anderen) bei jedem
+      Versuch erneut.
 
 **Modul hinzufügen:** Konfigurieren → „Funkmodule“ → „USB-Stick hinzufügen“, „Im Netzwerk
 suchen und hinzufügen“ (ab 0.7.0, listet die culfw-Module im eigenen Netz) oder

@@ -21,6 +21,17 @@
     [Mehrere Funkmodule](handbuch/funkmodule.md). 0x60/0x70 sind Rundsendungen und werden
     nicht quittiert.
 
+??? question "Der Wandthermostat zeigt nur die Soll-Temperatur, das Menü „S-A“ fehlt"
+    Solange der Wandthermostat an einer Zentrale angelernt ist (hier am CUL), sperrt er sein
+    Konfigurationsmenü; „S-A“ (Soll/Ist umschalten) erscheint dann nicht. Die Zentrale setzt
+    die Anzeige per Funk: ab 0.8.0 über `select.…_anzeige` oder auf der Seite „eQ-3 MAX!“ im
+    Reiter Konfiguration, Satz **Anzeige** (siehe [Gerätekonfiguration](handbuch/konfiguration.md)).
+
+??? question "Wird der MAX! Zwischenstecker unterstützt?"
+    Ab 0.8.0 wird er angelernt und erscheint mit RSSI und „zuletzt gemeldet“, steuern lässt er
+    sich noch nicht: Welche Telegramme er schickt, ist nirgends belegt. Seine Telegramme stehen
+    im Log („plug adapter, not supported yet“). Ein Mitschnitt als Issue hilft, ihn einzubauen.
+
 ??? question "Ein Thermostat steht plötzlich auf 12 °C"
     Meist ist es die **Fenster-auf-Erkennung des Thermostats selbst**: Fällt die gemessene
     Temperatur schnell, nimmt es ein offenes Fenster an und geht für die Fenster-auf-Dauer auf

@@ -15,7 +15,17 @@ from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 from homeassistant.exceptions import ServiceValidationError
 
 from .errors import invalid
-from .protocol.devices import CONFIG_TEMP_KEYS, CONFIG_VALVE_KEYS, KIND_TEMP, KIND_VALVE, WEEKDAYS
+from .protocol.devices import (
+    CONFIG_DISPLAY_KEYS,
+    CONFIG_TEMP_KEYS,
+    CONFIG_VALVE_KEYS,
+    DISPLAY_MEASURED,
+    DISPLAY_TARGET,
+    KIND_DISPLAY,
+    KIND_TEMP,
+    KIND_VALVE,
+    WEEKDAYS,
+)
 from .protocol.messages import BOOST_DURATIONS, MAX_TEMPERATURE, OFF_TEMPERATURE, OFFSET_LIMIT
 
 CONFIG_LABELS = {
@@ -32,9 +42,10 @@ CONFIG_LABELS = {
     "entkalkung_stunde": "Entkalkung Stunde",
     "ventil_max": "Ventil maximal",
     "ventil_offset": "Ventil-Offset",
+    "anzeige": "Anzeige",
 }
-SET_TITLES = {KIND_TEMP: "Temperaturen", KIND_VALVE: "Ventil"}
-SET_KEYS = {KIND_TEMP: CONFIG_TEMP_KEYS, KIND_VALVE: CONFIG_VALVE_KEYS}
+SET_TITLES = {KIND_TEMP: "Temperaturen", KIND_VALVE: "Ventil", KIND_DISPLAY: "Anzeige"}
+SET_KEYS = {KIND_TEMP: CONFIG_TEMP_KEYS, KIND_VALVE: CONFIG_VALVE_KEYS, KIND_DISPLAY: CONFIG_DISPLAY_KEYS}
 
 
 @dataclass(frozen=True)
@@ -68,9 +79,11 @@ OPTION_VALUES: dict[str, list[tuple[Any, str]]] = {
     # Keys of the select options; the names come from the translations (state of
     # entity.select.entkalkung_tag), the stored value stays the German weekday.
     "entkalkung_tag": list(zip(WEEKDAYS, ("saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"))),
+    # Wall thermostat display: target or measured temperature.
+    "anzeige": [(DISPLAY_TARGET, "setpoint"), (DISPLAY_MEASURED, "actual")],
 }
 OPTIONS = {key: [text for _value, text in items] for key, items in OPTION_VALUES.items()}
-ICONS = {"boost_dauer": "mdi:timer-outline", "entkalkung_tag": "mdi:calendar-week"}
+ICONS = {"boost_dauer": "mdi:timer-outline", "entkalkung_tag": "mdi:calendar-week", "anzeige": "mdi:thermometer-lines"}
 
 
 def range_error(key: str) -> ServiceValidationError:

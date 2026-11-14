@@ -43,4 +43,4 @@ class MaxConfigNumber(MaxConfigEntity, NumberEntity):
         return self.config_value
 
     async def async_set_native_value(self, value: float) -> None:
-        self._set(value)
+        await self._async_set(value)

@@ -32,12 +32,16 @@ class MsgType(IntEnum):
     CONFIG_VALVE = 0x12
     ADD_LINK_PARTNER = 0x20
     REMOVE_LINK_PARTNER = 0x21
+    SET_GROUP_ID = 0x22
+    REMOVE_GROUP_ID = 0x23
+    WAKE_UP = 0xF1
     SHUTTER_CONTACT_STATE = 0x30
     SET_TEMPERATURE = 0x40
     WALL_THERMOSTAT_CONTROL = 0x42
     PUSH_BUTTON_STATE = 0x50
     THERMOSTAT_STATE = 0x60
     WALL_THERMOSTAT_STATE = 0x70
+    SET_DISPLAY_ACTUAL_TEMPERATURE = 0x82
     RESET = 0xF0
 
 
@@ -55,6 +59,8 @@ class DeviceType(IntEnum):
     WALL_THERMOSTAT = 3
     SHUTTER_CONTACT = 4
     PUSH_BUTTON = 5
+    # Plug adapter BC-TS-Sw-Pl (FHEM PlugAdapter): recognised, not controlled yet.
+    PLUG_ADAPTER = 8
 
 
 class FrameError(ValueError):
@@ -231,6 +237,9 @@ class WallThermostatState:
     target: float
     measured: float | None
     until: datetime | None = None
+    # What the display shows (byte 1 of the full state, FHEM displayActualTemperature):
+    # True = measured, False = target; None where the telegram does not carry it (0x42).
+    display_actual: bool | None = None
 
 
 def decode_wall_thermostat_state(p: bytes) -> WallThermostatState:
@@ -254,7 +263,9 @@ def decode_wall_thermostat_state(p: bytes) -> WallThermostatState:
         value = (((p[3] & 0x01) << 8) + p[4]) / 10
     if value is not None and value >= 1:
         measured = value
-    return WallThermostatState(bits=bits, target=(desired_raw & 0x7F) / 2, measured=measured, until=until)
+    return WallThermostatState(
+        bits=bits, target=(desired_raw & 0x7F) / 2, measured=measured, until=until, display_actual=bool(p[1] & 0x04)
+    )
 
 
 def decode_wall_thermostat_control(p: bytes) -> WallThermostatState:
@@ -513,6 +524,37 @@ def build_config_temperatures(counter: int, src: int, dst: int, cfg: Temperature
 
 def build_config_valve(counter: int, src: int, dst: int, cfg: ValveConfig) -> Frame:
     return Frame(counter & 0xFF, 0x00, MsgType.CONFIG_VALVE, src, dst, 0, encode_config_valve(cfg))
+
+
+# --- Display of a wall thermostat (FHEM 10_MAX.pm displayActualTemperature: 0x82
+# SetDisplayActualTemperature, payload 04 = measured, 00 = target; acknowledged) ---
+
+DISPLAY_ACTUAL = 0x04
+
+
+def build_set_display(counter: int, src: int, dst: int, actual: bool) -> Frame:
+    payload = bytes([DISPLAY_ACTUAL if actual else 0x00])
+    return Frame(counter & 0xFF, 0x00, MsgType.SET_DISPLAY_ACTUAL_TEMPERATURE, src, dst, 0, payload)
+
+
+# --- Wake-up (FHEM 10_MAX.pm wakeUp: 0xF1 WakeUp, payload 3F; acknowledged). The device
+# then listens for a while, so a series of telegrams gets through faster. ---
+
+def build_wake_up(counter: int, src: int, dst: int) -> Frame:
+    return Frame(counter & 0xFF, 0x00, MsgType.WAKE_UP, src, dst, 0, b"\x3f")
+
+
+# --- Group id (FHEM 10_MAX.pm groupid: 0x22 SetGroupId with the id, 0x23 RemoveGroupId
+# with 00; acknowledged). Devices of one group take a group command (flags 04) together. ---
+
+def build_set_group_id(counter: int, src: int, dst: int, group: int) -> Frame:
+    if not 1 <= group <= 255:
+        raise FrameError(f"group id must be 1..255, got {group}")
+    return Frame(counter & 0xFF, 0x00, MsgType.SET_GROUP_ID, src, dst, 0, bytes([group]))
+
+
+def build_remove_group_id(counter: int, src: int, dst: int) -> Frame:
+    return Frame(counter & 0xFF, 0x00, MsgType.REMOVE_GROUP_ID, src, dst, 0, b"\x00")
 
 
 # --- Links between devices (FHEM 10_MAX.pm associate/deassociate: 0x20 AddLinkPartner,

@@ -52,7 +52,8 @@ does not react" (for example a window contact that does not accept its link). De
 
 - Week programs can be written ([Services](dienste.md)) but not read from the devices; the
   integration only knows what it has written itself.
-- Configuration is not read from the device (the devices cannot do that).
+- Configuration is not read from the device (the devices cannot do that). The only exception:
+  the wall thermostat reports whether it shows the set or the current temperature.
 - After a battery change a wall thermostat asks for date and time on the device; during this
   input it accepts no radio answer. Its radio error indicator goes off again as soon as it
   has successfully delivered a report.

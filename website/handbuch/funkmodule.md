@@ -16,6 +16,9 @@ USB sticks and flashed Cubes (network) can be mixed.
       move along to the new module.
     - Each module has **its own radio budget** (1 % = 36 s per hour). If a module is waiting
       for airtime, its tile says so.
+    - **Only one module transmits at a time** (from 0.8.0) and waits for its acknowledgement
+      before another one goes. Two modules side by side would otherwise overlap – on a
+      room-wide change (wall thermostat on one module, radiator on the other) on every attempt.
 
 **Adding a module:** Configure → "Radio modules" → "Add USB stick", "Search the network and
 add" (from 0.7.0, lists the culfw modules in your own network) or "Add network CUL", with

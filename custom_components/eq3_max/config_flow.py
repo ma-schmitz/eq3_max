@@ -25,6 +25,8 @@ from .const import (
     CONF_ADDRESS,
     CONF_AWAY_HOURS,
     CONF_AWAY_TEMPERATURE,
+    CONF_ALLOW_USER_CONFIG,
+    CONF_ALLOW_USER_WEEK_PROFILE,
     CONF_BRAKE,
     CONF_CONNECTION,
     CONF_DEVICES,
@@ -62,10 +64,10 @@ from .protocol.transport import open_serial, open_tcp
 _ADDRESS_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
 _COMMAND_STATE = (
     "pending_target", "pending_mode", "pending_until", "command_failed", "pending_config", "config_failed",
-    "pending_links",
+    "pending_links", "pending_group", "group_failed",
 )
 # Learnt at runtime and kept in the store, not part of the imported snapshot.
-_RUNTIME_STATE = (*_COMMAND_STATE, "last_comfort", "rssi_by_radio")
+_RUNTIME_STATE = (*_COMMAND_STATE, "last_comfort", "rssi_by_radio", "poll_minutes", "measured_at")
 
 
 def entry_item(device: MaxDevice) -> dict[str, Any]:
@@ -664,6 +666,10 @@ class MaxCulOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_BRAKE, default=options.get(CONF_BRAKE, False)): bool,
+                vol.Required(CONF_ALLOW_USER_CONFIG, default=options.get(CONF_ALLOW_USER_CONFIG, True)): bool,
+                vol.Required(
+                    CONF_ALLOW_USER_WEEK_PROFILE, default=options.get(CONF_ALLOW_USER_WEEK_PROFILE, True)
+                ): bool,
                 vol.Required(
                     CONF_AWAY_TEMPERATURE, default=options.get(CONF_AWAY_TEMPERATURE, DEFAULT_AWAY_TEMPERATURE)
                 ): selector.NumberSelector(

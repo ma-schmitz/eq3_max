@@ -1,3 +1,4 @@
+import logging
 import asyncio
 from datetime import datetime
 
@@ -129,6 +130,23 @@ async def test_repeated_button_frame_fires_once(hub):
     assert rec.buttons == [(PB, "auto"), (PB, "auto")]
 
 
+async def test_late_repeat_of_button_frame_fires_once(hub):
+    """The button repeats an unaccepted press with the same counter up to 12 s later."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    frame = line(0xBA, 0x06, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000")
+    cul.feed(frame)
+    await until(lambda: len(rec.buttons) == 1)
+    clock[0] += 12.0
+    cul.feed(frame)
+    clock[0] += 11.0
+    cul.feed(line(0xBB, 0x06, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+    await until(lambda: len(rec.buttons) == 2)
+    await asyncio.sleep(0.02)
+    assert rec.buttons == [(PB, "eco"), (PB, "eco")]
+
+
 async def test_wall_thermostat_control_to_heating_thermostat(hub):
     h, cul, rec = hub
     cul.feed(line(3, 0x04, MsgType.WALL_THERMOSTAT_CONTROL, WT, HT, 0, "2AD2"))
@@ -157,6 +175,30 @@ async def test_pairing_only_when_window_open(hub):
     assert h.devices[0x123ABC].device_type is DeviceType.HEATING_THERMOSTAT
     await until(lambda: len(rec.added) == 1, timeout=1.0)
     assert rec.added[0].serial == "ABC1234567"
+
+
+async def test_plug_adapter_is_paired_and_its_telegrams_logged(hub, caplog):
+    h, cul, rec = hub
+    h.open_pairing(60)
+    cul.feed(line(0, 0x04, MsgType.PAIR_PING, 0x123ABD, 0, 0, "100800" + b"PLG1234567".hex()))
+    await until(lambda: len(rec.added) == 1, timeout=1.0)
+    dev = h.devices[0x123ABD]
+    assert dev.device_type is DeviceType.PLUG_ADAPTER and dev.config_keys == () and not dev.is_climate
+    caplog.set_level(logging.INFO, logger="custom_components.eq3_max.protocol.hub")
+    cul.feed(line(5, 0x04, MsgType.THERMOSTAT_STATE, 0x123ABD, CENTRAL, 0, "0100AA"))
+    await until(lambda: "plug adapter, not supported yet" in caplog.text)
+    assert "payload 0100aa" in caplog.text
+    with pytest.raises(FrameError):
+        h.set_group(0x123ABD, 1)
+
+
+async def test_wake_up_is_sent_to_thermostats(hub):
+    h, cul, rec = hub
+    h.wake_up(HT)
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0] == "Zs" + "0B0100" + "F1C0FFEEA1B00500" + "3F"
+    with pytest.raises(FrameError):
+        h.wake_up(FK)
 
 
 async def test_repairing_after_battery_change_keeps_device(hub):
@@ -968,6 +1010,217 @@ async def test_nak_keeps_config_pending(hub):
     cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "81"))
     await until(lambda: h.devices[HT].config_failed)
     assert h.devices[HT].config["komfort"] == 21.0 and "temp" in h.devices[HT].pending_config
+
+
+async def test_set_display_sends_0x82_and_ack_commits(hub):
+    h, cul, rec = hub
+    assert "anzeige" not in h.devices[WT].config
+    h.set_config(WT, "anzeige", "ist")
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0] == "Zs" + "0B0100" + "82C0FFEE1590B400" + "04"
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, WT, CENTRAL, 0, "01"))
+    await until(lambda: not h.devices[WT].pending_config)
+    assert h.devices[WT].config["anzeige"] == "ist" and h.devices[WT].config_source["anzeige"] == "gesetzt"
+    with pytest.raises(FrameError):
+        h.set_config(HT, "anzeige", "ist")
+
+
+async def test_unacked_display_is_resent_and_a_report_confirms_it(hub):
+    h, cul, rec = hub
+    h.set_config(WT, "anzeige", "ist")
+    await heard_other_after_first_send(cul)
+    dev = h.devices[WT]
+    await until(lambda: dev.config_failed, timeout=1.0)
+    # The full state reports the display in byte 1: measured, as asked.
+    cul.feed(line(9, 0x04, MsgType.WALL_THERMOSTAT_STATE, WT, CENTRAL, 0, "19042A00D841"))
+    await until(lambda: not dev.pending_config)
+    assert dev.config["anzeige"] == "ist" and dev.config_source["anzeige"] == "gemeldet" and not dev.config_failed
+
+
+async def test_set_group_counts_after_ack_and_group_commands_follow(hub):
+    h, cul, rec = hub
+    h.set_group(HT, 3)
+    dev = h.devices[HT]
+    assert dev.pending_group == 3 and dev.group == 0
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0] == "Zs" + "0B0100" + "22C0FFEEA1B00500" + "03"
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01"))
+    await until(lambda: dev.pending_group is None)
+    assert dev.group == 3 and not dev.group_failed
+    # Commands now go out with the group flag and id.
+    h.set_temperature(HT, 21.0, Mode.MANUAL)
+    await until(lambda: len(sent(cul)) == 2)
+    assert sent(cul)[1][6:8] == "04" and sent(cul)[1][22:24] == "03"
+    cul.feed(line(_counter(sent(cul)[1]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01"))
+    h.set_group(HT, 0)
+    await until(lambda: any(l[8:10] == "23" for l in sent(cul)))
+    assert [l for l in sent(cul) if l[8:10] == "23"][0].endswith("00")
+    with pytest.raises(FrameError):
+        h.set_group(FK, 2)
+
+
+async def test_unacked_group_is_resent_on_next_status(hub):
+    h, cul, rec = hub
+    h.set_group(HT, 4)
+    await heard_other_after_first_send(cul)
+    dev = h.devices[HT]
+    await until(lambda: dev.group_failed, timeout=1.0)
+    assert dev.group == 0 and dev.pending_group == 4
+    before = len(sent(cul))
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19302800BE"))
+    await until(lambda: len(sent(cul)) > before)
+    assert sent(cul)[-1][8:10] == "22" and not dev.group_failed
+
+
+async def test_room_group_uses_a_free_id_for_all(hub):
+    h, cul, rec = hub
+    h.devices[WT].links = [h.devices[HT].serial]
+    h.devices[FK].group = 1  # taken (contacts never get one from us, but the id counts)
+    room = h.set_room_group(WT)
+    assert {d.address for d in room} == {WT, HT}
+    assert h.devices[WT].pending_group == h.devices[HT].pending_group == 2
+    # Asking again keeps the common id.
+    assert h.free_group(room) == 2
+
+
+async def test_room_group_clears_that_id_on_the_other_thermostats(hub):
+    """Devices do not report their group; one from Cube/Homegear times would make an
+    unrelated thermostat follow the room. The other thermostats get RemoveGroupId once."""
+    h, cul, rec = hub
+    h.devices[WT].links = [h.devices[HT].serial]
+    other = MaxDevice(0x123ABE, "OTH0000001", DeviceType.HEATING_THERMOSTAT, name="anderes")
+    h.devices[other.address] = other
+    room = h.set_room_group(WT)
+    assert {d.address for d in room} == {WT, HT}
+    assert other.pending_group == 0
+    await until(lambda: any(l[8:10] == "23" and l[16:22] == "123ABE" for l in sent(cul)), timeout=2.0)
+    assert h.devices[FK].pending_group is None  # contacts take no group
+
+
+# --- polling the measured temperature of radiator thermostats ---
+
+async def test_poll_pokes_target_waits_for_status_and_restores(hub):
+    """The radiator reports its measured temperature only in its own status, about a
+    minute after a target change. eq3_max moves the target by 0.5, waits for that status
+    and puts the target back; Home Assistant keeps seeing the real target."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.MANUAL, 21.0, clock[0] - 4000
+    h.set_poll(HT, 60)
+    assert dev.poll_minutes == 60
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    # 21.5 manual, no group flag even if the device has a group.
+    assert sent(cul)[0] == "Zs" + "0B0100" + "40C0FFEEA1B00500" + "6B"
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01192B2B"))
+    await asyncio.sleep(0.02)
+    assert dev.target == 21.0 and dev.mode is Mode.MANUAL  # the poke stays invisible
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2B00D6"))
+    await until(lambda: len(sent(cul)) == 2)
+    assert dev.measured == 21.4 and dev.measured_at == clock[0] and dev.target == 21.0
+    assert sent(cul)[1].endswith("6A")  # back to 21.0 manual
+    assert HT not in h._pokes
+
+
+async def test_poll_finishes_with_a_running_clock(hub):
+    """Real clocks move between two reads; the status must still end the poke."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+
+    def now():
+        clock[0] += 0.001
+        return clock[0]
+
+    h._now = now
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.MANUAL, 21.0, None
+    h.set_poll(HT, 15)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01192B2B"))
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2B00DF"))
+    await until(lambda: len(sent(cul)) == 2)
+    assert dev.measured == 22.3 and HT not in h._pokes and sent(cul)[1].endswith("6A")
+
+
+async def test_poll_auto_mode_returns_to_auto(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.AUTO, 17.0, None
+    h.set_poll(HT, 15)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0].endswith("63")  # 17.5 manual
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01192B23"))
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2300C8"))
+    await until(lambda: len(sent(cul)) == 2)
+    assert sent(cul)[1].endswith("00") and dev.mode is Mode.AUTO  # auto, program target
+
+
+async def test_poll_skips_when_fresh_busy_or_off(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target = Mode.MANUAL, 21.0
+    h.set_poll(HT, 60)
+    dev.measured_at = clock[0] - 600  # reported 10 min ago by itself
+    h._poll_check()
+    dev.measured_at = None
+    dev.mode = Mode.BOOST
+    h._poll_check()
+    dev.mode = Mode.MANUAL
+    dev.set_pending(22.0, Mode.MANUAL)
+    h._poll_check()
+    dev.clear_pending()
+    h.set_poll(HT, 0)
+    h._poll_check()
+    await asyncio.sleep(0.05)
+    assert sent(cul) == []
+    with pytest.raises(FrameError):
+        h.set_poll(WT, 60)  # the wall thermostat reports by itself
+    with pytest.raises(FrameError):
+        h.set_poll(HT, 45)
+
+
+async def test_poll_gives_up_after_timeout_and_restores(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.MANUAL, 30.5, None
+    h.set_poll(HT, 30)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0].endswith("7C")  # at the top it goes down: 30.0
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01193C3C"))
+    clock[0] += 200  # some devices take over 3 min: still waiting
+    h._poll_check()
+    await asyncio.sleep(0.05)
+    assert len(sent(cul)) == 1 and HT in h._pokes
+    clock[0] += 110
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 2)
+    assert sent(cul)[1].endswith("7D") and HT not in h._pokes
+
+
+async def test_user_command_during_poll_wins(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.MANUAL, 21.0, None
+    h.set_poll(HT, 60)
+    h._poll_check()
+    h.set_temperature(HT, 19.0, Mode.MANUAL)
+    assert HT not in h._pokes
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19002600D6"))
+    await asyncio.sleep(0.05)
+    assert not any(l.endswith("6A") for l in sent(cul))  # no restore to 21
 
 
 async def test_pending_config_is_resent_after_start():

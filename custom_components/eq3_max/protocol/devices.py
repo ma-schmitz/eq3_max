@@ -37,6 +37,15 @@ DEFAULT_WINDOW_OPEN_TEMPERATURE = 12.0
 # WT for its boost duration - its display counts the boost down by its own setting).
 KIND_TEMP = "temp"
 KIND_VALVE = "valve"
+# 0x82 SetDisplayActualTemperature: wall thermostat only, one value. Unlike the other sets
+# the device reports it (byte 1 of its full state), so there is no assumed factory value:
+# unknown until reported or acknowledged.
+KIND_DISPLAY = "display"
+CONFIG_KINDS = (KIND_TEMP, KIND_VALVE, KIND_DISPLAY)
+CONFIG_DISPLAY_KEYS = ("anzeige",)
+DISPLAY_TARGET = "soll"
+DISPLAY_MEASURED = "ist"
+DISPLAY_VALUES = (DISPLAY_TARGET, DISPLAY_MEASURED)
 CONFIG_TEMP_KEYS = ("komfort", "eco", "maximal", "minimal", "offset", "fenster_temperatur", "fenster_dauer")
 CONFIG_VALVE_KEYS = (
     "boost_dauer", "boost_ventil", "entkalkung_tag", "entkalkung_stunde", "ventil_max", "ventil_offset",
@@ -73,6 +82,8 @@ FACTORY_CONFIG: dict[str, Any] = {
 SOURCE_HOMEGEAR = "homegear"
 SOURCE_FACTORY = "werksvorgabe"
 SOURCE_SET = "gesetzt"
+# Reported by the device itself (display of a wall thermostat).
+SOURCE_REPORTED = "gemeldet"
 # Links: one pending operation per partner (direction "this device gets the partner").
 LINK_ADD = "add"
 LINK_REMOVE = "remove"
@@ -82,6 +93,7 @@ LINK_FAILED = "fehlgeschlagen"  # no ack: resent automatically
 LINK_REJECTED = "fehlgeschlagen (abgelehnt)"  # NAK: only a new request sends it again
 _LINK_OPS = (LINK_ADD, LINK_REMOVE)
 _LINK_STATES = (LINK_PENDING, LINK_WAITING, LINK_FAILED, LINK_REJECTED)
+_KIND_KEYS = {KIND_TEMP: CONFIG_TEMP_KEYS, KIND_VALVE: CONFIG_VALVE_KEYS, KIND_DISPLAY: CONFIG_DISPLAY_KEYS}
 _FLOAT_KEYS = ("komfort", "eco", "maximal", "minimal", "offset", "fenster_temperatur")
 
 
@@ -90,6 +102,8 @@ def config_kind(key: str) -> str:
         return KIND_TEMP
     if key in CONFIG_VALVE_KEYS:
         return KIND_VALVE
+    if key in CONFIG_DISPLAY_KEYS:
+        return KIND_DISPLAY
     raise FrameError(f"unknown config key {key!r}")
 
 
@@ -97,6 +111,10 @@ def normalize_config_value(key: str, value: Any) -> Any:
     """Type a config value (float, int minutes/percent/hour, weekday name); range is
     checked when the whole set is encoded."""
     config_kind(key)
+    if key == "anzeige":
+        if value not in DISPLAY_VALUES:
+            raise FrameError(f"display must be one of {DISPLAY_VALUES}, got {value!r}")
+        return value
     if key == "entkalkung_tag":
         if value not in WEEKDAYS:
             raise FrameError(f"decalcification day must be one of {WEEKDAYS}, got {value!r}")
@@ -156,6 +174,15 @@ class MaxDevice:
     week_profile_writing: list[str] = field(default_factory=list)
     # Why the last write stopped early, until the next write (German, not stored).
     week_profile_error: dict[str, Any] | None = None
+    # Group id sent but not acknowledged yet (0 = remove), and whether it ran out of
+    # attempts (resent with the next status).
+    pending_group: int | None = None
+    group_failed: bool = False
+    # Measured temperature polling (minutes, 0 = off), when the last status with a measured
+    # temperature came, and the last poke (not stored).
+    poll_minutes: int = 0
+    measured_at: float | None = None
+    last_poke: float | None = None
     # Radio module the commands to this device go through ("" = the main module).
     radio: str = ""
     # Last RSSI per radio module that heard the device ("" = the main module).
@@ -192,12 +219,14 @@ class MaxDevice:
         if self.is_heating_thermostat:
             return CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS
         if self.device_type is DeviceType.WALL_THERMOSTAT:
-            return CONFIG_TEMP_KEYS + CONFIG_WALL_VALVE_KEYS
+            return CONFIG_TEMP_KEYS + CONFIG_WALL_VALVE_KEYS + CONFIG_DISPLAY_KEYS
         return ()
 
     def ensure_config_defaults(self) -> None:
         """Assume factory settings for every config value not known yet."""
         for key in self.config_keys:
+            if key not in FACTORY_CONFIG:
+                continue  # reported by the device: unknown until it does
             if key not in self.config:
                 self.config[key] = FACTORY_CONFIG[key]
                 self.config_source[key] = SOURCE_FACTORY
@@ -207,8 +236,8 @@ class MaxDevice:
         """The whole set a change builds on: a pending set beats the stored one."""
         if kind in self.pending_config:
             return dict(self.pending_config[kind])
-        keys = CONFIG_TEMP_KEYS if kind == KIND_TEMP else CONFIG_VALVE_KEYS
-        return {key: self.config.get(key, FACTORY_CONFIG[key]) for key in keys}
+        keys = _KIND_KEYS[kind]
+        return {key: self.config.get(key, FACTORY_CONFIG.get(key)) for key in keys}
 
     @staticmethod
     def temperature_config(values: dict[str, Any]) -> TemperatureConfig:
@@ -240,6 +269,10 @@ class MaxDevice:
         """Payload of a whole set; raises FrameError on invalid values."""
         if kind == KIND_TEMP:
             return encode_config_temperatures(self.temperature_config(values))
+        if kind == KIND_DISPLAY:
+            if values.get("anzeige") not in DISPLAY_VALUES:
+                raise FrameError(f"display must be one of {DISPLAY_VALUES}, got {values.get('anzeige')!r}")
+            return bytes([0x04 if values["anzeige"] == DISPLAY_MEASURED else 0x00])
         return encode_config_valve(self.valve_config(values))
 
     def stage_config(self, key: str, value: Any) -> str:
@@ -260,7 +293,7 @@ class MaxDevice:
         """Change several values of one set at once: the whole set becomes pending.
         Returns the keys that go along as assumed factory settings (unchanged and
         never acknowledged); raises FrameError without side effects."""
-        if kind not in (KIND_TEMP, KIND_VALVE):
+        if kind not in CONFIG_KINDS:
             raise FrameError(f"unknown config set {kind!r}")
         if not values:
             raise FrameError("no config values given")
@@ -288,7 +321,7 @@ class MaxDevice:
             # Values the device does not use (a wall thermostat's valve limits) are no news.
             and key in self.config_keys
             and self.config_source.get(key) == SOURCE_FACTORY
-            and value == self.config.get(key, FACTORY_CONFIG[key])
+            and value == self.config.get(key, FACTORY_CONFIG.get(key))
         ]
 
     def mark_config_failed(self, kind: str) -> None:
@@ -397,6 +430,18 @@ class MaxDevice:
             self.note_comfort()
         if st.measured is not None:
             self.measured = st.measured
+        if st.display_actual is not None:
+            self._apply_display(DISPLAY_MEASURED if st.display_actual else DISPLAY_TARGET)
+
+    def _apply_display(self, value: str) -> None:
+        """The display setting the wall thermostat reported: known now. A pending set
+        asking for exactly this is done; a different one stays and is sent again."""
+        self.config["anzeige"] = value
+        self.config_source["anzeige"] = SOURCE_REPORTED
+        pending = self.pending_config.get(KIND_DISPLAY)
+        if pending is not None and pending.get("anzeige") == value:
+            del self.pending_config[KIND_DISPLAY]
+            self.clear_config_failed(KIND_DISPLAY)
 
     def apply_shutter(self, st: ShutterContactState) -> None:
         self.window_open = st.is_open
@@ -431,7 +476,7 @@ class MaxDevice:
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         # State of a running write, gone with the process.
-        del data["week_profile_writing"], data["week_profile_error"]
+        del data["week_profile_writing"], data["week_profile_error"], data["last_poke"]
         data["device_type"] = int(self.device_type)
         data["mode"] = None if self.mode is None else int(self.mode)
         data["pending_mode"] = None if self.pending_mode is None else int(self.pending_mode)
@@ -450,6 +495,7 @@ class MaxDevice:
         values = {k: v for k, v in data.items() if k in known}
         values.pop("week_profile_writing", None)
         values.pop("week_profile_error", None)
+        values.pop("last_poke", None)
         for key in ("config", "config_source"):
             values[key] = dict(values.get(key) or {})
         values["pending_config"] = {k: dict(v) for k, v in (values.get("pending_config") or {}).items()}
@@ -457,7 +503,7 @@ class MaxDevice:
         if isinstance(failed, bool):
             # Before fix round 1 one flag covered all pending sets.
             failed = sorted(values["pending_config"]) if failed else []
-        values["config_failed"] = [k for k in (failed or []) if k in (KIND_TEMP, KIND_VALVE)]
+        values["config_failed"] = [k for k in (failed or []) if k in CONFIG_KINDS]
         own = values.get("serial")
         values["links"] = list(dict.fromkeys(s for s in (values.get("links") or []) if s and s != own))
         values["pending_links"] = [_link_op_from_dict(op) for op in (values.get("pending_links") or [])]

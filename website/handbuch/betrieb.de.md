@@ -52,7 +52,8 @@ nicht“ weiterhilft (etwa ein Fensterkontakt, der seine Verknüpfung nicht anni
 
 - Wochenprogramme lassen sich schreiben ([Dienste](dienste.md)), aber nicht aus den Geräten
   auslesen; die Integration kennt nur, was sie selbst geschrieben hat.
-- Konfiguration wird nicht vom Gerät gelesen (die Geräte können das nicht).
+- Konfiguration wird nicht vom Gerät gelesen (die Geräte können das nicht). Einzige Ausnahme:
+  Der Wandthermostat meldet, ob er Soll- oder Ist-Temperatur anzeigt.
 - Ein Wandthermostat verlangt nach einem Batteriewechsel Datum und Uhrzeit am Gerät; in
   dieser Eingabe nimmt es keine Funkantwort an. Seine Funkfehler-Anzeige geht wieder aus,
   sobald es eine Meldung erfolgreich losgeworden ist.

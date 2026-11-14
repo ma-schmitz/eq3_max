@@ -15,6 +15,9 @@ from typing import Any
 
 from .devices import (
     KIND_TEMP,
+    CONFIG_KINDS,
+    DISPLAY_MEASURED,
+    KIND_DISPLAY,
     KIND_VALVE,
     LINK_ADD,
     LINK_FAILED,
@@ -30,6 +33,7 @@ from .devices import (
 from .messages import (
     DeviceType,
     Frame,
+    MAX_TEMPERATURE,
     FrameError,
     Mode,
     MsgType,
@@ -40,9 +44,13 @@ from .messages import (
     build_config_valve,
     build_config_week_profile,
     build_pair_pong,
+    build_remove_group_id,
     build_remove_link_partner,
+    build_set_display,
+    build_set_group_id,
     build_reset,
     build_set_temperature,
+    build_wake_up,
     build_time_information,
     decode_ack,
     decode_frame,
@@ -75,9 +83,20 @@ from .scheduler import (
 from .transport import TRACE, CulTransport
 
 _LOGGER = logging.getLogger(__name__)
-DUPLICATE_WINDOW_S = 5.0
+# A device repeats an unacknowledged telegram with the same counter, the push button
+# observed up to 12 s after the first try (13.11.2026). A new press always gets a new
+# counter, so a generous window cannot swallow one; too short a window let a late
+# repeat toggle the light back.
+DUPLICATE_WINDOW_S = 30.0
 RAW_HISTORY_LEN = 10
 RESET_SEND_WINDOW_S = 30.0
+# Polling the measured temperature of radiator thermostats (minutes, 0 = off). They report
+# it only in their own status, about a minute after a target change (measured 14.11.2026):
+# the target goes up by 0.5, and back once the status came (or after POKE_TIMEOUT_S; devices
+# took 19 s to a little over 3 min on 14.11.2026).
+POLL_CHOICES = (0, 15, 30, 60, 120, 240)
+POLL_TICK_S = 60.0
+POKE_TIMEOUT_S = 300.0
 RESET_MARGIN_S = 5.0
 # Sleepers: send to them only while they listen after their telegram to us.
 SLEEPER_DEBOUNCE_S = 0.08
@@ -99,6 +118,7 @@ _TYPE_NAMES = {
     DeviceType.WALL_THERMOSTAT: "Wandthermostat",
     DeviceType.SHUTTER_CONTACT: "Fensterkontakt",
     DeviceType.PUSH_BUTTON: "Eco-Taster",
+    DeviceType.PLUG_ADAPTER: "Zwischenstecker",
 }
 
 
@@ -113,6 +133,28 @@ class LinkStatus:
 def _devices_by_serial(devices: dict[int, MaxDevice] | Iterable[MaxDevice]) -> dict[str, MaxDevice]:
     values = devices.values() if isinstance(devices, dict) else devices
     return {d.serial: d for d in values}
+
+
+def room_of(devices: dict[int, MaxDevice], dev: MaxDevice) -> list[MaxDevice]:
+    """The other thermostats of the device's room: those linked with it through a
+    wall thermostat (the wall thermostat itself, and its radiators)."""
+    by_serial = _devices_by_serial(devices)
+
+    def partners(device: MaxDevice) -> list[MaxDevice]:
+        found = [by_serial[s] for s in device.links if s in by_serial]
+        # A half link counts as well.
+        found += [d for d in devices.values() if device.serial in d.links and d not in found]
+        return [d for d in found if d.is_climate]
+
+    room: list[MaxDevice] = []
+    walls = [dev] if dev.device_type is DeviceType.WALL_THERMOSTAT else [
+        d for d in partners(dev) if d.device_type is DeviceType.WALL_THERMOSTAT
+    ]
+    for wall in walls:
+        for member in (wall, *partners(wall)):
+            if member is not dev and member not in room:
+                room.append(member)
+    return room
 
 
 def link_status(devices: dict[int, MaxDevice] | Iterable[MaxDevice], dev: MaxDevice) -> LinkStatus:
@@ -263,6 +305,7 @@ class MaxHub:
         fast_deadline: float = FAST_DEADLINE_S,
         fast_ack_timeout: float = FAST_ACK_TIMEOUT_S,
         lovf_delay: float = LOVF_RETRY_S,
+        poll_tick: float = POLL_TICK_S,
     ) -> None:
         self.address = address
         self.devices: dict[int, MaxDevice] = {d.address: d for d in devices}
@@ -284,6 +327,10 @@ class MaxHub:
         self._on_problem = on_problem
         self._brake = brake
         self._lovf_delay = lovf_delay
+        self._poll_tick = poll_tick
+        self._poll_task: asyncio.Task | None = None
+        # Running pokes by address: the real target/mode, the poke's deadline.
+        self._pokes: dict[int, dict[str, Any]] = {}
         # Week profile writes in progress by device address; they outlive their caller.
         self._profile_jobs: dict[int, asyncio.Task[None]] = {}
         # What each running write is writing: the same days asked for again join it.
@@ -356,8 +403,16 @@ class MaxHub:
             # Same clock as the transport: first send and last receive are compared.
             clock=radio.transport.clock,
             next_counter=self._next_counter,
+            air_lock=self._shared_air_lock(),
         )
         return radio
+
+    def _shared_air_lock(self) -> asyncio.Lock:
+        """One lock for all modules: one transmission (and its acknowledgement) at a time."""
+        lock = getattr(self, "_air_lock", None)
+        if lock is None:
+            lock = self._air_lock = asyncio.Lock()
+        return lock
 
     def _next_counter(self) -> int:
         self._counter = (self._counter + 1) & 0xFF
@@ -474,9 +529,24 @@ class MaxHub:
                 dev.command_failed = False
                 self._submit_pending(dev)
             self._submit_pending_config(dev)
+            if dev.pending_group is not None:
+                dev.group_failed = False
+                self._submit_group(dev)
             self._start_links(dev)
+        self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _poll_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._poll_tick)
+            try:
+                self._poll_check()
+            except Exception:  # noqa: BLE001 - keep polling
+                _LOGGER.exception("polling the measured temperature failed")
 
     async def stop(self) -> None:
+        if self._poll_task is not None:
+            self._poll_task.cancel()
+            self._poll_task = None
         for handle in self._flush_handles.values():
             handle.cancel()
         self._flush_handles.clear()
@@ -501,6 +571,7 @@ class MaxHub:
     ) -> None:
         """Queue a set command; mode TEMPORARY needs `until` (naive local, on :00/:30)."""
         dev = self.devices[address]
+        self._pokes.pop(address, None)  # the user's command wins over a running poke
         # Validate first: a command the builder rejects must not leave pending state behind.
         build_set_temperature(0, self.address, dev.address, dev.group, temperature, mode, until)
         if until is not None and until <= self._local_now():
@@ -511,6 +582,82 @@ class MaxHub:
         dev.set_pending(temperature, mode, until)
         self._notify(dev)
         self._submit_set(dev, temperature, mode, until)
+
+    # --- Measured temperature of radiator thermostats ---
+
+    def set_poll(self, address: int, minutes: int) -> None:
+        """How often (minutes, 0 = never) to make a radiator thermostat report its measured
+        temperature when it does not by itself. Each poke is two set commands."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError(f"unknown device {address:06X}")
+        if not dev.is_heating_thermostat:
+            raise FrameError(f"{dev.device_type.name} reports its temperature by itself")
+        if minutes not in POLL_CHOICES:
+            raise FrameError(f"poll interval must be one of {POLL_CHOICES}, got {minutes}")
+        dev.poll_minutes = minutes
+        if not minutes:
+            self._pokes.pop(address, None)
+        self._notify(dev)
+
+    def _poll_check(self) -> None:
+        now = self._now()
+        for dev in list(self.devices.values()):
+            poke = self._pokes.get(dev.address)
+            if poke is not None:
+                if now >= poke["deadline"]:
+                    _LOGGER.info("MAX! %s (%s): no status after the poke, target back", dev.name or dev.serial, dev.serial)
+                    self._finish_poke(dev)
+                continue
+            if not dev.poll_minutes or not dev.is_heating_thermostat:
+                continue
+            interval = dev.poll_minutes * 60
+            if dev.measured_at is not None and now - dev.measured_at < interval:
+                continue
+            if dev.last_poke is not None and now - dev.last_poke < interval:
+                continue
+            if (
+                dev.mode not in (Mode.MANUAL, Mode.AUTO)
+                or dev.target is None
+                or dev.has_pending
+                or dev.week_profile_writing
+                or (dev.mode is Mode.MANUAL and dev.target == dev.window_open_temperature)
+                or not self.reachable(dev.address)
+                or self._scheduler_for(dev.address).waiting_for_budget
+            ):
+                continue
+            self._poke(dev, now)
+
+    def _poke(self, dev: MaxDevice, now: float) -> None:
+        target = dev.target
+        assert target is not None
+        poke_target = target + 0.5 if target + 0.5 <= MAX_TEMPERATURE else target - 0.5
+        self._pokes[dev.address] = {"target": target, "mode": dev.mode, "deadline": now + POKE_TIMEOUT_S}
+        dev.last_poke = now
+        _LOGGER.debug("MAX! %s (%s): poke %.1f for the measured temperature", dev.name or dev.serial, dev.serial, poke_target)
+        address = dev.address
+        self._submit(
+            Command(
+                dst=address,
+                # Without the group: only this device.
+                build=lambda c: build_set_temperature(c, self.address, address, 0, poke_target, Mode.MANUAL, None),
+                key=f"set:{address}",
+                deaf_probe=True,
+            )
+        )
+
+    def _finish_poke(self, dev: MaxDevice) -> None:
+        poke = self._pokes.pop(dev.address, None)
+        if poke is None:
+            return
+        dev.target, dev.mode = poke["target"], poke["mode"]
+        if poke["mode"] is Mode.AUTO:
+            dev.set_pending(None, Mode.AUTO, None)
+            self._submit_set(dev, None, Mode.AUTO, group=0)
+        else:
+            dev.set_pending(poke["target"], Mode.MANUAL, None)
+            self._submit_set(dev, poke["target"], Mode.MANUAL, group=0)
+        self._notify(dev)
 
     def set_config(self, address: int, key: str, value: Any) -> None:
         """Change one configuration value. Devices only take whole sets: the set with
@@ -525,25 +672,8 @@ class MaxHub:
         self._share_with_room(dev, (key,))
 
     def room_of(self, dev: MaxDevice) -> list[MaxDevice]:
-        """The other thermostats of the device's room: those linked with it through a
-        wall thermostat (the wall thermostat itself, and its radiators)."""
-        by_serial = _devices_by_serial(self.devices)
-
-        def partners(device: MaxDevice) -> list[MaxDevice]:
-            found = [by_serial[s] for s in device.links if s in by_serial]
-            # A half link counts as well.
-            found += [d for d in self.devices.values() if device.serial in d.links and d not in found]
-            return [d for d in found if d.is_climate]
-
-        room: list[MaxDevice] = []
-        walls = [dev] if dev.device_type is DeviceType.WALL_THERMOSTAT else [
-            d for d in partners(dev) if d.device_type is DeviceType.WALL_THERMOSTAT
-        ]
-        for wall in walls:
-            for member in (wall, *partners(wall)):
-                if member is not dev and member not in room:
-                    room.append(member)
-        return room
+        """The other thermostats of the device's room (see room_of)."""
+        return room_of(self.devices, dev)
 
     def _share_with_room(self, dev: MaxDevice, keys: Iterable[str]) -> None:
         """Give the room's other thermostats the values a room shares. A boost started
@@ -752,6 +882,10 @@ class MaxHub:
             cfg = dev.temperature_config(values)
             builder: Callable[[int], Frame] = lambda c: build_config_temperatures(c, self.address, dev.address, cfg)
             key = f"cfg_temp:{dev.address}"
+        elif kind == KIND_DISPLAY:
+            actual = values["anzeige"] == DISPLAY_MEASURED
+            builder = lambda c: build_set_display(c, self.address, dev.address, actual)
+            key = f"cfg_display:{dev.address}"
         else:
             vcfg = dev.valve_config(values)
             builder = lambda c: build_config_valve(c, self.address, dev.address, vcfg)
@@ -861,6 +995,122 @@ class MaxHub:
         for entry in list(dev.pending_links):
             if entry["state"] != LINK_REJECTED:
                 self._submit_link(dev, entry)
+
+    # --- Wake-up ---
+
+    def wake_up(self, address: int) -> None:
+        """Send WakeUp (0xF1): the device listens for a while after it. Not used on its
+        own yet; whether it makes series (week program) more reliable is to be measured."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError(f"unknown device {address:06X}")
+        if not dev.is_climate:
+            raise FrameError(f"{dev.device_type.name} is not woken up")
+        name = dev.name or dev.serial
+
+        def done(ok: bool) -> None:
+            _LOGGER.info("MAX! %s (%s): wake-up %s", name, dev.serial, "acknowledged" if ok else "not acknowledged")
+
+        self._submit(
+            Command(
+                dst=dev.address,
+                build=lambda c: build_wake_up(c, self.address, dev.address),
+                key=f"wake:{dev.address}",
+                on_done=done,
+                deaf_probe=True,
+            )
+        )
+
+    # --- Group id ---
+
+    def set_group(self, address: int, group: int) -> None:
+        """Give a thermostat a group id (1..255) or remove it (0). The new id counts once
+        the device acknowledged it; until then it is pending, without an answer it is
+        sent again with the device's next status."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError(f"unknown device {address:06X}")
+        if not dev.is_climate:
+            raise FrameError(f"{dev.device_type.name} takes no group id")
+        if not 0 <= group <= 255:
+            raise FrameError(f"group id must be 0..255, got {group}")
+        dev.pending_group = group
+        dev.group_failed = False
+        self._notify(dev)
+        self._submit_group(dev)
+
+    def free_group(self, devices: Iterable[MaxDevice]) -> int:
+        """Group id for these devices: one they all have (or are getting) already, else
+        the smallest id no other device uses."""
+        devices = list(devices)
+        ids = {d.pending_group if d.pending_group is not None else d.group for d in devices}
+        if len(ids) == 1 and 0 not in ids:
+            return ids.pop()
+        used = {
+            d.pending_group if d.pending_group is not None else d.group
+            for d in self.devices.values()
+            if d not in devices
+        }
+        group = next((n for n in range(1, 256) if n not in used), None)
+        if group is None:
+            raise FrameError("no free group id")
+        return group
+
+    def set_room_group(self, address: int) -> list[MaxDevice]:
+        """Give the device and the thermostats of its room one common group id."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError(f"unknown device {address:06X}")
+        room = [dev, *self.room_of(dev)]
+        group = self.free_group(room)
+        for member in room:
+            if (member.pending_group if member.pending_group is not None else member.group) != group:
+                self.set_group(member.address, group)
+        # The devices do not report their group: one left from Cube/Homegear times with
+        # this id would follow the room. The other thermostats lose it once (RemoveGroupId).
+        for other in self.devices.values():
+            if other in room or not other.is_climate:
+                continue
+            if (other.pending_group if other.pending_group is not None else other.group) == 0:
+                self.set_group(other.address, 0)
+        return room
+
+    def _submit_group(self, dev: MaxDevice) -> None:
+        group = dev.pending_group
+        if group is None:
+            return
+        if group:
+            builder: Callable[[int], Frame] = lambda c: build_set_group_id(c, self.address, dev.address, group)
+        else:
+            builder = lambda c: build_remove_group_id(c, self.address, dev.address)
+        self._submit(
+            Command(
+                dst=dev.address,
+                build=builder,
+                key=f"group:{dev.address}",
+                on_done=lambda ok: self._group_done(dev, group, ok),
+                deaf_probe=True,
+            )
+        )
+
+    def _group_done(self, dev: MaxDevice, group: int, ok: bool) -> None:
+        if dev.pending_group != group:
+            return  # a newer request replaced this one
+        name = dev.name or dev.serial
+        if ok:
+            dev.group = group
+            dev.pending_group = None
+            dev.group_failed = False
+            _LOGGER.info("MAX! %s (%s): group id %s acknowledged", name, dev.serial, group or "removed")
+        else:
+            dev.group_failed = True
+            _LOGGER.warning("MAX! %s (%s): group id %s not acknowledged", name, dev.serial, group or "removal")
+        self._notify(dev)
+
+    def _resubmit_failed_group(self, dev: MaxDevice) -> None:
+        if dev.group_failed and dev.pending_group is not None:
+            dev.group_failed = False
+            self._submit_group(dev)
 
     def _resubmit_failed_links(self, dev: MaxDevice) -> None:
         for entry in dev.failed_link_ops():
@@ -1061,15 +1311,17 @@ class MaxHub:
         self._submit_set(dev, dev.pending_target, dev.pending_mode, dev.pending_until)
 
     def _submit_set(
-        self, dev: MaxDevice, temperature: float | None, mode: Mode | None, until: datetime | None = None
+        self, dev: MaxDevice, temperature: float | None, mode: Mode | None, until: datetime | None = None,
+        group: int | None = None,
     ) -> None:
         if mode is None:
             return
+        group = dev.group if group is None else group
 
         def build(counter: int) -> Frame:
             if self._expired(mode, until):
                 raise FrameError(f"end time {until} passed")
-            return build_set_temperature(counter, self.address, dev.address, dev.group, temperature, mode, until)
+            return build_set_temperature(counter, self.address, dev.address, group, temperature, mode, until)
 
         self._submit(
             Command(
@@ -1160,6 +1412,7 @@ class MaxHub:
                     self._submit_pending(dev)
                 if dev.failed_config_kinds():
                     self._submit_pending_config(dev, dev.failed_config_kinds())
+                self._resubmit_failed_group(dev)
                 if not dev.is_sleeper:
                     self._resubmit_failed_links(dev)
         self._notify(None)
@@ -1295,6 +1548,12 @@ class MaxHub:
         self._note_rssi(dev, frame, radio)
         dev.last_seen = self._now()
         kind = frame.msg_type
+        if dev.device_type is DeviceType.PLUG_ADAPTER and kind != MsgType.ACK:
+            # Not supported yet: its telegrams in the log, so a user can hand in a capture.
+            _LOGGER.info(
+                "MAX! %s (%s, plug adapter, not supported yet): type %02X to %06X payload %s",
+                dev.name or dev.serial, dev.serial, kind, frame.dst, frame.payload.hex(),
+            )
         status = True
         if kind == MsgType.ACK:
             ack = decode_ack(frame.payload)
@@ -1340,12 +1599,25 @@ class MaxHub:
         else:
             status = False
             _LOGGER.debug("unhandled message type %02X from %06X", kind, frame.src)
+        reported = False
+        if kind == MsgType.THERMOSTAT_STATE and dev.is_heating_thermostat and len(frame.payload) >= 5:
+            if decode_thermostat_state(frame.payload).measured is not None:
+                dev.measured_at = self._now()
+                reported = True
+        poke = self._pokes.get(dev.address)
+        if poke is not None:
+            # The poke stays invisible: keep the real target and mode.
+            dev.target, dev.mode = poke["target"], poke["mode"]
+            if reported:
+                self._finish_poke(dev)
         dev.clear_pending_if_reached()
         if status and dev.command_failed and dev.has_pending:
             dev.command_failed = False
             self._submit_pending(dev)
         if status and dev.failed_config_kinds():
             self._submit_pending_config(dev, dev.failed_config_kinds())
+        if status:
+            self._resubmit_failed_group(dev)
         if dev.is_sleeper:
             if not (kind == MsgType.ACK and frame.dst == self.address):
                 # It transmits instead of listening: a fast attempt on air is moot.
@@ -1437,11 +1709,19 @@ class MaxHub:
         dev.pending_links = []
         for partner in partners:
             self._queue_link(dev, partner.serial, partner.address, partner.device_type, LINK_ADD)
-        for kind in (KIND_TEMP, KIND_VALVE):
+        for kind in CONFIG_KINDS:
             if any(config_kind(key) == kind for key in dev.config_keys):
-                dev.pending_config[kind] = dev.config_set(kind)
+                values = dev.config_set(kind)
+                if None in values.values():
+                    continue  # never known (display not reported yet): nothing to put back
+                dev.pending_config[kind] = values
                 dev.clear_config_failed(kind)
         self._submit_pending_config(dev)
+        if dev.group and dev.pending_group is None:
+            # After the reset it has none: give it back the one it had.
+            dev.pending_group = dev.group
+            dev.group = 0
+            self._submit_group(dev)
         target = dev.pending_target if dev.has_pending and dev.pending_target is not None else dev.target
         if (
             dev.is_climate

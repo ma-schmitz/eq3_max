@@ -35,6 +35,9 @@ async def test_wall_thermostat_has_temperature_config_and_boost_duration(hass, s
     # Its display counts the boost down by its own duration; it has no decalcification.
     assert reg.async_get("select.wt_wohnzimmer_boost_dauer") is not None
     assert reg.async_get("select.wt_wohnzimmer_entkalkung_tag") is None
+    # Display (target/measured temperature): wall thermostat only.
+    assert reg.async_get("select.wt_wohnzimmer_anzeige").unique_id == "NEQ9000011_anzeige"
+    assert reg.async_get("select.ht_bad_unten_anzeige") is None
     numbers = [e for e in er.async_entries_for_config_entry(reg, setup_entry.entry_id) if e.domain == "number"]
     assert len(numbers) == 7 + 11  # WT + HT; no contact or button
 
@@ -150,3 +153,34 @@ async def test_config_entities_registered_for_existing_install(hass, entry, fake
     assert reg.async_get("select.bad_unten_heizung_entkalkung_tag").unique_id == "MEQ9000007_entkalkung_tag"
     assert reg.async_get("number.wt_wohnzimmer_eco").unique_id == "NEQ9000011_eco"
     assert hass.states.get("number.bad_unten_heizung_komfort").state == "21.0"
+
+
+async def test_select_sets_display_of_wall_thermostat(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    st = hass.states.get("select.wt_wohnzimmer_anzeige")
+    # Unknown until the wall thermostat reports it.
+    assert st.state == "unknown" and st.attributes["options"] == ["setpoint", "actual"]
+    await hass.services.async_call(
+        "select", "select_option", {ATTR_ENTITY_ID: "select.wt_wohnzimmer_anzeige", "option": "actual"}, blocking=True
+    )
+    assert hub.commands[-1] == ("config", WT, "anzeige", "ist")
+    assert hass.states.get("select.wt_wohnzimmer_anzeige").attributes["ausstehend"] == "actual"
+    hub.ack_config(WT, "display")
+    await hass.async_block_till_done()
+    st = hass.states.get("select.wt_wohnzimmer_anzeige")
+    assert st.state == "actual" and st.attributes["quelle"] == "gesetzt"
+
+
+async def test_poll_select_on_radiator_thermostats_only(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    reg = er.async_get(hass)
+    entry = reg.async_get("select.ht_bad_unten_ist_abfragen")
+    assert entry is not None and entry.entity_category is er.EntityCategory.CONFIG
+    assert reg.async_get("select.wt_wohnzimmer_ist_abfragen") is None
+    st = hass.states.get("select.ht_bad_unten_ist_abfragen")
+    assert st.state == "off" and st.attributes["options"] == ["off", "15", "30", "60", "120", "240"]
+    await hass.services.async_call(
+        "select", "select_option", {ATTR_ENTITY_ID: "select.ht_bad_unten_ist_abfragen", "option": "60"}, blocking=True
+    )
+    assert hub.commands[-1] == ("poll", HT, 60)
+    assert hass.states.get("select.ht_bad_unten_ist_abfragen").state == "60"

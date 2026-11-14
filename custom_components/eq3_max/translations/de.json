@@ -144,11 +144,15 @@
         "data": {
           "brake": "Sendezeit auf 36 s pro Stunde begrenzen",
           "away_temperature": "Urlaubstemperatur",
-          "away_hours": "Urlaubsdauer (Stunden)"
+          "away_hours": "Urlaubsdauer (Stunden)",
+          "allow_user_config": "Benutzer ohne Admin-Rechte dürfen Geräteeinstellungen ändern",
+          "allow_user_week_profile": "Benutzer ohne Admin-Rechte dürfen Wochenprogramme ändern"
         },
         "data_description": {
           "away_temperature": "Solltemperatur des Presets Abwesend.",
-          "away_hours": "Das Preset Abwesend endet nach so vielen Stunden, aufgerundet auf die nächste halbe Stunde."
+          "away_hours": "Das Preset Abwesend endet nach so vielen Stunden, aufgerundet auf die nächste halbe Stunde.",
+          "allow_user_config": "Komfort/Eco, Offset, Fenster, Boost, Ventil und Anzeige, z. B. über die Thermostatkarte. Temperatur und Modus bleiben für alle frei; Admins und Automationen dürfen immer.",
+          "allow_user_week_profile": "Wochenprogramme schreiben (Dienst set_week_profile/copy_week_profile, Thermostatkarte)."
         }
       },
       "radios": {
@@ -413,6 +417,24 @@
           "thursday": "Donnerstag",
           "friday": "Freitag"
         }
+      },
+      "anzeige": {
+        "name": "Anzeige",
+        "state": {
+          "setpoint": "Soll-Temperatur",
+          "actual": "Ist-Temperatur"
+        }
+      },
+      "ist_abfragen": {
+        "name": "Ist-Temperatur abfragen",
+        "state": {
+          "off": "aus",
+          "15": "alle 15 min",
+          "30": "alle 30 min",
+          "60": "stündlich",
+          "120": "alle 2 Stunden",
+          "240": "alle 4 Stunden"
+        }
       }
     },
     "number": {
@@ -641,6 +663,24 @@
     },
     "radio_name_taken": {
       "message": "Diesen Namen hat schon ein Funkmodul."
+    },
+    "hub_no_group": {
+      "message": "Das Funkmodul hat keine Gruppen-ID"
+    },
+    "group_not_on_device": {
+      "message": "Nur Thermostate haben eine Gruppen-ID"
+    },
+    "group_none_free": {
+      "message": "Keine freie Gruppen-ID mehr"
+    },
+    "not_allowed_config": {
+      "message": "Geräteeinstellungen dürfen nur Administratoren ändern (Option der Integration)"
+    },
+    "not_allowed_week_profile": {
+      "message": "Wochenprogramme dürfen nur Administratoren ändern (Option der Integration)"
+    },
+    "not_allowed_admin": {
+      "message": "Das dürfen nur Administratoren"
     }
   },
   "selector": {

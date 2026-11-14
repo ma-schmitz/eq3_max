@@ -109,6 +109,8 @@ plugins:
                   name: Helles Design
           nav_translations:
             Home: Start
+            "What's new in 0.8": Neu in 0.8
+            Thermostat card: Thermostatkarte
             Getting started: Loslegen
             Installation: Installation
             Setup: Einrichtung
@@ -130,6 +132,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - What's new in 0.8: neu.md
   - Getting started:
       - Installation: loslegen/installation.md
       - Setup: loslegen/einrichtung.md
@@ -143,6 +146,7 @@ nav:
       - Device configuration: handbuch/konfiguration.md
       - Links: handbuch/verknuepfungen.md
       - The "eQ-3 MAX!" panel: handbuch/seite.md
+      - Thermostat card: handbuch/karte.md
       - Multiple radio modules: handbuch/funkmodule.md
       - Pairing devices: handbuch/anlernen.md
       - Services: handbuch/dienste.md

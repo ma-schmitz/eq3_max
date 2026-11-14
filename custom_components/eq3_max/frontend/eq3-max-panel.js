@@ -18,6 +18,8 @@ const EN = {
   "Aus": "Off",
   "Homegear": "Homegear",
   "Werksvorgabe": "Factory default",
+  "gemeldet": "reported",
+  "unbekannt": "unknown",
   "gesetzt": "set",
   "ausstehend": "pending",
   "wartet auf Gerät": "waiting for device",
@@ -40,6 +42,7 @@ const EN = {
   "Wandthermostat": "Wall thermostat",
   "Fensterkontakt": "Window contact",
   "Eco-Taster": "Eco button",
+  "Zwischenstecker (noch nicht unterstützt)": "Plug adapter (not supported yet)",
   "Unbekannt": "Unknown",
   // Konfiguration
   "Temperaturen": "Temperatures",
@@ -54,6 +57,9 @@ const EN = {
   "Boost-Dauer": "Boost duration",
   "Boost-Ventilstellung": "Boost valve position",
   "Entkalkung Tag": "Decalcification day",
+  "Anzeige": "Display",
+  "Soll-Temperatur": "Set temperature",
+  "Ist-Temperatur": "Current temperature",
   "Entkalkung Stunde": "Decalcification hour",
   "Ventil maximal": "Valve maximum",
   "Ventil-Offset": "Valve offset",
@@ -224,6 +230,51 @@ const EN = {
   "Partner auswählen …": "Choose partner …",
   "kein weiteres Gerät möglich": "no further device possible",
   "Keine Verknüpfungen.": "No links.",
+  "Temperatur für die Komfort-Taste am Gerät und das Preset „Komfort“. Gilt für den ganzen Raum.":
+    "Temperature of the comfort button on the device and of the preset \"Comfort\". Applies to the whole room.",
+  "Absenktemperatur für die Eco-Taste, den Eco-Taster und das Preset „Eco“. Gilt für den ganzen Raum.":
+    "Setback temperature of the eco button, the eco push button and the preset \"Eco\". Applies to the whole room.",
+  "Höchster Sollwert, der sich am Gerät einstellen lässt.":
+    "Highest target that can be set on the device.",
+  "Niedrigster Sollwert, der sich am Gerät einstellen lässt.":
+    "Lowest target that can be set on the device.",
+  "Korrigiert die gemessene Temperatur, z. B. −1 K, wenn das Thermostat direkt am Heizkörper zu warm misst.":
+    "Corrects the measured temperature, e.g. −1 K if the thermostat measures too warm right at the radiator.",
+  "Sollwert, solange ein Fenster offen ist – über einen Fensterkontakt oder die eigene Erkennung des Thermostats.":
+    "Target while a window is open – from a window contact or the thermostat's own detection.",
+  "So lange gilt die Fenster-auf-Temperatur, wenn das Thermostat selbst einen Temperatursturz erkennt. 0 = eigene Erkennung aus (ein Fensterkontakt wirkt weiter).":
+    "How long the window-open temperature applies when the thermostat itself detects a temperature drop. 0 = own detection off (a window contact still works).",
+  "Wie lange Boost das Ventil weit öffnet. Der Wandthermostat zählt seine Anzeige danach herunter.":
+    "How long boost opens the valve wide. The wall thermostat counts its display down by it.",
+  "Ventilöffnung während Boost.":
+    "Valve opening during boost.",
+  "Wochentag der Ventilfahrt gegen Festsitzen (Entkalkung).":
+    "Weekday of the valve run against sticking (decalcification).",
+  "Uhrzeit der wöchentlichen Ventilfahrt.":
+    "Hour of the weekly valve run.",
+  "Größte Ventilöffnung – begrenzt die Heizleistung dieses Heizkörpers.":
+    "Largest valve opening – limits the heat output of this radiator.",
+  "Verschiebt die Ventilstellung, z. B. bei Ventilen, die erst spät öffnen.":
+    "Shifts the valve position, e.g. for valves that open late.",
+  "Was das Display des Wandthermostats zeigt. Am Gerät ist das Menü gesperrt, solange es an einer Zentrale hängt.":
+    "What the wall thermostat's display shows. Its menu is locked while it is paired with a central.",
+  "Der Heizkörper meldet seine Ist-Temperatur nur, wenn sich bei ihm etwas ändert. eq3_max stößt ihn in diesem Abstand an (Sollwert +0,5 °C bis zur Meldung, etwa 1 min, dann zurück). Kostet zwei Telegramme und etwas Batterie; ausgelassen, wenn er von selbst gemeldet hat.":
+    "The radiator reports its current temperature only when something changes on it. eq3_max nudges it at this interval (target +0.5 °C until it reports, about 1 min, then back). Costs two telegrams and some battery; skipped when it reported by itself.",
+  "Ist-Temperatur abfragen": "Poll current temperature",
+  "aus": "off", "alle 15 min": "every 15 min", "alle 30 min": "every 30 min", "stündlich": "every hour",
+  "alle 2 Stunden": "every 2 hours", "alle 4 Stunden": "every 4 hours",
+  "Abfrage: {value}": "Polling: {value}",
+  "Erklärung": "Explanation",
+  "Gruppen-ID": "Group id",
+  "keine": "none",
+  "Setzen": "Set",
+  "Entfernen": "Remove",
+  "Für den Raum vergeben": "Assign for the room",
+  "Gruppen-ID {group} gesendet – wartet auf Quittung.": "Group id {group} sent – waiting for acknowledgement.",
+  "Gruppen-ID entfernt – wartet auf Quittung.": "Group id removed – waiting for acknowledgement.",
+  "Raum bekommt Gruppen-ID {group} ({n} Geräte) – wartet auf Quittung.": "Room gets group id {group} ({n} devices) – waiting for acknowledgement.",
+  "Geräte einer Gruppe übernehmen Stellbefehle gemeinsam. „Für den Raum vergeben“ gibt diesem Thermostat und den mit ihm verknüpften Thermostaten eine gemeinsame freie ID (1–255) und entfernt sie bei allen anderen.":
+    "Devices of one group take set commands together. \"Assign for the room\" gives this thermostat and the thermostats linked with it one common free id (1–255) and removes it from all others.",
   "Partner hinzufügen": "Add partner",
   "Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind.":
     "Only devices that can be linked with this one and are not linked or requested yet are offered.",
@@ -267,6 +318,7 @@ const TYPE_ICONS = {
   wall_thermostat: "mdi:thermostat",
   shutter_contact: "mdi:window-open-variant",
   push_button: "mdi:gesture-tap-button",
+  plug_adapter: "mdi:power-socket-de",
   cube: "mdi:cube-outline",
 };
 const MODE_LABELS = { auto: "Automatik", manual: "Manuell", temporary: "Temporär", boost: "Boost" };
@@ -276,7 +328,7 @@ const TONE_COLORS = {
   heat: "var(--e3-heat)", open: "var(--e3-open)", alert: "var(--e3-error)", off: "var(--e3-muted)", idle: "var(--e3-accent)",
 };
 const WP_DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
-const SOURCE_LABELS = { homegear: "Homegear", werksvorgabe: "Werksvorgabe", gesetzt: "gesetzt" };
+const SOURCE_LABELS = { homegear: "Homegear", werksvorgabe: "Werksvorgabe", gesetzt: "gesetzt", gemeldet: "gemeldet" };
 const LINK_LABELS = {
   pending: "ausstehend",
   waiting: "wartet auf Gerät",
@@ -299,8 +351,9 @@ const TYPE_NAMES = {
   wall_thermostat: "Wandthermostat",
   shutter_contact: "Fensterkontakt",
   push_button: "Eco-Taster",
+  plug_adapter: "Zwischenstecker (noch nicht unterstützt)",
 };
-const SET_TITLES = { temp: "Temperaturen", valve: "Ventil" };
+const SET_TITLES = { temp: "Temperaturen", valve: "Ventil", display: "Anzeige" };
 const CONFIG_LABELS = {
   komfort: "Komforttemperatur",
   eco: "Eco-Temperatur",
@@ -315,7 +368,29 @@ const CONFIG_LABELS = {
   entkalkung_stunde: "Entkalkung Stunde",
   ventil_max: "Ventil maximal",
   ventil_offset: "Ventil-Offset",
+  anzeige: "Anzeige",
 };
+// Optionsschlüssel der Anzeige (Wandthermostat) -> deutscher Text (Anzeige über t()).
+const DISPLAY_KEYS = { setpoint: "Soll-Temperatur", actual: "Ist-Temperatur" };
+// Erklärtexte je Einstellwert (Mouseover und ⓘ).
+const CONFIG_HELP = {
+  komfort: "Temperatur für die Komfort-Taste am Gerät und das Preset „Komfort“. Gilt für den ganzen Raum.",
+  eco: "Absenktemperatur für die Eco-Taste, den Eco-Taster und das Preset „Eco“. Gilt für den ganzen Raum.",
+  maximal: "Höchster Sollwert, der sich am Gerät einstellen lässt.",
+  minimal: "Niedrigster Sollwert, der sich am Gerät einstellen lässt.",
+  offset: "Korrigiert die gemessene Temperatur, z. B. −1 K, wenn das Thermostat direkt am Heizkörper zu warm misst.",
+  fenster_temperatur: "Sollwert, solange ein Fenster offen ist – über einen Fensterkontakt oder die eigene Erkennung des Thermostats.",
+  fenster_dauer: "So lange gilt die Fenster-auf-Temperatur, wenn das Thermostat selbst einen Temperatursturz erkennt. 0 = eigene Erkennung aus (ein Fensterkontakt wirkt weiter).",
+  boost_dauer: "Wie lange Boost das Ventil weit öffnet. Der Wandthermostat zählt seine Anzeige danach herunter.",
+  boost_ventil: "Ventilöffnung während Boost.",
+  entkalkung_tag: "Wochentag der Ventilfahrt gegen Festsitzen (Entkalkung).",
+  entkalkung_stunde: "Uhrzeit der wöchentlichen Ventilfahrt.",
+  ventil_max: "Größte Ventilöffnung – begrenzt die Heizleistung dieses Heizkörpers.",
+  ventil_offset: "Verschiebt die Ventilstellung, z. B. bei Ventilen, die erst spät öffnen.",
+  anzeige: "Was das Display des Wandthermostats zeigt. Am Gerät ist das Menü gesperrt, solange es an einer Zentrale hängt.",
+  ist_abfragen: "Der Heizkörper meldet seine Ist-Temperatur nur, wenn sich bei ihm etwas ändert. eq3_max stößt ihn in diesem Abstand an (Sollwert +0,5 °C bis zur Meldung, etwa 1 min, dann zurück). Kostet zwei Telegramme und etwas Batterie; ausgelassen, wenn er von selbst gemeldet hat.",
+};
+const POLL_LABELS = { 0: "aus", 15: "alle 15 min", 30: "alle 30 min", 60: "stündlich", 120: "alle 2 Stunden", 240: "alle 4 Stunden" };
 // Optionsschlüssel von entkalkung_tag -> deutscher Wochentag (Anzeige über t()).
 const DAY_KEYS = {
   monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag",
@@ -471,6 +546,10 @@ const STYLE = `
   .card .foot > span { display: inline-flex; align-items: center; gap: 4px; }
   .card .foot ha-icon { --mdc-icon-size: 14px; }
   .card .foot .low { color: var(--e3-error); }
+  .info-btn { border: 0; background: none; color: var(--e3-muted); cursor: pointer; padding: 0 0 0 4px; vertical-align: middle; display: inline-flex; }
+  .info-btn ha-icon { --mdc-icon-size: 15px; }
+  .help { grid-column: 1 / -1; font-size: 12.5px; color: var(--e3-muted); background: color-mix(in srgb, var(--e3-accent) 8%, transparent);
+    border-radius: 8px; padding: 6px 10px; margin: 2px 0 4px; }
   .chip {
     display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 500; white-space: nowrap;
     background: var(--e3-divider); color: var(--primary-text-color);
@@ -699,6 +778,7 @@ function configLabel(item) {
 
 function optionLabel(item, opt) {
   if (item.key === "entkalkung_tag" && DAY_KEYS[opt.label]) return t(DAY_KEYS[opt.label]);
+  if (item.key === "anzeige" && DISPLAY_KEYS[opt.label]) return t(DISPLAY_KEYS[opt.label]);
   return opt.label;
 }
 
@@ -730,6 +810,7 @@ function effective(item) {
 }
 
 function formatConfig(item, value) {
+  if (value === null || value === undefined) return "–";
   if (item.type === "select") {
     const opt = item.options.find((o) => sameValue(o.value, value));
     return opt ? optionLabel(item, opt) : String(value);
@@ -1844,7 +1925,48 @@ class Eq3MaxPanel extends HTMLElement {
           }, t("Verknüpfen"))),
         h("div", { class: "sub", style: "margin-top:6px;color:var(--e3-muted);font-size:12px" },
           t("Zur Auswahl stehen nur Geräte, die sich mit diesem verknüpfen lassen und noch nicht verknüpft oder beauftragt sind."))),
+      dev.config && dev.config.length ? this._renderGroup(dev) : null,
     ];
+  }
+
+  _renderGroup(dev) {
+    const key = `group:${dev.serial}`;
+    const busy = this._busy.has(key) || !dev.device_id;
+    const input = h("input", {
+      type: "number", min: "1", max: "255", step: "1", inputmode: "numeric",
+      "data-focus": `group:${dev.serial}`, "aria-label": t("Gruppen-ID"), style: "width:80px",
+    });
+    input.value = String(dev.pending_group ?? (dev.group || ""));
+    const status = [chip(dev.group ? String(dev.group) : t("keine"), dev.group ? "ok" : "")];
+    if (dev.pending_group !== null && dev.pending_group !== undefined) {
+      status.push(chip(t("ausstehend: {value}", { value: dev.pending_group || t("keine") }), "warn"));
+    }
+    if (dev.group_failed) status.push(chip(t("nicht quittiert – wird beim nächsten Melden erneut gesendet"), "error"));
+    const send = (message, text) => this._call(key, { type: "eq3_max/set_group", device_id: dev.device_id, ...message }, text);
+    return h("div", {},
+      h("div", { class: "sub", style: "margin:12px 0 6px;font-weight:500" }, t("Gruppen-ID")),
+      h("div", { class: "add" },
+        status,
+        input,
+        h("button", {
+          class: "action primary", disabled: busy,
+          onclick: () => {
+            const group = Number(input.value);
+            if (!Number.isInteger(group) || group < 1 || group > 255) return;
+            send({ group }, t("Gruppen-ID {group} gesendet – wartet auf Quittung.", { group }));
+          },
+        }, t("Setzen")),
+        h("button", {
+          class: "action danger", disabled: busy || (!dev.group && !dev.pending_group),
+          onclick: () => send({ group: 0 }, t("Gruppen-ID entfernt – wartet auf Quittung.")),
+        }, t("Entfernen")),
+        h("button", {
+          class: "action", disabled: busy,
+          onclick: () => send({ room: true }, (res) =>
+            t("Raum bekommt Gruppen-ID {group} ({n} Geräte) – wartet auf Quittung.", { group: res.group, n: res.devices.length })),
+        }, t("Für den Raum vergeben"))),
+      h("div", { class: "sub", style: "margin-top:6px;color:var(--e3-muted);font-size:12px" },
+        t("Geräte einer Gruppe übernehmen Stellbefehle gemeinsam. „Für den Raum vergeben“ gibt diesem Thermostat und den mit ihm verknüpften Thermostaten eine gemeinsame freie ID (1–255) und entfernt sie bei allen anderen.")));
   }
 
   // --- Konfiguration ---
@@ -1883,7 +2005,33 @@ class Eq3MaxPanel extends HTMLElement {
       h("div", { class: "sub", style: "color:var(--e3-muted);font-size:13px" },
         t("Das Gerät übernimmt nur ganze Sätze: Werte ändern und den Satz mit einem Klick senden. Gezeigt wird der zuletzt quittierte Wert; „ausstehend“ heißt gesendet, aber noch nicht quittiert.")),
       dev.config.map((set) => this._renderSet(dev, set)),
+      dev.poll_minutes === null || dev.poll_minutes === undefined ? null : this._renderPoll(dev),
     ];
+  }
+
+  _helpToggle(scope, key) {
+    if (!CONFIG_HELP[key]) return null;
+    const id = `${scope}:${key}`;
+    return h("button", {
+      class: "info-btn", title: t("Erklärung"), "aria-label": t("Erklärung"),
+      onclick: (ev) => { ev.stopPropagation(); this._helpOpen = this._helpOpen === id ? null : id; this._render(); },
+    }, icon("mdi:information-outline"));
+  }
+
+  _renderPoll(dev) {
+    const key = `poll:${dev.serial}`;
+    const select = h("select", {
+      "aria-label": t("Ist-Temperatur abfragen"), disabled: this._busy.has(key) || !dev.device_id,
+      onchange: () => this._call(key, { type: "eq3_max/set_poll", device_id: dev.device_id, minutes: Number(select.value) },
+        t("Abfrage: {value}", { value: t(POLL_LABELS[Number(select.value)]) })),
+    }, Object.entries(POLL_LABELS).map(([v, label]) => h("option", { value: v }, t(label))));
+    select.value = String(dev.poll_minutes);
+    return h("fieldset", {},
+      h("legend", {}, t("Ist-Temperatur abfragen")),
+      h("div", { class: "cfg" },
+        h("span", { class: "label", title: t(CONFIG_HELP.ist_abfragen) }, t("Ist-Temperatur abfragen"), this._helpToggle(key, "ist_abfragen")),
+        h("span", { class: "ctl" }, select),
+        this._helpOpen === `${key}:ist_abfragen` ? h("div", { class: "help" }, t(CONFIG_HELP.ist_abfragen)) : null));
   }
 
   _renderSet(dev, set) {
@@ -1898,14 +2046,17 @@ class Eq3MaxPanel extends HTMLElement {
       let control;
       if (item.type === "select") {
         control = h("select", { "data-focus": `cfg:${dk}:${item.key}`, "aria-label": configLabel(item) },
-          item.options.map((o) => h("option", { value: String(o.value) }, optionLabel(item, o))));
+          // Noch unbekannt (Anzeige meldet erst das Gerät): Platzhalter statt einer Option.
+          (current === null || current === undefined
+            ? [h("option", { value: "", disabled: true }, "–")] : [])
+            .concat(item.options.map((o) => h("option", { value: String(o.value) }, optionLabel(item, o)))));
       } else {
         control = h("input", {
           type: "number", min: String(item.min), max: String(item.max), step: String(item.step),
           inputmode: "decimal", "data-focus": `cfg:${dk}:${item.key}`, "aria-label": configLabel(item),
         });
       }
-      control.value = String(current);
+      control.value = current === null || current === undefined ? "" : String(current);
       // Nur den Entwurf merken und den Satz vor Ort auffrischen: kein Neuaufbau, der
       // Fokus und Eingabe stören würde.
       control.addEventListener(item.type === "select" ? "change" : "input", () => {
@@ -1918,8 +2069,8 @@ class Eq3MaxPanel extends HTMLElement {
       });
       const error = h("span", { style: "color:var(--e3-error)" });
       refs.push({ item, control, error });
-      const meta = [chip(SOURCE_LABELS[item.source] ? t(SOURCE_LABELS[item.source]) : item.source || "?",
-        item.source === "werksvorgabe" ? "warn" : item.source === "gesetzt" ? "ok" : "info")];
+      const meta = [chip(SOURCE_LABELS[item.source] ? t(SOURCE_LABELS[item.source]) : item.source || t("unbekannt"),
+        item.source === "werksvorgabe" ? "warn" : item.source === "gesetzt" || item.source === "gemeldet" ? "ok" : "info")];
       if (item.pending !== null && item.pending !== undefined) {
         meta.push(chip(t("ausstehend: {value}", { value: formatConfig(item, item.pending) }), "warn"));
         meta.push(h("span", {}, t("quittiert: {value}", { value: formatConfig(item, item.value) })));
@@ -1929,7 +2080,10 @@ class Eq3MaxPanel extends HTMLElement {
       }
       meta.push(error);
       return h("div", { class: "cfg" },
-        h("span", { class: "label" }, configLabel(item)),
+        h("span", { class: "label", title: CONFIG_HELP[item.key] ? t(CONFIG_HELP[item.key]) : null },
+          configLabel(item), this._helpToggle(dk, item.key)),
+        this._helpOpen === `${dk}:${item.key}` && CONFIG_HELP[item.key]
+          ? h("div", { class: "help" }, t(CONFIG_HELP[item.key])) : null,
         h("span", { class: "ctl" }, control, item.unit ? h("span", { class: "sub" }, item.unit) : null),
         h("div", { class: "meta" }, meta));
     });

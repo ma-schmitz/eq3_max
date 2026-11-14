@@ -135,19 +135,40 @@ async def test_options_brake(hass, entry):
     r = await open_options(hass, entry)
     r = await hass.config_entries.options.async_configure(r["flow_id"], {"brake": True})
     assert r["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {"brake": True, "away_temperature": 18.0, "away_hours": 24}
+    assert entry.options == {
+        "brake": True, "away_temperature": 18.0, "away_hours": 24,
+        "allow_user_config": True, "allow_user_week_profile": True,
+    }
+
+
+async def test_options_user_permissions_default_on_and_saved(hass, entry):
+    entry.add_to_hass(hass)
+    r = await open_options(hass, entry)
+    defaults = {str(k): k.default() for k in r["data_schema"].schema}
+    assert defaults["allow_user_config"] is True and defaults["allow_user_week_profile"] is True
+    r = await hass.config_entries.options.async_configure(
+        r["flow_id"], {"brake": False, "allow_user_config": False, "allow_user_week_profile": True}
+    )
+    assert r["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["allow_user_config"] is False and entry.options["allow_user_week_profile"] is True
 
 
 async def test_options_away_defaults_and_values(hass, entry):
     entry.add_to_hass(hass)
     r = await open_options(hass, entry)
     defaults = {str(k): k.default() for k in r["data_schema"].schema}
-    assert defaults == {"brake": False, "away_temperature": 18.0, "away_hours": 24}
+    assert defaults == {
+        "brake": False, "away_temperature": 18.0, "away_hours": 24,
+        "allow_user_config": True, "allow_user_week_profile": True,
+    }
     r = await hass.config_entries.options.async_configure(
         r["flow_id"], {"brake": False, "away_temperature": 16.5, "away_hours": 72}
     )
     assert r["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {"brake": False, "away_temperature": 16.5, "away_hours": 72}
+    assert entry.options == {
+        "brake": False, "away_temperature": 16.5, "away_hours": 72,
+        "allow_user_config": True, "allow_user_week_profile": True,
+    }
     assert isinstance(entry.options["away_hours"], int)
     r = await open_options(hass, entry)
     assert {str(k): k.default() for k in r["data_schema"].schema}["away_hours"] == 72

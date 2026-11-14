@@ -12,12 +12,14 @@ from custom_components.eq3_max.config_defs import (
     validate_config_value,
 )
 from custom_components.eq3_max.migration import SELECT_CONFIG_KEYS
-from custom_components.eq3_max.protocol.devices import FACTORY_CONFIG
+from custom_components.eq3_max.protocol.devices import CONFIG_DISPLAY_KEYS, FACTORY_CONFIG
 
 
 def test_every_config_key_is_number_or_select():
     assert set(OPTION_VALUES) == set(SELECT_CONFIG_KEYS)
-    assert set(RANGES) | set(OPTION_VALUES) == set(FACTORY_CONFIG) == set(CONFIG_LABELS)
+    assert set(RANGES) | set(OPTION_VALUES) == set(CONFIG_LABELS)
+    # The display is reported by the device: no assumed factory value.
+    assert set(FACTORY_CONFIG) == set(CONFIG_LABELS) - set(CONFIG_DISPLAY_KEYS)
     for key, value in FACTORY_CONFIG.items():
         assert validate_config_value(key, value) == value
 

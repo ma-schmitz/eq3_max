@@ -19,6 +19,8 @@ Seite neu laden.
 | Preset | Wirkung |
 |---|---|
 | **keins** | normaler Betrieb |
+| **Komfort** | Handbetrieb auf der Komforttemperatur aus der Gerätekonfiguration (ab 0.8.0) |
+| **Eco** | Handbetrieb auf der Eco-Temperatur aus der Gerätekonfiguration (ab 0.8.0) |
 | **Boost** | Ventil kurz weit auf (Dauer und Öffnung siehe Gerätekonfiguration), danach zurück |
 | **Abwesend** | feste Temperatur bis zu einer Endzeit (Modus „temporär“) |
 
@@ -30,6 +32,11 @@ Nach Ablauf kehrt das Gerät selbst in seinen vorherigen Modus zurück.
 **Zurück aus Abwesend oder Boost:** Modus „Heizbetrieb“ wählen oder Preset „keins“ → es gilt
 wieder der zuletzt eingestellte Komfortwert (egal ob in HA oder am Rad gesetzt; die
 Fenster-auf-Temperatur zählt nicht als Komfortwert).
+
+**Komfort und Eco** setzen den Handbetrieb auf den jeweiligen Wert, wie die Tasten am Gerät
+(Telegramm 0x40). HA zeigt das Preset auch, wenn der Sollwert auf anderem Weg dort landet;
+im Automatikbetrieb und bei offenem Fenster heißt es „keins“. Eco zählt nicht als
+Komfortwert: Nach Abwesend oder Boost geht es zurück auf den letzten Komfortwert.
 
 ## Befehle und Quittungen
 

@@ -104,7 +104,7 @@ async def test_overview_devices_states_areas_entities(hass, setup_entry, fake_hu
     assert ht["entity_id"] == "climate.ht_bad_unten" and ht["sleeper"] is False
     state = ht["state"]
     assert (state["target"], state["measured"], state["valve"], state["rssi"]) == (21.0, 19.5, 35, -61.5)
-    assert state["mode"] == "manual" and state["hvac"] == "heat" and state["preset"] == "none"
+    assert state["mode"] == "manual" and state["hvac"] == "heat" and state["preset"] == "comfort"  # 21.0 = comfort (factory)
     assert state["last_seen"] == 1_760_000_000.0 and state["rf_error"] is True and state["battery_low"] is False
     assert state["command_failed"] is False and state["config_failed"] == []
     assert ht["pending"] is False
@@ -146,9 +146,16 @@ async def test_overview_config_sets_with_metadata(hass, setup_entry, fake_hub, h
     assert {"value": 60, "label": "60 min"} in vvalues["boost_dauer"]["options"]
     assert vvalues["entkalkung_tag"]["value"] == "Samstag"
     wt = devices["NEQ9000011"]
-    assert [s["kind"] for s in wt["config"]] == ["temp", "valve"]
+    assert [s["kind"] for s in wt["config"]] == ["temp", "valve", "display"]
     # Of the valve set a wall thermostat only has the boost duration.
     assert [v["key"] for v in wt["config"][1]["values"]] == ["boost_dauer"]
+    # The display is unknown until the wall thermostat reports it: no assumed factory value.
+    display = wt["config"][2]
+    assert display["title"] == "Anzeige"
+    assert display["values"][0]["key"] == "anzeige" and display["values"][0]["type"] == "select"
+    assert display["values"][0]["value"] is None and display["values"][0]["source"] is None
+    assert [o["value"] for o in display["values"][0]["options"]] == ["soll", "ist"]
+    assert "display" not in [s["kind"] for s in ht["config"]]
     assert devices["KEQ9000001"]["config"] == []
 
 
@@ -512,3 +519,37 @@ async def test_set_time_over_websocket_and_service(hass, setup_entry, fake_hub, 
     hub.time_error = "wt-wohnzimmer: clock not acknowledged (no_ack)"
     reply = await call(client, type="eq3_max/set_time", device_id=device_id(hass, WT))
     assert not reply["success"] and "not acknowledged" in reply["error"]["message"]
+
+
+async def test_set_group_single_and_room(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(client, type="eq3_max/set_group", device_id=device_id(hass, HT), group=5)
+    assert reply["success"], reply
+    assert reply["result"] == {"devices": ["MEQ9000007"], "group": 5}
+    assert hub.commands == [("group", HT, 5)]
+    hub.devices[WT].links = ["MEQ9000007"]
+    reply = await call(client, type="eq3_max/set_group", device_id=device_id(hass, WT), room=True)
+    assert reply["success"], reply
+    assert set(reply["result"]["devices"]) == {"NEQ9000011", "MEQ9000007"}
+    devices = by_serial((await overview(client))["entries"][0])
+    assert devices["NEQ9000011"]["pending_group"] == 7 and devices["NEQ9000011"]["group"] == 0
+
+
+async def test_set_group_rejects_contact(hass, setup_entry, fake_hub, hass_ws_client):
+    client = await hass_ws_client(hass)
+    contact = next(a for a, d in fake_hub.last.devices.items() if not d.is_climate)
+    reply = await call(client, type="eq3_max/set_group", device_id=device_id(hass, contact), group=3)
+    assert not reply["success"] and reply["error"]["translation_key"] == "group_not_on_device"
+
+
+async def test_set_poll_and_overview(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    devices = by_serial((await overview(client))["entries"][0])
+    assert devices["MEQ9000007"]["poll_minutes"] == 0 and devices["NEQ9000011"]["poll_minutes"] is None
+    reply = await call(client, type="eq3_max/set_poll", device_id=device_id(hass, HT), minutes=30)
+    assert reply["success"], reply
+    assert hub.commands[-1] == ("poll", HT, 30)
+    reply = await call(client, type="eq3_max/set_poll", device_id=device_id(hass, WT), minutes=30)
+    assert not reply["success"]

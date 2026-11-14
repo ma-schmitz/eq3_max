@@ -375,3 +375,12 @@ async def test_links_sensor_follows_device_base_for_all_types(hass, entry, fake_
     }
     for serial, entity_id in expected.items():
         assert reg.async_get_entity_id("sensor", DOMAIN, f"{serial}_verknuepfungen") == entity_id
+
+
+def test_plug_adapter_gets_only_diagnostic_entities():
+    from custom_components.eq3_max.migration import specs_for
+    from custom_components.eq3_max.protocol.devices import MaxDevice
+    from custom_components.eq3_max.protocol.messages import DeviceType
+
+    plug = MaxDevice(0x123ABD, "PLG1234567", DeviceType.PLUG_ADAPTER)
+    assert [(s.domain, s.key) for s in specs_for(plug)] == [("sensor", "rssi"), ("sensor", "zuletzt_gemeldet")]

@@ -17,3 +17,7 @@ through all modules.
 
 After a **battery change** a known device re-registers by itself and keeps its values. If a
 thermostat then shows "InS", press the boost button (see [FAQ](../faq.md)).
+
+**Plug adapter (BC-TS-Sw-Pl, from 0.8.0):** is paired and appears, but only with RSSI and
+"last seen"; it cannot be controlled yet. Its telegrams are in the log ("plug adapter, not
+supported yet"). If you have one, a capture in an issue helps.

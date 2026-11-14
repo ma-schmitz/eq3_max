@@ -43,3 +43,23 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   ```
   Nothing is sent to the old partner. For window contacts this request, too, waits for the
   next window event.
+
+## Group id (from 0.8.0)
+
+Thermostats of one group take set commands together: the integration then sends them with
+the group id, and every device of the group follows. On the "eQ-3 MAX!" page, tab
+**Links**, under **Group id**:
+
+- **Set**: enter an id 1–255; **Remove** takes it away again.
+- **Assign for the room**: this thermostat and all thermostats linked with it get one
+  common id no other device has (if they share one already, that one stays). All **other**
+  thermostats get "remove group" once: the devices do not report their group, and an old id
+  from Cube or Homegear times would otherwise make an unrelated thermostat follow.
+
+The new id counts once the device acknowledged it; until then it shows as "pending", and
+without an acknowledgement it goes out again with the device's next report. After a factory
+reset the device gets its id back automatically.
+
+**Why?** A target HA sends to the wall thermostat is passed on to the radiators only with its
+next round (measured 2–5 min). With a common group all devices of the room take it from one
+telegram (measured 1–2 min; radiators only listen at intervals).

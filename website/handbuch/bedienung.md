@@ -18,6 +18,8 @@ when the valve moves; after a change, reload the page if needed.
 | Preset | Effect |
 |---|---|
 | **None** | normal operation |
+| **Comfort** | manual mode at the comfort temperature from the device configuration (from 0.8.0) |
+| **Eco** | manual mode at the eco temperature from the device configuration (from 0.8.0) |
 | **Boost** | valve wide open briefly (duration and opening see device configuration), then back |
 | **Away** | fixed temperature until an end time (mode "temporary") |
 
@@ -29,6 +31,11 @@ When it expires, the device returns to its previous mode by itself.
 **Back from Away or Boost:** choose mode "Heat" or preset "None" → the last set comfort
 value applies again (no matter whether set in HA or on the wheel; the window-open
 temperature does not count as a comfort value).
+
+**Comfort and Eco** set manual mode to that value, like the buttons on the device
+(telegram 0x40). HA also shows the preset when the target gets there another way; in
+automatic mode and with a window open it says "None". Eco is no comfort value: after Away
+or Boost it goes back to the last comfort value.
 
 ## Commands and acknowledgements
 

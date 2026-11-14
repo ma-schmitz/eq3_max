@@ -17,3 +17,7 @@ alle Module an.
 
 Nach einem **Batteriewechsel** meldet sich ein bekanntes Gerät von selbst neu an und behält
 seine Werte. Steht ein Thermostat danach auf „InS“, Boost-Taste drücken (siehe [FAQ](../faq.md)).
+
+**Zwischenstecker (BC-TS-Sw-Pl, ab 0.8.0):** wird angelernt und erscheint, aber nur mit RSSI
+und „zuletzt gemeldet“; steuern lässt er sich noch nicht. Seine Telegramme stehen im Log
+(„plug adapter, not supported yet“). Wer einen hat, hilft mit einem Mitschnitt als Issue.

@@ -6,6 +6,15 @@ Home-Assistant-Integration für eQ-3 MAX! über einen CUL mit culfw: USB-Stick (
 oder im Netzwerk (a-culfw auf CUN oder geflashtem MAX! Cube).
 Ersetzt Homegear und die legacy `homematic`-Integration.
 
+![Seite „eQ-3 MAX!“ in Home Assistant](website/assets/panel-hero.png)
+
+**Neu in 0.8.0:** eine eigene [Thermostatkarte](https://github.com/ma-schmitz/eq3-max-thermostat-card),
+Presets Komfort/Eco, Gruppen-IDs für ganze Räume, Anzeige Soll/Ist am Wandthermostat,
+Ist-Temperatur regelmäßig abfragen, Freigaben für Benutzer ohne Admin-Rechte –
+[alles Neue](https://ma-schmitz.github.io/eq3_max/de/neu/).
+
+![Thermostatkarte](website/assets/karte/card-kompakt-de-light.png)
+
 **Dokumentation:** https://ma-schmitz.github.io/eq3_max/de/ – Installation, Umstieg von Homegear,
 Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
 `uv venv .venv-docs && uv pip install -p .venv-docs -r requirements_docs.txt &&
@@ -18,8 +27,13 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
 - Zustand übersteht Neustarts, verlorene Befehle werden erkannt und wiederholt
 - Übernahme bestehender Homegear-Kopplungen und -Entity-IDs ohne Neuanlernen
 - Sendezeit-Sensor und Bremse auf 1 % (36 s pro Stunde, bei neuen Einträgen an)
-- Preset „Abwesend“ (temporär mit Endzeit), Werksreset und Löschen von Geräten
-- Gerätekonfiguration (Komfort-/Eco-Temperatur, Offset, Fenster, Boost, Entkalkung, Ventil)
+- Presets „Komfort“, „Eco“ und „Abwesend“ (temporär mit Endzeit), Werksreset und Löschen von Geräten
+- Gruppen-IDs (je Thermostat oder für einen ganzen Raum)
+- Eigene Dashboard-Karte: [eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (Ventil, Batterie, Funk, Fenster, Einstellungen und Wochenprogramm im Pop-up)
+- Freigaben: Geräteeinstellungen und Wochenprogramme für Benutzer ohne Admin-Rechte sperrbar
+- Gerätekonfiguration (Komfort-/Eco-Temperatur, Offset, Fenster, Boost, Entkalkung, Ventil;
+  Anzeige Soll/Ist am Wandthermostat), jeder Wert per Mouseover und ⓘ erklärt
+- Ist-Temperatur der Heizkörper in frei wählbarem Abstand abfragen (für Verlaufskurven)
 - Verknüpfungen zwischen Geräten anlegen und lösen (Fensterkontakt, Taster, Wand- und Heizkörperthermostat)
 - CUL per USB oder im Netzwerk (CUN, geflashter Cube), Wechsel in den Optionen
 - Mehrere Funkmodule mit einer Zentralen-Adresse (z. B. eins pro Etage); Geräte ohne
@@ -89,6 +103,7 @@ der Geräteseite):
 | `entkalkung_tag` (Auswahl) | ja | – | Samstag … Freitag |
 | `entkalkung_stunde` | ja | – | 0–23 |
 | `ventil_max`, `ventil_offset` | ja | – | 0–100 % |
+| `anzeige` (Auswahl) | – | ja | Soll-/Ist-Temperatur im Display; meldet das Gerät selbst |
 
 Die entity_ids folgen dem Gerät, z. B. `number.ht_bad_unten_komfort` oder
 `select.ht_bad_unten_entkalkung_tag`.

@@ -33,8 +33,7 @@ from .const import CONF_ADDRESS, DOMAIN, SIGNAL_PANEL_UPDATE
 from .registry_compat import find_device
 from .migration import specs_for, unique_id
 from .protocol.devices import (
-    KIND_TEMP,
-    KIND_VALVE,
+    CONFIG_KINDS,
     LINK_ADD,
     LINK_FAILED,
     LINK_PENDING,
@@ -70,6 +69,7 @@ TYPE_KEYS = {
     DeviceType.WALL_THERMOSTAT: "wall_thermostat",
     DeviceType.SHUTTER_CONTACT: "shutter_contact",
     DeviceType.PUSH_BUTTON: "push_button",
+    DeviceType.PLUG_ADAPTER: "plug_adapter",
 }
 TYPE_NAMES = {
     DeviceType.CUBE: "Cube",
@@ -78,13 +78,14 @@ TYPE_NAMES = {
     DeviceType.WALL_THERMOSTAT: "Wandthermostat",
     DeviceType.SHUTTER_CONTACT: "Fensterkontakt",
     DeviceType.PUSH_BUTTON: "Eco-Taster",
+    DeviceType.PLUG_ADAPTER: "Zwischenstecker (noch nicht unterst\u00fctzt)",
 }
 
 
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     for command in (
-        ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_radio,
+        ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_group, ws_set_poll, ws_set_radio,
         ws_set_week_profile, ws_copy_week_profile, ws_set_time, ws_rename_radio,
     ):
         websocket_api.async_register_command(hass, command)
@@ -201,7 +202,7 @@ def _pending_change(dev: MaxDevice, key: str) -> Any:
 
 def _config(dev: MaxDevice) -> list[dict[str, Any]]:
     sets = []
-    kinds = [kind for kind in (KIND_TEMP, KIND_VALVE) if any(key in dev.config_keys for key in SET_KEYS[kind])]
+    kinds = [kind for kind in CONFIG_KINDS if any(key in dev.config_keys for key in SET_KEYS[kind])]
     failed = dev.failed_config_kinds()
     for kind in kinds:
         values = [
@@ -246,11 +247,19 @@ def _device(ctx: _Context, dev: MaxDevice) -> dict[str, Any]:
         "area_name": None if area is None else area.name,
         "entity_id": entity_id,
         "sleeper": dev.is_sleeper,
-        "pending": bool(dev.has_pending or dev.pending_config or dev.pending_links or dev.week_profile_writing),
+        "pending": bool(
+            dev.has_pending or dev.pending_config or dev.pending_links or dev.pending_group is not None
+            or dev.week_profile_writing
+        ),
+        "group": dev.group,
+        "pending_group": dev.pending_group,
+        "group_failed": dev.group_failed,
         "state": _state(ctx, dev, entity_id),
         "links": links,
         "candidates": _candidates(ctx, dev),
         "config": _config(dev),
+        # Measured temperature polling: radiator thermostats only (None = not offered).
+        "poll_minutes": dev.poll_minutes if dev.is_heating_thermostat else None,
         "week_profile": dev.week_profile,
         "week_profile_writing": list(dev.week_profile_writing),
         "week_profile_error": dev.week_profile_error,
@@ -493,7 +502,7 @@ def _validated_set(dev: MaxDevice, kind: str, values: dict[str, Any]) -> dict[st
     {
         vol.Required("type"): "eq3_max/set_config",
         vol.Required("device_id"): str,
-        vol.Required("kind"): vol.In([KIND_TEMP, KIND_VALVE]),
+        vol.Required("kind"): vol.In(list(CONFIG_KINDS)),
         vol.Required("values"): dict,
     }
 )
@@ -515,6 +524,67 @@ def ws_set_config(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
         _error(connection, msg, err)
         return
     connection.send_result(msg["id"], {"factory_keys": factory_keys})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eq3_max/set_poll",
+        vol.Required("device_id"): str,
+        vol.Required("minutes"): vol.In([0, 15, 30, 60, 120, 240]),
+    }
+)
+@callback
+def ws_set_poll(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    try:
+        entry, dev = resolve_max_device(hass, msg["device_id"], "hub_no_config")
+        if not dev.is_heating_thermostat:
+            raise invalid("invalid_value")
+        entry.runtime_data.hub.set_poll(dev.address, msg["minutes"])
+    except HomeAssistantError as err:
+        _error(connection, msg, err)
+        return
+    except FrameError:
+        _error(connection, msg, invalid("invalid_value"))
+        return
+    connection.send_result(msg["id"], {"minutes": msg["minutes"]})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eq3_max/set_group",
+        vol.Required("device_id"): str,
+        # 1..255 = this id, 0 = remove; "room": one free (or common) id for the whole room.
+        vol.Optional("group"): vol.All(int, vol.Range(min=0, max=255)),
+        vol.Optional("room", default=False): bool,
+    }
+)
+@callback
+def ws_set_group(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    try:
+        entry, dev = resolve_max_device(hass, msg["device_id"], "hub_no_group")
+        if not dev.is_climate:
+            raise invalid("group_not_on_device")
+        hub = entry.runtime_data.hub
+        if msg["room"]:
+            devices = hub.set_room_group(dev.address)
+        elif "group" in msg:
+            hub.set_group(dev.address, msg["group"])
+            devices = [dev]
+        else:
+            raise invalid("invalid_value")
+    except HomeAssistantError as err:
+        _error(connection, msg, err)
+        return
+    except FrameError as err:
+        _LOGGER.debug("set_group rejected: %s", err)
+        _error(connection, msg, invalid("group_none_free"))
+        return
+    connection.send_result(
+        msg["id"],
+        {"devices": [d.serial for d in devices], "group": devices[0].pending_group if devices[0].pending_group is not None else devices[0].group},
+    )
 
 
 @websocket_api.require_admin

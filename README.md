@@ -6,6 +6,15 @@ Home Assistant integration for eQ-3 MAX! via a CUL with culfw: USB stick (e.g. n
 or on the network (a-culfw on a CUN or a flashed MAX! Cube).
 Replaces Homegear and the legacy `homematic` integration.
 
+![eQ-3 MAX! panel in Home Assistant](website/assets/panel-hero.png)
+
+**New in 0.8.0:** a [thermostat card](https://github.com/ma-schmitz/eq3-max-thermostat-card) of its
+own, presets Comfort/Eco, group ids for whole rooms, display set/current on the wall thermostat,
+polling the current temperature, permissions for users without admin rights –
+[what's new](https://ma-schmitz.github.io/eq3_max/neu/).
+
+![Thermostat card](website/assets/karte/card-kompakt-en-light.png)
+
 **Documentation:** https://ma-schmitz.github.io/eq3_max/ – installation, migration from Homegear,
 manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
 `uv venv .venv-docs && uv pip install -p .venv-docs -r requirements_docs.txt &&
@@ -18,8 +27,13 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
 - State survives restarts, lost commands are detected and repeated
 - Takes over existing Homegear pairings and entity IDs without re-pairing
 - Airtime sensor and brake at 1 % (36 s per hour, on for new entries)
-- Preset "Away" (temporary with end time), factory reset and deleting devices
-- Device configuration (comfort/eco temperature, offset, window, boost, decalcification, valve)
+- Presets "Comfort", "Eco" and "Away" (temporary with end time), factory reset and deleting devices
+- Group ids (set per thermostat or for a whole room)
+- Own dashboard card: [eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (valve, battery, radio, window, settings and week program in a pop-up)
+- Permissions: device settings and week programs can be locked for users without admin rights
+- Device configuration (comfort/eco temperature, offset, window, boost, decalcification, valve;
+  wall thermostat display: set or current temperature), every value explained on hover and with ⓘ
+- Poll the current temperature of radiator thermostats at an interval of your choice (for history graphs)
 - Create and remove links between devices (window contact, button, wall and radiator thermostat)
 - CUL via USB or on the network (CUN, flashed Cube), switchable in the options
 - Several radio modules with one central address (e.g. one per floor); assign devices to
@@ -89,6 +103,7 @@ the device page):
 | `entkalkung_tag` (select) | yes | – | Saturday … Friday |
 | `entkalkung_stunde` | yes | – | 0–23 |
 | `ventil_max`, `ventil_offset` | yes | – | 0–100 % |
+| `anzeige` (select, display) | – | yes | set / current temperature; reported by the device |
 
 (HT = radiator thermostat, WT = wall thermostat; the keys stand for comfort, eco, maximum,
 minimum, window-open temperature/duration, boost duration/valve, decalcification day/hour,
