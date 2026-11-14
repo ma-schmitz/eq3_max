@@ -190,7 +190,8 @@ connection restarts the integration, the settings do not.
 Home Assistant has no rights per entity: every user may call every service. eq3_max
 therefore checks the caller itself:
 
-- **Administrators only:** `factory_reset`, `link`, `unlink` and the choice of radio module.
+- **Administrators only:** `factory_reset`, `link`, `unlink`, the choice of radio module and the
+  pairing button (from 0.8.2).
 - **By option** (see above, open by default): device settings and week programs.
 - **Always open:** temperature, mode, presets, `set_away`, `set_time`.
 

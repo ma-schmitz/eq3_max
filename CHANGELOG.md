@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] – 2026-11-14
+
+### Added
+- **Set the area right on the "eQ-3 MAX!" page**: the device drawer has an area selection next
+  to the device type (writes to Home Assistant's device registry) – no jump to the device page
+  for new devices (#7).
+
+### Changed
+- **The pairing button (`button.eq3_max_anlernen`) is for administrators only**, like linking and
+  factory reset (automations still may). The pairing on the "eQ-3 MAX!" page always was.
+
 ## [0.8.1] – 2026-11-14
 
 ### Added

@@ -190,7 +190,8 @@ Integration neu, die Einstellungen nicht.
 Home Assistant kennt keine Rechte je Entität: Jeder Benutzer darf jeden Dienst aufrufen.
 eq3_max prüft deshalb selbst, wer aufruft:
 
-- **Nur Administratoren:** `factory_reset`, `link`, `unlink` und die Auswahl des Funkmoduls.
+- **Nur Administratoren:** `factory_reset`, `link`, `unlink`, die Auswahl des Funkmoduls und der
+  Anlern-Knopf (ab 0.8.2).
 - **Nach Option** (siehe oben, Vorgabe frei): Geräteeinstellungen und Wochenprogramme.
 - **Immer frei:** Temperatur, Modus, Presets, `set_away`, `set_time`.
 

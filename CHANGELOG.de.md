@@ -7,6 +7,17 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.2] – 2026-11-14
+
+### Hinzugefügt
+- **Bereich direkt auf der Seite „eQ-3 MAX!“ setzen**: Im Seitenfenster eines Geräts steht neben dem
+  Gerätetyp eine Bereichsauswahl (schreibt in die Geräteverwaltung von Home Assistant) – für neue
+  Geräte kein Umweg über die Geräteseite mehr (#7).
+
+### Geändert
+- **Der Anlern-Knopf (`button.eq3_max_anlernen`) ist nur noch für Administratoren**, wie Verknüpfen und
+  Werksreset (Automationen dürfen weiter). Das Anlernen auf der Seite „eQ-3 MAX!“ war es schon immer.
+
 ## [0.8.1] – 2026-11-14
 
 ### Hinzugefügt

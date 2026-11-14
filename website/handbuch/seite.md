@@ -31,7 +31,8 @@ Markers: **pending** (command, configuration or link not yet acknowledged),
 **not acknowledged** (attempts used up, goes out again on the next report),
 **Radio error**, **Battery low**.
 
-**Clicking a card** opens the side panel:
+**Clicking a card** opens the side panel. Next to the device type at the top, the **area** is a
+selection (from 0.8.2) – set it right there, e.g. for newly paired devices.
 
 - **Links:** each partner with its state — linked · pending · waiting for device ·
   failed · rejected · one-sided — with the plain-text explanation below (e.g. "waiting for

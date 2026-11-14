@@ -31,7 +31,9 @@ Markierungen: **ausstehend** (Befehl, Konfiguration oder Verknüpfung noch nicht
 **nicht quittiert** (Versuche ausgeschöpft, geht beim nächsten Melden erneut raus),
 **Funkfehler**, **Batterie schwach**.
 
-**Klick auf eine Karte** öffnet das Seitenfenster:
+**Klick auf eine Karte** öffnet das Seitenfenster. Oben steht neben dem Gerätetyp der
+**Bereich** als Auswahl (ab 0.8.2) – dort lässt er sich direkt setzen, etwa für neu angelernte
+Geräte.
 
 - **Verknüpfungen:** jeder Partner mit Zustand — verknüpft · ausstehend · wartet auf Gerät ·
   fehlgeschlagen · abgelehnt · einseitig — darunter der Klartext (z. B. „wartet auf

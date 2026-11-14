@@ -230,6 +230,8 @@ const EN = {
   "Partner auswählen …": "Choose partner …",
   "kein weiteres Gerät möglich": "no further device possible",
   "Keine Verknüpfungen.": "No links.",
+  "Bereich": "Area", "Bereich des Geräts in Home Assistant": "The device's area in Home Assistant",
+  "Bereich gesetzt: {name}": "Area set: {name}",
   "Mit allen Geräten im Bereich verknüpfen ({n})": "Link with all devices in the area ({n})",
   "Verknüpft dieses Gerät mit allen passenden Geräten, die in Home Assistant im selben Bereich stehen.":
     "Links this device with all suitable devices in the same Home Assistant area.",
@@ -551,6 +553,8 @@ const STYLE = `
   .card .foot > span { display: inline-flex; align-items: center; gap: 4px; }
   .card .foot ha-icon { --mdc-icon-size: 14px; }
   .card .foot .low { color: var(--e3-error); }
+  .area-select { border: 1px solid var(--e3-divider); border-radius: 999px; padding: 1px 8px; font: inherit; font-size: 11.5px;
+    font-weight: 500; background: transparent; color: inherit; cursor: pointer; }
   .info-btn { border: 0; background: none; color: var(--e3-muted); cursor: pointer; padding: 0 0 0 4px; vertical-align: middle; display: inline-flex; }
   .info-btn ha-icon { --mdc-icon-size: 15px; }
   .help { grid-column: 1 / -1; font-size: 12.5px; color: var(--e3-muted); background: color-mix(in srgb, var(--e3-accent) 8%, transparent);
@@ -1528,7 +1532,7 @@ class Eq3MaxPanel extends HTMLElement {
           h("span", { class: "ic", style: `--tone:${TONE_COLORS[cardTone(dev)]}` }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
           h("div", { class: "t" },
             h("div", { class: "n" }, dev.name),
-            h("div", { class: "tags" }, chip(typeName(dev)), chip(dev.area_name || t("Ohne Bereich")),
+            h("div", { class: "tags" }, chip(typeName(dev)), this._areaSelect(dev),
               isMulti(entry) ? chip(t("Funkmodul {name}", { name: radioName(entry, dev.radio) }), "info") : null),
             h("div", { class: "meta" }, t("Seriennummer {serial} · Adresse {address}", { serial: dev.serial, address: dev.address })
               + (dev.firmware ? t(" · Firmware {firmware}", { firmware: dev.firmware }) : ""))),
@@ -1541,6 +1545,22 @@ class Eq3MaxPanel extends HTMLElement {
               : this._renderLinks(dev)),
       ),
     ];
+  }
+
+  /** Bereich direkt hier setzen (Issue #7): schreibt in die Geräteverwaltung von HA. */
+  _areaSelect(dev) {
+    const areas = Object.values((this._hass && this._hass.areas) || {}).sort((a, b) => a.name.localeCompare(b.name));
+    if (!areas.length || !dev.device_id) return chip(dev.area_name || t("Ohne Bereich"));
+    const key = `area:${dev.serial}`;
+    const select = h("select", {
+      class: "area-select", "aria-label": t("Bereich"), title: t("Bereich des Geräts in Home Assistant"),
+      disabled: this._busy.has(key),
+      onchange: () => this._call(key,
+        { type: "config/device_registry/update", device_id: dev.device_id, area_id: select.value || null },
+        t("Bereich gesetzt: {name}", { name: select.value ? select.selectedOptions[0].textContent : t("Ohne Bereich") })),
+    }, h("option", { value: "" }, t("Ohne Bereich")), areas.map((a) => h("option", { value: a.area_id }, a.name)));
+    select.value = dev.area_id || "";
+    return select;
   }
 
   // --- Wochenprogramm ---

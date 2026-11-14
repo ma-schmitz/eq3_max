@@ -114,3 +114,12 @@ async def test_week_profile_follows_its_switch(hass, setup_entry, fake_hub, fami
     assert err.value.translation_key == "not_allowed_week_profile"
     with pytest.raises(ServiceValidationError):
         await _call(hass, DOMAIN, "copy_week_profile", {"device_id": _dev(hass, HT_S), "target_device_id": [_dev(hass, HT_S)]}, family_user)
+
+
+async def test_pairing_button_only_for_admins(hass, setup_entry, fake_hub, family_user, hass_admin_user):
+    hub = fake_hub.last
+    with pytest.raises(ServiceValidationError) as err:
+        await _call(hass, "button", "press", {ATTR_ENTITY_ID: "button.eq3_max_anlernen"}, family_user)
+    assert err.value.translation_key == "not_allowed_admin"
+    await _call(hass, "button", "press", {ATTR_ENTITY_ID: "button.eq3_max_anlernen"}, hass_admin_user)
+    await hass.services.async_call("button", "press", {ATTR_ENTITY_ID: "button.eq3_max_anlernen"}, blocking=True)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 
+from .permissions import async_check_allowed
 from .entity import MaxCulHubEntity
 
 PAIRING_SECONDS = 60
@@ -21,4 +22,6 @@ class MaxPairingButton(MaxCulHubEntity, ButtonEntity):
         super().__init__(coordinator, "anlernen", "Anlernen")
 
     async def async_press(self) -> None:
+        # Pairing is an admin action like linking (automations without a user still may).
+        await async_check_allowed(self.hass, self.coordinator.entry, self._context, "admin")
         self.coordinator.hub.open_pairing(PAIRING_SECONDS)
