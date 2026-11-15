@@ -27,12 +27,12 @@ const EN = {
   "fehlgeschlagen (abgelehnt)": "failed (rejected)",
   "abgelehnt": "rejected",
   "einseitig": "one-sided",
-  "wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen":
-    "waiting for window contact – please open and close the window once",
+  "wartet auf Fensterkontakt – bitte Anlerntaste kurz drücken (oder Fenster öffnen und schließen)":
+    "waiting for window contact – please press its pairing button briefly (or open and close the window)",
   "wartet auf Eco-Taster – bitte Taster einmal drücken (oder Anlerntaste)":
     "waiting for eco button – please press the button once (or the pairing button)",
-  "Fensterkontakte hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn das Fenster einmal geöffnet und geschlossen wird.":
-    "Window contacts only listen briefly after they send themselves: changes go out once the window has been opened and closed.",
+  "Fensterkontakte hören nur kurz zu. Am sichersten kommt eine Änderung an, wenn die Anlerntaste des Kontakts kurz gedrückt wird (LED blinkt, er bleibt angelernt). Fenster öffnen und schließen reicht nur, wenn der Kontakt schon mit einem Thermostat verknüpft ist.":
+    "Window contacts only listen briefly. A change gets through most reliably when the contact's pairing button is pressed briefly (LED blinks, it stays paired). Opening and closing the window only works once the contact is linked to a thermostat.",
   "Eco-Taster hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn der Taster einmal gedrückt wird (oder die Anlerntaste).":
     "Eco buttons only listen briefly after they send themselves: changes go out once the button has been pressed (or the pairing button).",
   // Gerätetypen
@@ -346,7 +346,7 @@ const LINK_LABELS = {
 const LINK_CHIP = { pending: "warn", waiting: "warn", failed: "error", rejected: "error", one_sided: "warn" };
 const SLEEPER_HINTS = {
   shutter_contact:
-    "Fensterkontakte hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn das Fenster einmal geöffnet und geschlossen wird.",
+    "Fensterkontakte hören nur kurz zu. Am sichersten kommt eine Änderung an, wenn die Anlerntaste des Kontakts kurz gedrückt wird (LED blinkt, er bleibt angelernt). Fenster öffnen und schließen reicht nur, wenn der Kontakt schon mit einem Thermostat verknüpft ist.",
   push_button:
     "Eco-Taster hören nur kurz nach dem eigenen Senden zu: Änderungen gehen erst raus, wenn der Taster einmal gedrückt wird (oder die Anlerntaste).",
 };

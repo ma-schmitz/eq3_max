@@ -639,7 +639,7 @@ async def test_link_and_unlink_services_queue_and_return(hass, setup_entry, fake
     await hass.async_block_till_done()
     st = hass.states.get("sensor.fk_schlafzimmer_verknuepfungen")
     assert st.attributes["ausstehend"] == [
-        "ht-bad-unten: wartet auf Fensterkontakt \u2013 bitte Fenster einmal \u00f6ffnen und schlie\u00dfen"
+        "ht-bad-unten: wartet auf Fensterkontakt \u2013 bitte Anlerntaste kurz dr\u00fccken (oder Fenster \u00f6ffnen und schlie\u00dfen)"
     ]
     hub.devices[HT].links = ["NEQ9000011"]
     hub.devices[WT].links = ["MEQ9000007"]

@@ -1339,7 +1339,7 @@ async def test_sending_assumed_factory_values_logs_warning(hub, caplog):
 from custom_components.eq3_max.protocol.hub import link_status  # noqa: E402
 
 HT_S, FK_S, PB_S, WT_S = "MEQ9000007", "NEQ9000010", "KEQ9000001", "NEQ9000011"
-WAIT_FK = "wartet auf Fensterkontakt \u2013 bitte Fenster einmal \u00f6ffnen und schlie\u00dfen"
+WAIT_FK = "wartet auf Fensterkontakt \u2013 bitte Anlerntaste kurz dr\u00fccken (oder Fenster \u00f6ffnen und schlie\u00dfen)"
 
 
 def link_frame(dst, partner, partner_type, msg_type=0x20):
@@ -1546,6 +1546,7 @@ async def test_contact_link_gives_up_after_five_unheard_rounds(hub):
     """A contact that never takes the link (e.g. behind a module whose firmware
     acknowledges for us, #6) must not burn airtime after every telegram forever."""
     h, cul, rec = hub
+    h._sleeper_round_gap = 0  # every telegram here stands for a window event of its own
     h.devices[HT].links = [FK_S]
     h.link(FK, HT)
     waiting = "wartet auf Ger\u00e4t"
@@ -2874,3 +2875,82 @@ async def test_leftover_refused_removals_are_dropped_at_start():
         assert h.devices[HT].pending_links == []
     finally:
         await h.stop()
+
+
+async def test_contact_pinging_its_central_gets_its_links_right_after_the_pong(hub):
+    """A window contact without partners only ever talks to the central and sleeps again
+    on the acknowledgement: the flush after its telegram never reaches it (#6). After
+    new batteries it pings its central and listens for its configuration: the waiting
+    link goes out then, fast and before the time."""
+    h, cul, rec = hub
+    h.unlink(FK, HT, force=True)
+    await asyncio.sleep(0.05)
+    assert sent(cul) == [] and fast(cul) == []
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, FK, CENTRAL, 0, "100400" + b"NEQ9000010".hex()))
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0][8:10] == "01"  # the pong
+    ack(cul, FK, sent(cul)[0])
+    await until(lambda: len(fast(cul)) == 1)
+    assert matches(fast(cul)[0], link_frame(FK, HT, 1, 0x21))
+    assert len(sent(cul)) == 1  # the time waits behind the link
+    ack(cul, FK, fast(cul)[0])
+    await until(lambda: h.devices[FK].pending_links == [])
+
+
+async def test_contact_link_given_up_after_its_rounds_is_sent_again_after_a_ping(hub):
+    h, cul, rec = hub
+    h.unlink(FK, HT, force=True)
+    h.devices[FK].set_link_state(HT_S, "remove", "fehlgeschlagen")
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, FK, CENTRAL, 0, "100400" + b"NEQ9000010".hex()))
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, FK, sent(cul)[0])
+    await until(lambda: len(fast(cul)) == 1)
+    assert matches(fast(cul)[0], link_frame(FK, HT, 1, 0x21))
+
+
+async def test_thermostat_ping_sends_no_links_out_of_turn(hub):
+    h, cul, rec = hub
+    h.link(HT, WT)
+    await until(lambda: len(sent(cul)) == 1)
+    before = len(cul.written)
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, HT, CENTRAL, 0, "100100" + b"MEQ9000007".hex()))
+    await asyncio.sleep(0.05)
+    assert fast(cul) == []
+    assert len(cul.written) > before
+
+
+async def test_link_after_pong_is_retried_quickly_while_the_contact_listens(hub):
+    """15.11.2026: the contact missed the first attempt after the pong and slept again
+    before the next one 3 s later. While it listens, retries come at the fast pace."""
+    h, cul, rec = hub
+    h.unlink(FK, HT, force=True)
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, FK, CENTRAL, 0, "100400" + b"NEQ9000010".hex()))
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, FK, sent(cul)[0])
+    await until(lambda: len(fast(cul)) == 1)
+    await until(lambda: len(fast(cul)) == 2, timeout=1.0)  # no ack: again within the window
+    ack(cul, FK, fast(cul)[1])
+    await until(lambda: h.devices[FK].pending_links == [])
+
+
+async def test_contact_gets_no_time_after_its_pong(hub):
+    h, cul, rec = hub
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, FK, CENTRAL, 0, "100400" + b"NEQ9000010".hex()))
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, FK, sent(cul)[0])
+    await asyncio.sleep(0.1)
+    assert [l[8:10] for l in cul.written if l[8:10] == "03"] == []
+
+
+async def test_misses_within_one_burst_count_as_one_round(hub):
+    """15.11.2026: one window event (retries, telegram to the partner) gave several
+    unheard attempts within a second, and the link was given up after two events."""
+    h, cul, rec = hub
+    h.devices[HT].links = [FK_S]
+    h.link(FK, HT)
+    for counter in range(10, 16):
+        n = len(fast(cul))
+        cul.feed(line(counter, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "12"))
+        await until(lambda: len(fast(cul)) == n + 1)
+        await until(lambda: h.devices[FK].link_op(HT_S)["state"] == "wartet auf Ger\u00e4t", timeout=1.5)
+    assert h.devices[FK].link_op(HT_S)["misses"] == 1

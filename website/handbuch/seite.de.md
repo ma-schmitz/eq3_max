@@ -37,7 +37,7 @@ Geräte.
 
 - **Verknüpfungen:** jeder Partner mit Zustand — verknüpft · ausstehend · wartet auf Gerät ·
   fehlgeschlagen · abgelehnt · einseitig — darunter der Klartext (z. B. „wartet auf
-  Fensterkontakt – bitte Fenster einmal öffnen und schließen“). Knöpfe: **Lösen**,
+  Fensterkontakt – bitte Anlerntaste kurz drücken (oder Fenster öffnen und schließen)“). Knöpfe: **Lösen**,
   bei fehlgeschlagenen **Erneut senden**, bei einseitigen **Verknüpfen**.
   **Partner hinzufügen** bietet nur Geräte an, die sich mit diesem verknüpfen lassen und
   noch nicht verknüpft oder beauftragt sind; hinter jedem steht sein Bereich (ab 0.8.1).

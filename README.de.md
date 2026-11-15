@@ -158,15 +158,16 @@ lösen sie (Telegramme 0x20 AddLinkPartner und 0x21 RemoveLinkPartner, wie FHEM
   Weckpräambel (`Zf`) raus – ein Versuch je Gelegenheit, 0,5 s Quittungswartezeit;
   sendet das Gerät währenddessen selbst, wird der Versuch aufgegeben und nach dem
   nächsten Telegramm wiederholt. Nie mit Präambel (`Zs`): die kommt nach 1 s immer
-  zu spät. Dafür das Fenster einmal öffnen und schließen bzw. den Taster (oder die
-  Anlerntaste) einmal drücken; die Anlerntaste geht bei beiden, auch wenn das
-  Gerät schon angelernt ist. Wartende Aufträge überstehen Neustarts; ein
+  zu spät. Dafür die Anlerntaste kurz drücken (geht bei beiden, auch wenn das
+  Gerät schon angelernt ist) oder das Fenster einmal öffnen und schließen bzw. den
+  Taster drücken. Ein Fensterkontakt ohne Partner bekommt den Auftrag nur über
+  die Anlerntaste: Er hört dann einige Sekunden zu, wiederholt wird alle 0,5 s. Wartende Aufträge überstehen Neustarts; ein
   Werksreset des Geräts verwirft sie.
 - Diagnosesensor `sensor.<basis>_verknuepfungen` an jedem Gerät: Zustand ist die
   Zahl der vollständigen Verknüpfungen (beide Richtungen quittiert), Attribut
   `partner` die Namen der Partner, Attribut `ausstehend` je unfertigem Paar
   „<Partner>: <Zustand>“ mit `ausstehend` (eingereiht oder unterwegs),
-  „wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen“
+  „wartet auf Fensterkontakt – bitte Anlerntaste kurz drücken (oder Fenster öffnen und schließen)“
   (bzw. „wartet auf Eco-Taster – bitte Taster einmal drücken (oder
   Anlerntaste)“), `fehlgeschlagen`, `fehlgeschlagen (abgelehnt)` oder
   `einseitig` (nur eines der beiden Geräte kennt die Verknüpfung, nichts

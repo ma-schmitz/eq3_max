@@ -14,7 +14,7 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
     partner_device_id: <thermostat>
   ```
 - **Window contacts and eco buttons sleep.** Requests to them wait until they report:
-  state "waiting for window contact – please open and close the window once" (button:
+  state "waiting for window contact – please press its pairing button briefly (or open and close the window)" (button:
   press it once; for both, the pairing button works too, the device stays paired). Sending
   happens without wake-up preamble, 80 ms after the device's last telegram – one attempt
   per opportunity, because a contact only listens for a moment after sending itself.
@@ -23,7 +23,14 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   stays "waiting for …" over several events, the telegram trace helps
   ([Operation](betrieb.md#diagnose)). **From 0.8.3** eq3_max gives up after **5 reports without
   acknowledgement**: the request then shows as "failed" and is tried again only with **"Send
-  again"** – otherwise every report of the contact would cost airtime for good.
+  again"** – otherwise every report of the contact would cost airtime for good. **From 0.8.4**
+  one round counts per event (retries and reports to partners within a few seconds count once).
+- **Contact without partners (from 0.8.4):** a window contact not yet linked to any thermostat
+  only reports to the central unit and goes back to sleep on its acknowledgement – opening and
+  closing the window never gets the request through. **Press its pairing button briefly** (LED
+  blinks): the contact reports to the central again and listens for a few seconds; eq3_max sends
+  the waiting links right after (also "failed" ones). New batteries are not enough, a contact
+  does not report again after a restart.
 - States in `ausstehend`: pending · waiting for … · failed (will be retried) ·
   **failed (rejected)** (the device refused, no automatic retry) ·
   one-sided (only one side knows the other).

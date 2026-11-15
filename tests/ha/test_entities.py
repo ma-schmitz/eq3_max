@@ -91,7 +91,7 @@ async def test_links_sensor_counts_complete_pairs_and_lists_pending(hass, setup_
     assert st.state == "1"
     assert st.attributes["partner"] == ["wt-wohnzimmer"]
     assert st.attributes["ausstehend"] == [
-        "fk-schlafzimmer: wartet auf Fensterkontakt \u2013 bitte Fenster einmal \u00f6ffnen und schlie\u00dfen"
+        "fk-schlafzimmer: wartet auf Fensterkontakt \u2013 bitte Anlerntaste kurz dr\u00fccken (oder Fenster \u00f6ffnen und schlie\u00dfen)"
     ]
 
 

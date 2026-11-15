@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.4] – 2026-11-15
+
+### Fixed
+- **Window contacts without a partner can be linked (#6).** Such a contact only talks to the
+  central and goes back to sleep on its acknowledgement, so a link waited forever. Now the
+  waiting links go out as soon as the contact reports to its central again: press its
+  teach-in button briefly (LED blinks). It listens for a few seconds then, the link is retried
+  every half second meanwhile. Links given up after 5 rounds are sent again then as well.
+  (New batteries are not enough: a window contact does not report to its central after a
+  restart.)
+- A window contact no longer gets the time after reporting to its central: it has no clock
+  and never acknowledged it (four useless sends).
+- **Link changes for sleeping devices count rounds per event.** Retries and reports to
+  partners within a few seconds count as one of the 5 rounds; before, one window event used up
+  several, and a link was given up after two events.
+- **The panel suggests the pairing button for waiting window contacts** ("press its pairing
+  button briefly (or open and close the window)") – the only way for a contact without partners.
+
 ## [0.8.3] – 2026-11-14
 
 ### Fixed

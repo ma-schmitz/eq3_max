@@ -14,7 +14,7 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
     partner_device_id: <Thermostat>
   ```
 - **Fensterkontakte und Eco-Taster schlafen.** Aufträge an sie warten, bis sie sich melden:
-  Zustand „wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen“ (Taster:
+  Zustand „wartet auf Fensterkontakt – bitte Anlerntaste kurz drücken (oder Fenster öffnen und schließen)“ (Taster:
   einmal drücken; bei beiden geht auch die Anlerntaste, das Gerät bleibt angelernt). Gesendet
   wird ohne Weckpräambel, 80 ms nach dem letzten Telegramm des Geräts – ein Versuch je
   Gelegenheit, denn ein Kontakt hört nach eigenem Senden nur einen Moment zu. Mehrere
@@ -23,7 +23,15 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   mehrere Ereignisse lang „wartet auf …“, hilft der Telegramm-Trace
   ([Betrieb](betrieb.md#diagnose)). **Ab 0.8.3** gibt eq3_max nach **5 Meldungen ohne Quittung**
   auf: Der Auftrag steht dann als „fehlgeschlagen“ da und wird erst mit **„Erneut senden“** wieder
-  versucht – sonst kostet jede Meldung des Kontakts dauerhaft Sendezeit.
+  versucht – sonst kostet jede Meldung des Kontakts dauerhaft Sendezeit. **Ab 0.8.4** zählt eine
+  Runde je Ereignis (Wiederholungen und Meldungen an Partner innerhalb weniger Sekunden zählen
+  einmal).
+- **Kontakt ohne Partner (ab 0.8.4):** Ein Fensterkontakt, der noch mit keinem Thermostat
+  verknüpft ist, meldet sich nur bei der Zentrale und schläft nach deren Quittung sofort wieder
+  ein – Fenster öffnen und schließen bringt den Auftrag dann nie hin. **Anlerntaste kurz drücken**
+  (LED blinkt): Der Kontakt meldet sich neu bei der Zentrale und hört einige Sekunden zu; eq3_max
+  schickt die wartenden Verknüpfungen sofort hinterher (auch „fehlgeschlagene“). Ein
+  Batteriewechsel reicht nicht, danach meldet sich ein Kontakt nicht neu an.
 - Zustände in `ausstehend`: ausstehend · wartet auf … · fehlgeschlagen (wird wiederholt) ·
   **fehlgeschlagen (abgelehnt)** (Gerät hat abgelehnt, keine automatische Wiederholung) ·
   einseitig (nur eine Seite kennt die andere).

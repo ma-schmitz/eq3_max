@@ -162,16 +162,17 @@ services `eq3_max.link` and `eq3_max.unlink` create or remove a link
   wake-up preamble (`Zf`) – one attempt per opportunity, 0.5 s acknowledgement wait;
   if the device sends itself meanwhile, the attempt is abandoned and repeated after the
   next telegram. Never with preamble (`Zs`): after 1 s it always comes
-  too late. So open and close the window once, or press the button (or the
-  pairing button) once; the pairing button works for both, even if the
-  device is already paired. Pending requests survive restarts; a
+  too late. So press the pairing button briefly (works for both, even if the
+  device is already paired), or open and close the window / press the button
+  once. A window contact without partners only gets it through the pairing
+  button: it then listens a few seconds and the request is retried every 0.5 s. Pending requests survive restarts; a
   factory reset of the device discards them.
 - Diagnostic sensor `sensor.<base>_verknuepfungen` ("Links") on every device: the state is the
   number of complete links (both directions acknowledged), attribute
   `partner` the names of the partners, attribute `ausstehend` for each unfinished pair
   "<partner>: <state>" with `ausstehend` (queued or in transit),
-  "wartet auf Fensterkontakt – bitte Fenster einmal öffnen und schließen"
-  (waiting for window contact – please open and close the window once; or "wartet auf
+  "wartet auf Fensterkontakt – bitte Anlerntaste kurz drücken (oder Fenster öffnen und schließen)"
+  (waiting for window contact – please press its pairing button briefly (or open and close the window); or "wartet auf
   Eco-Taster – bitte Taster einmal drücken (oder Anlerntaste)", waiting for eco button –
   please press the button once (or the pairing button)), `fehlgeschlagen` (failed),
   `fehlgeschlagen (abgelehnt)` (failed (rejected)) or

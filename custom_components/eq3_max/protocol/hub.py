@@ -99,6 +99,8 @@ POLL_CHOICES = (0, 15, 30, 60, 120, 240)
 # given up ("fehlgeschlagen") until the user sends it again: otherwise every telegram of
 # the device costs airtime forever (e.g. behind a firmware that acknowledges for us, #6).
 SLEEPER_LINK_ROUNDS = 5
+# Misses closer together than this belong to the same burst of the device (one round).
+SLEEPER_ROUND_GAP_S = 3.0
 POLL_TICK_S = 60.0
 POKE_TIMEOUT_S = 300.0
 RESET_MARGIN_S = 5.0
@@ -106,11 +108,13 @@ RESET_MARGIN_S = 5.0
 SLEEPER_DEBOUNCE_S = 0.08
 FAST_DEADLINE_S = 0.3
 FAST_ACK_TIMEOUT_S = 0.5
+# How long a device that just took our pong listens for its configuration.
+PAIRED_LISTEN_S = 5.0
 
 
 # What a link waiting for a sleeping device shows, by the sleeper's type.
 LINK_WAITING_TEXT = {
-    DeviceType.SHUTTER_CONTACT: "wartet auf Fensterkontakt \u2013 bitte Fenster einmal \u00f6ffnen und schlie\u00dfen",
+    DeviceType.SHUTTER_CONTACT: "wartet auf Fensterkontakt \u2013 bitte Anlerntaste kurz dr\u00fccken (oder Fenster \u00f6ffnen und schlie\u00dfen)",
     DeviceType.PUSH_BUTTON: "wartet auf Eco-Taster \u2013 bitte Taster einmal dr\u00fccken (oder Anlerntaste)",
 }
 # Only one device of the pair has the other in its links and nothing is pending.
@@ -308,6 +312,7 @@ class MaxHub:
         sleeper_debounce: float = SLEEPER_DEBOUNCE_S,
         fast_deadline: float = FAST_DEADLINE_S,
         fast_ack_timeout: float = FAST_ACK_TIMEOUT_S,
+        sleeper_round_gap: float = SLEEPER_ROUND_GAP_S,
         lovf_delay: float = LOVF_RETRY_S,
         poll_tick: float = POLL_TICK_S,
     ) -> None:
@@ -365,6 +370,8 @@ class MaxHub:
         self._time_corrected: dict[int, float] = {}
         self._sleeper_debounce = sleeper_debounce
         self._fast_deadline = fast_deadline
+        self._link_missed_at: dict[tuple[int, str], float] = {}
+        self._sleeper_round_gap = sleeper_round_gap
         self._fast_ack_timeout = fast_ack_timeout
         self._flush_handles: dict[int, asyncio.TimerHandle] = {}
         # Unheard fast sends per (device address, partner serial) in a row.
@@ -1157,8 +1164,25 @@ class MaxHub:
             if entry["state"] == LINK_WAITING:
                 self._submit_link(dev, entry, awake=True, fast=True)
 
+    def _send_links_after_pong(self, dev: MaxDevice) -> None:
+        """A device that just paired with us (new batteries, teach-in button) stays awake
+        for a few seconds, waiting for its configuration. For a sleeper that is the one
+        sure chance: a window contact without partners otherwise only ever talks to the
+        central and goes back to sleep on its acknowledgement (#6)."""
+        if not dev.is_sleeper:
+            return
+        for entry in list(dev.pending_links):
+            if entry["state"] in (LINK_WAITING, LINK_FAILED):
+                self._submit_link(dev, entry, awake=True, fast=True, window=PAIRED_LISTEN_S)
+
     def _submit_link(
-        self, dev: MaxDevice, entry: dict[str, Any], *, awake: bool = False, fast: bool = False
+        self,
+        dev: MaxDevice,
+        entry: dict[str, Any],
+        *,
+        awake: bool = False,
+        fast: bool = False,
+        window: float | None = None,
     ) -> None:
         partner, op = entry["partner"], entry["op"]
         partner_address, partner_type = entry["address"], DeviceType(entry["device_type"])
@@ -1175,7 +1199,14 @@ class MaxHub:
             deaf_probe=not dev.is_sleeper,
             fast=fast,
         )
-        if fast:
+        if fast and window is not None:
+            # Listening for a while (just paired): quick retries until it stops. One
+            # attempt is not enough, a contact missed the first one (15.11.2026), and
+            # the usual 3 s ack timeout would leave room for just one more.
+            cmd.deadline = self._scheduler_for(dev.address).now() + window
+            cmd.ack_timeout = self._fast_ack_timeout
+            cmd.retries = int(window / self._fast_ack_timeout)
+        elif fast:
             # Only worth sending while the device still listens: one attempt, short wait.
             cmd.deadline = self._scheduler_for(dev.address).now() + self._fast_deadline
             cmd.retries = 0
@@ -1204,12 +1235,20 @@ class MaxHub:
             _LOGGER.warning("MAX! %s (%s): link %s %s rejected", name, dev.serial, op, partner)
         elif dev.is_sleeper:
             # Asleep again (or never reached): the next telegram is the next chance – up to
-            # SLEEPER_LINK_ROUNDS times.
-            current["misses"] = current.get("misses", 0) + 1
-            if current["misses"] >= SLEEPER_LINK_ROUNDS:
+            # SLEEPER_LINK_ROUNDS rounds. A round is one burst of the device (one window
+            # event): its retries and its telegrams to partners give several attempts within
+            # a second, which counted singly ended two window events early (15.11.2026).
+            # "Abandoned" (it transmitted instead of listening) is no round at all.
+            now = self._scheduler_for(dev.address).now()
+            key = (dev.address, partner)
+            last = self._link_missed_at.get(key)
+            if cmd.outcome is not Outcome.ABANDONED and (last is None or now - last > self._sleeper_round_gap):
+                self._link_missed_at[key] = now
+                current["misses"] = current.get("misses", 0) + 1
+            if current.get("misses", 0) >= SLEEPER_LINK_ROUNDS:
                 dev.set_link_state(partner, op, LINK_FAILED)
                 _LOGGER.warning(
-                    "MAX! %s (%s): link %s %s not acknowledged after %d telegrams of the device, "
+                    "MAX! %s (%s): link %s %s not acknowledged in %d rounds of the device, "
                     "given up (send it again from the eQ-3 MAX! page)",
                     name, dev.serial, op, partner, current["misses"],
                 )
@@ -1840,8 +1879,13 @@ class MaxHub:
             if ok and was_reset and src in self.devices:
                 self._restore(self.devices[src])
             if ok and (to_me or was_reset) and src in self.devices:
-                # Back in touch: now it listens, and its clock starts from nothing.
-                self._reply_time(src)
+                # Back in touch: now it listens. Links first (a sleeper listens only
+                # for a few seconds), then the clock, which starts from nothing.
+                back = self.devices[src]
+                self._send_links_after_pong(back)
+                if back.device_type is not DeviceType.SHUTTER_CONTACT:
+                    # A window contact has no clock and never acknowledges the time.
+                    self._reply_time(src)
 
         self._submit(
             Command(

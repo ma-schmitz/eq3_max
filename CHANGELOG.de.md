@@ -7,6 +7,25 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.4] – 2026-11-15
+
+### Behoben
+- **Fensterkontakte ohne Partner lassen sich verknüpfen (#6).** Ein solcher Kontakt spricht
+  nur mit der Zentrale und schläft nach deren Quittung sofort wieder ein, die Verknüpfung
+  blieb deshalb dauerhaft „ausstehend“. Jetzt gehen wartende Verknüpfungen raus, sobald sich
+  der Kontakt neu bei seiner Zentrale meldet: Anlerntaste kurz drücken (LED blinkt). Er hört
+  dann einige Sekunden zu, die Verknüpfung wird in der Zeit alle halbe Sekunde wiederholt.
+  Nach 5 Runden aufgegebene Verknüpfungen werden dabei ebenfalls erneut gesendet.
+  (Batteriewechsel reicht nicht: Ein Fensterkontakt meldet sich nach dem Neustart nicht bei
+  seiner Zentrale.)
+- Fensterkontakte bekommen nach ihrer Anmeldung keine Uhrzeit mehr: Sie haben keine Uhr und
+  haben sie nie quittiert (vier unnötige Sendungen).
+- **Verknüpfungsaufträge an schlafende Geräte zählen Runden je Ereignis.** Wiederholungen und
+  Meldungen an Partner innerhalb weniger Sekunden zählen als eine der 5 Runden; bisher
+  verbrauchte ein Fenster-Ereignis mehrere, und nach zwei Ereignissen war Schluss.
+- **Das Panel nennt bei wartenden Fensterkontakten die Anlerntaste** („bitte Anlerntaste kurz
+  drücken (oder Fenster öffnen und schließen)“) – für einen Kontakt ohne Partner der einzige Weg.
+
 ## [0.8.3] – 2026-11-14
 
 ### Behoben

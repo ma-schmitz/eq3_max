@@ -36,7 +36,7 @@ selection (from 0.8.2) – set it right there, e.g. for newly paired devices.
 
 - **Links:** each partner with its state — linked · pending · waiting for device ·
   failed · rejected · one-sided — with the plain-text explanation below (e.g. "waiting for
-  window contact – please open and close the window once"). Buttons: **Unlink**,
+  window contact – please press its pairing button briefly (or open and close the window)"). Buttons: **Unlink**,
   for failed ones **Send again**, for one-sided ones **Link**.
   **Add partner** only offers devices that can be linked with this one and are not linked
   or requested yet; each one shows its area (from 0.8.1).
