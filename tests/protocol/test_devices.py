@@ -671,3 +671,24 @@ def test_failed_display_set_survives_storage():
     d.mark_config_failed(KIND_DISPLAY)
     again = MaxDevice.from_dict(d.to_dict())
     assert again.pending_config == {KIND_DISPLAY: {"anzeige": "ist"}} and again.config_failed == [KIND_DISPLAY]
+
+
+# --- when a window really opened or closed (kept across reloads, #heating schedules) ---
+
+from custom_components.eq3_max.protocol.messages import ShutterContactState  # noqa: E402
+
+
+def _contact():
+    return MaxDevice(address=0xA1B00B, serial="NEQ9000010", device_type=DeviceType.SHUTTER_CONTACT, name="fk")
+
+
+def test_window_change_time_only_on_a_real_change():
+    d = _contact()
+    d.apply_shutter(ShutterContactState(is_open=False, rf_error=False, battery_low=False), now=100.0)
+    assert d.window_changed_at is None  # first report after a start: no change seen
+    d.apply_shutter(ShutterContactState(is_open=True, rf_error=False, battery_low=False), now=200.0)
+    assert d.window_changed_at == 200.0
+    d.apply_shutter(ShutterContactState(is_open=True, rf_error=False, battery_low=False), now=300.0)
+    assert d.window_changed_at == 200.0  # cyclic report, still open
+    again = MaxDevice.from_dict(d.to_dict())
+    assert again.window_changed_at == 200.0

@@ -67,7 +67,7 @@ _COMMAND_STATE = (
     "pending_links", "pending_group", "group_failed",
 )
 # Learnt at runtime and kept in the store, not part of the imported snapshot.
-_RUNTIME_STATE = (*_COMMAND_STATE, "last_comfort", "rssi_by_radio", "poll_minutes", "measured_at")
+_RUNTIME_STATE = (*_COMMAND_STATE, "last_comfort", "rssi_by_radio", "poll_minutes", "measured_at", "window_changed_at")
 
 
 def entry_item(device: MaxDevice) -> dict[str, Any]:

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.3] – 2026-11-14
+
+### Fixed
+- **Window contacts keep the time they really opened or closed across a reload or restart.**
+  Home Assistant dated every window to the reload, so schedules waiting for a window to stay
+  closed (e.g. the Advanced Heating Control blueprint) treated every room as "window just
+  closed" and skipped a setback in that time.
+
+### Changed
+- **Link changes for window contacts and eco buttons give up after 5 reports of the device
+  without acknowledgement** and show as "failed"; "Send again" on the "eQ-3 MAX!" page starts
+  over. Before, every report of a device that never took the change cost airtime for good
+  (e.g. behind a radio module whose firmware acknowledges, #6, discussion #8).
+
 ## [0.8.2] – 2026-11-14
 
 ### Added

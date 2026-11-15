@@ -48,6 +48,13 @@ or at runtime with the service `logger.set_level`. This is the log that helps wi
 does not react" (for example a window contact that does not accept its link). Deliberately
 `info` instead of `debug`: Home Assistant OS does not write `debug` lines to the log file.
 
+## Window contacts and timestamps (from 0.8.3)
+
+eq3_max remembers when a window really opened or closed and, after a reload or restart, puts
+that time in as `last_changed`. Automations that work with "window closed for X minutes" (e.g.
+the Advanced Heating Control blueprint) therefore do not see "just closed" only because the
+integration was reloaded. Applies from the first real change after the update.
+
 ## Limits
 
 - Week programs can be written ([Services](dienste.md)) but not read from the devices; the

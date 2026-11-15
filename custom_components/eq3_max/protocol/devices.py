@@ -180,6 +180,9 @@ class MaxDevice:
     group_failed: bool = False
     # Measured temperature polling (minutes, 0 = off), when the last status with a measured
     # temperature came, and the last poke (not stored).
+    # When the window really opened or closed last (epoch seconds), kept across restarts:
+    # Home Assistant would otherwise date every window to the reload.
+    window_changed_at: float | None = None
     poll_minutes: int = 0
     measured_at: float | None = None
     last_poke: float | None = None
@@ -443,7 +446,9 @@ class MaxDevice:
             del self.pending_config[KIND_DISPLAY]
             self.clear_config_failed(KIND_DISPLAY)
 
-    def apply_shutter(self, st: ShutterContactState) -> None:
+    def apply_shutter(self, st: ShutterContactState, now: float | None = None) -> None:
+        if now is not None and self.window_open is not None and st.is_open != self.window_open:
+            self.window_changed_at = now
         self.window_open = st.is_open
         self.rf_error = st.rf_error
         self.battery_low = st.battery_low
@@ -546,4 +551,6 @@ def _link_op_from_dict(data: Any) -> dict[str, Any] | None:
         return None
     if op["op"] not in _LINK_OPS or op["state"] not in _LINK_STATES:
         return None
+    if isinstance(data.get("misses"), int):
+        op["misses"] = data["misses"]
     return op

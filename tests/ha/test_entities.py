@@ -119,3 +119,31 @@ async def test_entity_names_follow_the_language_ids_do_not(hass, setup_entry, fa
     for entry in er.async_entries_for_config_entry(er.async_get(hass), setup_entry.entry_id):
         if entry.translation_key is not None:
             assert entry.translation_key in en[entry.domain], entry.entity_id
+
+
+async def test_window_keeps_its_change_time_across_reload(hass, entry, fake_hub, hass_storage):
+    """A reload (or restart) must not make every window look "just closed": heating
+    schedules that wait for a window to stay closed would skip their setback."""
+    from datetime import datetime, timezone
+
+    from custom_components.eq3_max.const import DOMAIN
+
+    from .conftest import FK
+
+    changed = datetime(2026, 11, 14, 8, 0, tzinfo=timezone.utc).timestamp()
+    key = f"{DOMAIN}.devices.{entry.entry_id}"
+    hass_storage[key] = {
+        "version": 1, "minor_version": 1, "key": key,
+        "data": {"devices": {str(FK): {"address": FK, "serial": "NEQ9000010", "device_type": 4,
+                                       "window_open": False, "window_changed_at": changed}}},
+    }
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    eid = "binary_sensor.fk_schlafzimmer_state"
+    assert hass.states.get(eid).state == "off"
+    assert hass.states.get(eid).last_changed.timestamp() == changed
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(eid).state == "off"
+    assert hass.states.get(eid).last_changed.timestamp() == changed

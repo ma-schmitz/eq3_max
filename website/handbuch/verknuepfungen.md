@@ -21,7 +21,9 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   Several opportunities per event are normal: the contact reports to the central unit, then
   to each partner, and to unreachable partners again and again for minutes. If the request
   stays "waiting for …" over several events, the telegram trace helps
-  ([Operation](betrieb.md#diagnose)).
+  ([Operation](betrieb.md#diagnose)). **From 0.8.3** eq3_max gives up after **5 reports without
+  acknowledgement**: the request then shows as "failed" and is tried again only with **"Send
+  again"** – otherwise every report of the contact would cost airtime for good.
 - States in `ausstehend`: pending · waiting for … · failed (will be retried) ·
   **failed (rejected)** (the device refused, no automatic retry) ·
   one-sided (only one side knows the other).

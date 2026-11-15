@@ -21,7 +21,9 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   Gelegenheiten je Ereignis sind normal: Der Kontakt meldet sich bei der Zentrale, dann bei
   jedem Partner und bei unerreichbaren Partnern minutenlang immer wieder. Bleibt der Auftrag
   mehrere Ereignisse lang „wartet auf …“, hilft der Telegramm-Trace
-  ([Betrieb](betrieb.md#diagnose)).
+  ([Betrieb](betrieb.md#diagnose)). **Ab 0.8.3** gibt eq3_max nach **5 Meldungen ohne Quittung**
+  auf: Der Auftrag steht dann als „fehlgeschlagen“ da und wird erst mit **„Erneut senden“** wieder
+  versucht – sonst kostet jede Meldung des Kontakts dauerhaft Sendezeit.
 - Zustände in `ausstehend`: ausstehend · wartet auf … · fehlgeschlagen (wird wiederholt) ·
   **fehlgeschlagen (abgelehnt)** (Gerät hat abgelehnt, keine automatische Wiederholung) ·
   einseitig (nur eine Seite kennt die andere).

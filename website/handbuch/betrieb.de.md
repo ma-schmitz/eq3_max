@@ -48,6 +48,13 @@ oder zur Laufzeit mit dem Dienst `logger.set_level`. Das ist das Log, das bei �
 nicht“ weiterhilft (etwa ein Fensterkontakt, der seine Verknüpfung nicht annimmt). Bewusst
 `info` statt `debug`: Home Assistant OS schreibt keine `debug`-Zeilen in die Logdatei.
 
+## Fensterkontakte und Zeitstempel (ab 0.8.3)
+
+eq3_max merkt sich, wann ein Fenster wirklich auf- oder zuging, und trägt nach Neuladen oder
+Neustart diesen Zeitpunkt als `last_changed` ein. Automationen, die mit „Fenster seit X Minuten
+zu“ rechnen (z. B. der Blueprint Advanced Heating Control), sehen also kein „gerade geschlossen“,
+nur weil die Integration neu geladen wurde. Gilt ab der ersten echten Änderung nach dem Update.
+
 ## Grenzen
 
 - Wochenprogramme lassen sich schreiben ([Dienste](dienste.md)), aber nicht aus den Geräten

@@ -95,6 +95,10 @@ RESET_SEND_WINDOW_S = 30.0
 # the target goes up by 0.5, and back once the status came (or after POKE_TIMEOUT_S; devices
 # took 19 s to a little over 3 min on 14.11.2026).
 POLL_CHOICES = (0, 15, 30, 60, 120, 240)
+# A sleeping device that did not take a link change after this many of its telegrams is
+# given up ("fehlgeschlagen") until the user sends it again: otherwise every telegram of
+# the device costs airtime forever (e.g. behind a firmware that acknowledges for us, #6).
+SLEEPER_LINK_ROUNDS = 5
 POLL_TICK_S = 60.0
 POKE_TIMEOUT_S = 300.0
 RESET_MARGIN_S = 5.0
@@ -1149,7 +1153,8 @@ class MaxHub:
         moment after its own telegram, a Zs frame arrives after that moment every time
         (twelve unheard Zs attempts on 09.11.2026) and blocks the next chances meanwhile."""
         for entry in list(dev.pending_links):
-            if entry["state"] in (LINK_WAITING, LINK_FAILED):
+            # Failed = given up after SLEEPER_LINK_ROUNDS; only a new request resends it.
+            if entry["state"] == LINK_WAITING:
                 self._submit_link(dev, entry, awake=True, fast=True)
 
     def _submit_link(
@@ -1198,12 +1203,22 @@ class MaxHub:
             dev.set_link_state(partner, op, LINK_REJECTED)
             _LOGGER.warning("MAX! %s (%s): link %s %s rejected", name, dev.serial, op, partner)
         elif dev.is_sleeper:
-            # Asleep again (or never reached): the next telegram is the next chance.
-            dev.set_link_state(partner, op, LINK_WAITING)
-            _LOGGER.info(
-                "MAX! %s (%s): link %s %s not acknowledged (%s), waiting for the next telegram",
-                name, dev.serial, op, partner, cmd.outcome.value if cmd.outcome else "?",
-            )
+            # Asleep again (or never reached): the next telegram is the next chance – up to
+            # SLEEPER_LINK_ROUNDS times.
+            current["misses"] = current.get("misses", 0) + 1
+            if current["misses"] >= SLEEPER_LINK_ROUNDS:
+                dev.set_link_state(partner, op, LINK_FAILED)
+                _LOGGER.warning(
+                    "MAX! %s (%s): link %s %s not acknowledged after %d telegrams of the device, "
+                    "given up (send it again from the eQ-3 MAX! page)",
+                    name, dev.serial, op, partner, current["misses"],
+                )
+            else:
+                dev.set_link_state(partner, op, LINK_WAITING)
+                _LOGGER.info(
+                    "MAX! %s (%s): link %s %s not acknowledged (%s), waiting for the next telegram",
+                    name, dev.serial, op, partner, cmd.outcome.value if cmd.outcome else "?",
+                )
         else:
             dev.fail_link(partner, op)
             _LOGGER.warning("MAX! %s (%s): link %s %s not acknowledged", name, dev.serial, op, partner)
@@ -1570,7 +1585,7 @@ class MaxHub:
         elif kind == MsgType.WALL_THERMOSTAT_CONTROL:
             dev.apply_wall_state(decode_wall_thermostat_control(frame.payload))
         elif kind == MsgType.SHUTTER_CONTACT_STATE:
-            dev.apply_shutter(decode_shutter_contact_state(frame.payload))
+            dev.apply_shutter(decode_shutter_contact_state(frame.payload), now=self._now())
         elif kind == MsgType.SET_TEMPERATURE and dev.device_type is DeviceType.WALL_THERMOSTAT:
             # Overheard WT -> HT command: it carries the wall thermostat's mode and target.
             mode, target = decode_set_temperature(frame.payload)
@@ -1654,7 +1669,7 @@ class MaxHub:
         elif dev.device_type is DeviceType.WALL_THERMOSTAT:
             dev.apply_wall_state(decode_wall_thermostat_state(payload))
         elif dev.device_type is DeviceType.SHUTTER_CONTACT:
-            dev.apply_shutter(decode_shutter_contact_state(payload))
+            dev.apply_shutter(decode_shutter_contact_state(payload), now=self._now())
         elif dev.device_type is DeviceType.PUSH_BUTTON:
             dev.apply_button(decode_push_button_state(payload))
 

@@ -1542,6 +1542,30 @@ async def test_failed_contact_link_waits_for_next_contact_telegram(hub):
     await until(lambda: len(fast(cul)) == n + 1)
 
 
+async def test_contact_link_gives_up_after_five_unheard_rounds(hub):
+    """A contact that never takes the link (e.g. behind a module whose firmware
+    acknowledges for us, #6) must not burn airtime after every telegram forever."""
+    h, cul, rec = hub
+    h.devices[HT].links = [FK_S]
+    h.link(FK, HT)
+    waiting = "wartet auf Ger\u00e4t"
+    for counter in range(10, 15):
+        n = len(fast(cul))
+        cul.feed(line(counter, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "12"))
+        await until(lambda: len(fast(cul)) == n + 1)
+        await until(lambda: h.devices[FK].link_op(HT_S)["state"] in (waiting, "fehlgeschlagen"), timeout=1.5)
+    assert h.devices[FK].link_op(HT_S)["state"] == "fehlgeschlagen"
+    n = len(fast(cul))
+    cul.feed(line(20, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await asyncio.sleep(0.3)
+    assert len(fast(cul)) == n  # no more attempts on their own
+    # "Send again" (a new request) starts over.
+    h.link(FK, HT)
+    assert h.devices[FK].link_op(HT_S)["state"] == waiting
+    cul.feed(line(21, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "12"))
+    await until(lambda: len(fast(cul)) == n + 1)
+
+
 async def test_failed_link_is_resent_after_reconnect():
     cul = FakeCul()
     h = _make(cul, transport_kwargs={"reconnect_delay": 0.01})

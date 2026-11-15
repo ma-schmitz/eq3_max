@@ -7,6 +7,21 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.3] – 2026-11-14
+
+### Behoben
+- **Fensterkontakte behalten über Neuladen und Neustart den Zeitpunkt, zu dem sie wirklich auf-
+  oder zugingen.** Home Assistant datierte jedes Fenster auf das Neuladen; Heizungssteuerungen, die
+  warten, bis ein Fenster eine Weile zu ist (z. B. der Blueprint Advanced Heating Control),
+  behandelten dann jeden Raum als „Fenster gerade geschlossen“ und ließen in der Zeit eine
+  Absenkung aus.
+
+### Geändert
+- **Verknüpfungsaufträge an Fensterkontakte und Eco-Taster geben nach 5 Meldungen des Geräts ohne
+  Quittung auf** und stehen dann als „fehlgeschlagen“ da; „Erneut senden“ auf der Seite „eQ-3 MAX!“
+  beginnt neu. Vorher kostete jede Meldung eines Geräts, das den Auftrag nie annahm, dauerhaft
+  Sendezeit (z. B. hinter einem Funkmodul, dessen Firmware quittiert, #6, Diskussion #8).
+
 ## [0.8.2] – 2026-11-14
 
 ### Hinzugefügt

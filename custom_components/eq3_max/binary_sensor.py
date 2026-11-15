@@ -68,6 +68,18 @@ class MaxWindow(MaxCulEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         return self.device.window_open
 
+    async def async_added_to_hass(self) -> None:
+        """Put the known state in with the time the window really changed, before the
+        entity writes its own: Home Assistant keeps last_changed only while the state
+        stays the same, so a reload or restart would otherwise date every window to now –
+        and heating schedules waiting for a window to stay closed would skip a setback."""
+        await super().async_added_to_hass()
+        dev = self.device
+        if dev.window_open is not None and dev.window_changed_at is not None:
+            self.hass.states.async_set(
+                self.entity_id, "on" if dev.window_open else "off", timestamp=dev.window_changed_at
+            )
+
 
 class MaxConnectedSensor(MaxCulHubEntity, BinarySensorEntity):
     _platform_domain = "binary_sensor"
