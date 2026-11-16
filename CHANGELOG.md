@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.5] – 2026-11-16
+
+### Fixed
+- **A late repeat of an eco button press no longer counts as a new press.** A button that
+  misses the acknowledgement sends the press again with the same number, on 15.11.2026 still
+  52 s later, which toggled a light back on (the filter only covered 30 s). The same number
+  as the last press now counts as that press for 10 minutes; each repeat shows in the
+  telegram trace.
+- **One link per teach-in press.** After taking one link a window contact stopped listening,
+  and the next one went out nine times in vain (#6). Now the next press brings the next link;
+  once the contact has a partner, the others also follow on the next window event.
+- **"To the editor" on the week program shows temperatures with a decimal (#10).** 17.5 °C
+  came into the editor as "17,5" in German, which a number field does not take, so it stayed
+  empty.
+
 ## [0.8.4] – 2026-11-15
 
 ### Fixed

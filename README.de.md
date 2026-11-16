@@ -161,7 +161,9 @@ lösen sie (Telegramme 0x20 AddLinkPartner und 0x21 RemoveLinkPartner, wie FHEM
   zu spät. Dafür die Anlerntaste kurz drücken (geht bei beiden, auch wenn das
   Gerät schon angelernt ist) oder das Fenster einmal öffnen und schließen bzw. den
   Taster drücken. Ein Fensterkontakt ohne Partner bekommt den Auftrag nur über
-  die Anlerntaste: Er hört dann einige Sekunden zu, wiederholt wird alle 0,5 s. Wartende Aufträge überstehen Neustarts; ein
+  die Anlerntaste: Er hört dann einige Sekunden zu, wiederholt wird alle 0,5 s. Je Druck geht
+  eine Verknüpfung raus; danach hat er einen Partner, und die übrigen kommen beim Fenster
+  öffnen/schließen (oder mit dem nächsten Druck). Wartende Aufträge überstehen Neustarts; ein
   Werksreset des Geräts verwirft sie.
 - Diagnosesensor `sensor.<basis>_verknuepfungen` an jedem Gerät: Zustand ist die
   Zahl der vollständigen Verknüpfungen (beide Richtungen quittiert), Attribut

@@ -30,7 +30,9 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   verknüpft ist, meldet sich nur bei der Zentrale und schläft nach deren Quittung sofort wieder
   ein – Fenster öffnen und schließen bringt den Auftrag dann nie hin. **Anlerntaste kurz drücken**
   (LED blinkt): Der Kontakt meldet sich neu bei der Zentrale und hört einige Sekunden zu; eq3_max
-  schickt die wartenden Verknüpfungen sofort hinterher (auch „fehlgeschlagene“). Ein
+  schickt sofort die nächste wartende Verknüpfung hinterher (auch eine „fehlgeschlagene“). **Eine je
+  Druck:** Nach der ersten hört der Kontakt nicht mehr zu (#6); da er jetzt einen Partner hat,
+  kommen die übrigen beim nächsten Fenster öffnen/schließen oder mit dem nächsten Druck. Ein
   Batteriewechsel reicht nicht, danach meldet sich ein Kontakt nicht neu an.
 - Zustände in `ausstehend`: ausstehend · wartet auf … · fehlgeschlagen (wird wiederholt) ·
   **fehlgeschlagen (abgelehnt)** (Gerät hat abgelehnt, keine automatische Wiederholung) ·

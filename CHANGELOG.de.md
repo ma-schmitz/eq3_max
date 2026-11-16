@@ -7,6 +7,21 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.5] – 2026-11-16
+
+### Behoben
+- **Eine späte Wiederholung eines Eco-Taster-Drucks zählt nicht mehr als neuer Druck.** Ein
+  Taster, der die Quittung nicht hört, sendet den Druck mit derselben Nummer erneut, am
+  15.11.2026 noch 52 s später, und schaltete so ein Licht wieder an (der Filter reichte nur
+  30 s). Dieselbe Nummer wie beim letzten Druck gilt jetzt 10 Minuten lang als dieser Druck;
+  jede Wiederholung steht im Telegramm-Trace.
+- **Eine Verknüpfung je Druck auf die Anlerntaste.** Nach einer Verknüpfung hörte ein
+  Fensterkontakt nicht mehr zu, die nächste ging neunmal ins Leere (#6). Jetzt bringt der
+  nächste Druck die nächste Verknüpfung; hat der Kontakt einen Partner, kommen die übrigen
+  auch beim nächsten Fenster öffnen/schließen.
+- **„In den Editor“ beim Wochenprogramm zeigt Temperaturen mit Nachkommastelle (#10).** 17,5 °C
+  kam als „17,5“ in den Editor, das nimmt ein Zahlenfeld nicht an, es blieb leer.
+
 ## [0.8.4] – 2026-11-15
 
 ### Behoben

@@ -1640,7 +1640,7 @@ class Eq3MaxPanel extends HTMLElement {
           class: "action", disabled: busy,
           onclick: () => {
             draft.points = stored[day].map((p, i) => ({
-              temperature: plainNum(p.temperature), until: i === stored[day].length - 1 ? "" : p.until,
+              temperature: String(Number(p.temperature)), until: i === stored[day].length - 1 ? "" : p.until,
             }));
             draft.days = new Set([day]);
             this._render();

@@ -165,7 +165,9 @@ services `eq3_max.link` and `eq3_max.unlink` create or remove a link
   too late. So press the pairing button briefly (works for both, even if the
   device is already paired), or open and close the window / press the button
   once. A window contact without partners only gets it through the pairing
-  button: it then listens a few seconds and the request is retried every 0.5 s. Pending requests survive restarts; a
+  button: it then listens a few seconds and the request is retried every 0.5 s. One link
+  goes out per press; after that it has a partner and the others follow on the next window
+  event (or the next press). Pending requests survive restarts; a
   factory reset of the device discards them.
 - Diagnostic sensor `sensor.<base>_verknuepfungen` ("Links") on every device: the state is the
   number of complete links (both directions acknowledged), attribute

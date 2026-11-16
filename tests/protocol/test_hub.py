@@ -147,6 +147,37 @@ async def test_late_repeat_of_button_frame_fires_once(hub):
     assert rec.buttons == [(PB, "eco"), (PB, "eco")]
 
 
+async def test_repeat_of_the_last_press_minutes_later_fires_once(hub):
+    """15.11.2026: one press (counter D2) came again 52 s later with the radio-error bit
+    (payload 50 instead of 10) and toggled the office light back on. The same counter as
+    the last press is a repeat for up to 10 minutes; a new press brings a new counter."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    cul.feed(line(0xD2, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+    await until(lambda: len(rec.buttons) == 1)
+    clock[0] += 52.0
+    cul.feed(line(0xD2, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "5000"))
+    clock[0] += 500.0
+    cul.feed(line(0xD2, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "5000"))
+    await asyncio.sleep(0.05)
+    assert rec.buttons == [(PB, "eco")]
+    cul.feed(line(0xD3, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+    await until(lambda: len(rec.buttons) == 2)
+
+
+async def test_same_counter_after_ten_minutes_is_a_new_press(hub):
+    """The counter wraps after 256 presses: much later the same number is a new press."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    cul.feed(line(0xD2, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+    await until(lambda: len(rec.buttons) == 1)
+    clock[0] += 601.0
+    cul.feed(line(0xD2, 0x02, MsgType.PUSH_BUTTON_STATE, PB, CENTRAL, 0, "1000"))
+    await until(lambda: len(rec.buttons) == 2)
+
+
 async def test_wall_thermostat_control_to_heating_thermostat(hub):
     h, cul, rec = hub
     cul.feed(line(3, 0x04, MsgType.WALL_THERMOSTAT_CONTROL, WT, HT, 0, "2AD2"))
@@ -2954,3 +2985,19 @@ async def test_misses_within_one_burst_count_as_one_round(hub):
         await until(lambda: len(fast(cul)) == n + 1)
         await until(lambda: h.devices[FK].link_op(HT_S)["state"] == "wartet auf Ger\u00e4t", timeout=1.5)
     assert h.devices[FK].link_op(HT_S)["misses"] == 1
+
+
+async def test_only_one_link_goes_out_per_pong(hub):
+    """15.11.2026 (#6): after the first link the contact stopped listening, the second was
+    sent nine times into the void. One link per teach-in press; the next press (or, now
+    that it has a partner, the next window event) brings the next one."""
+    h, cul, rec = hub
+    h.unlink(FK, HT, force=True)
+    h.unlink(FK, WT, force=True)
+    cul.feed(line(0, 0x00, MsgType.PAIR_PING, FK, CENTRAL, 0, "100400" + b"NEQ9000010".hex()))
+    await until(lambda: len(sent(cul)) == 1)
+    ack(cul, FK, sent(cul)[0])
+    await until(lambda: len(fast(cul)) >= 1)
+    await asyncio.sleep(0.05)
+    assert {l[24:30] for l in fast(cul)} == {f"{HT:06X}"}
+    assert h.devices[FK].link_op(WT_S)["state"] == "wartet auf Gerät"

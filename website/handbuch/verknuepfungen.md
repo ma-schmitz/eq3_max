@@ -29,7 +29,9 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   only reports to the central unit and goes back to sleep on its acknowledgement – opening and
   closing the window never gets the request through. **Press its pairing button briefly** (LED
   blinks): the contact reports to the central again and listens for a few seconds; eq3_max sends
-  the waiting links right after (also "failed" ones). New batteries are not enough, a contact
+  the next waiting link right after (also a "failed" one). **One per press:** after the first
+  the contact stops listening (#6); as it has a partner now, the others follow on the next
+  window event or the next press. New batteries are not enough, a contact
   does not report again after a restart.
 - States in `ausstehend`: pending · waiting for … · failed (will be retried) ·
   **failed (rejected)** (the device refused, no automatic retry) ·

@@ -83,11 +83,11 @@ from .scheduler import (
 from .transport import TRACE, CulTransport
 
 _LOGGER = logging.getLogger(__name__)
-# A device repeats an unacknowledged telegram with the same counter, the push button
-# observed up to 12 s after the first try (13.11.2026). A new press always gets a new
-# counter, so a generous window cannot swallow one; too short a window let a late
-# repeat toggle the light back.
-DUPLICATE_WINDOW_S = 30.0
+# A push button repeats a press it got no acknowledgement for, with the same counter: up
+# to 12 s later on 13.11.2026, 52 s later on 15.11.2026 (a 30 s window let that one toggle
+# the office light back on). The same counter as its last press is that press for this long;
+# a new press always brings a new counter (it wraps only after 256 presses).
+BUTTON_REPEAT_WINDOW_S = 600.0
 RAW_HISTORY_LEN = 10
 RESET_SEND_WINDOW_S = 30.0
 # Polling the measured temperature of radiator thermostats (minutes, 0 = off). They report
@@ -331,7 +331,8 @@ class MaxHub:
         self._pairing_until = 0.0
         # Module that answers new devices while pairing is open (None: whichever hears them).
         self.pairing_radio: str | None = None
-        self._recent: dict[tuple[int, int, int], float] = {}
+        # Last press per push button: (counter, time).
+        self._last_press: dict[int, tuple[int, float]] = {}
         self.raw_history: dict[int, deque[str]] = {}
         self._on_problem = on_problem
         self._brake = brake
@@ -1171,9 +1172,12 @@ class MaxHub:
         central and goes back to sleep on its acknowledgement (#6)."""
         if not dev.is_sleeper:
             return
-        for entry in list(dev.pending_links):
-            if entry["state"] in (LINK_WAITING, LINK_FAILED):
-                self._submit_link(dev, entry, awake=True, fast=True, window=PAIRED_LISTEN_S)
+        # One link per press: after taking one the contact stopped listening and the next
+        # went out nine times into the void (#6, 15.11.2026). The next press brings the
+        # next one, or, now that it has a partner, the next window event.
+        entry = next((e for e in dev.pending_links if e["state"] in (LINK_WAITING, LINK_FAILED)), None)
+        if entry is not None:
+            self._submit_link(dev, entry, awake=True, fast=True, window=PAIRED_LISTEN_S)
 
     def _submit_link(
         self,
@@ -1553,13 +1557,17 @@ class MaxHub:
         except Exception:
             _LOGGER.exception("on_update callback failed")
 
-    def _is_duplicate(self, frame: Frame) -> bool:
+    def _is_repeated_press(self, frame: Frame) -> bool:
+        """A press the button sends again because it missed our acknowledgement."""
         now = self._now()
-        self._recent = {k: t for k, t in self._recent.items() if now - t < DUPLICATE_WINDOW_S}
-        key = (frame.src, frame.counter, frame.msg_type)
-        if key in self._recent:
+        last = self._last_press.get(frame.src)
+        if last is not None and last[0] == frame.counter and now - last[1] < BUTTON_REPEAT_WINDOW_S:
+            TRACE.info(
+                "button %06X repeats press %02X after %.0f s (payload %s): not passed on",
+                frame.src, frame.counter, now - last[1], bytes(frame.payload).hex(),
+            )
             return True
-        self._recent[key] = now
+        self._last_press[frame.src] = (frame.counter, now)
         return False
 
     def _heard_elsewhere(self, frame: Frame, radio: str) -> bool:
@@ -1642,7 +1650,7 @@ class MaxHub:
         elif kind == MsgType.PUSH_BUTTON_STATE:
             state = decode_push_button_state(frame.payload)
             dev.apply_button(state)
-            if not self._is_duplicate(frame):
+            if not self._is_repeated_press(frame):
                 self._safe(self._on_button, dev, "auto" if state.auto else "eco")
         elif kind == MsgType.TIME_INFORMATION:
             status = False
