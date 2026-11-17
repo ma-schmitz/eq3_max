@@ -29,7 +29,7 @@ from homeassistant.helpers.event import async_call_later
 
 from .config_defs import CONFIG_LABELS, SET_KEYS, SET_TITLES, config_meta, validate_config_value
 from .connection import connection_target, connection_type
-from .const import CONF_ADDRESS, DOMAIN, SIGNAL_PANEL_UPDATE
+from .const import CONF_ADDRESS, CONF_SHOW_ON_OFF, DOMAIN, SIGNAL_PANEL_UPDATE
 from .registry_compat import find_device
 from .migration import specs_for, unique_id
 from .protocol.devices import (
@@ -341,6 +341,7 @@ def build_overview(hass: HomeAssistant) -> dict[str, Any]:
             "loaded": False,
             "hub": None,
             "devices": [],
+            "show_on_off": bool(entry.options.get(CONF_SHOW_ON_OFF, False)),
         }
         coordinator = getattr(entry, "runtime_data", None) if entry.state is ConfigEntryState.LOADED else None
         if coordinator is not None and coordinator.hub is not None:

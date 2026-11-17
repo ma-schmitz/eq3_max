@@ -146,13 +146,15 @@
           "away_temperature": "Away temperature",
           "away_hours": "Away duration (hours)",
           "allow_user_config": "Users without admin rights may change device settings",
-          "allow_user_week_profile": "Users without admin rights may change week programs"
+          "allow_user_week_profile": "Users without admin rights may change week programs",
+          "show_on_off": "Show targets 4.5 and 30.5 °C as “Off” and “On”"
         },
         "data_description": {
           "away_temperature": "Target temperature of the preset away.",
           "away_hours": "The preset away ends after this many hours, rounded up to the next half hour.",
           "allow_user_config": "Comfort/eco, offset, window, boost, valve and display, e.g. from the thermostat card. Temperature and mode stay open to everyone; admins and automations may always.",
-          "allow_user_week_profile": "Writing week programs (service set_week_profile/copy_week_profile, thermostat card)."
+          "allow_user_week_profile": "Writing week programs (service set_week_profile/copy_week_profile, thermostat card).",
+          "show_on_off": "Page “eQ-3 MAX!”: as on the devices' display. The thermostat entities still report the temperature."
         }
       },
       "radios": {

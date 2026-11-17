@@ -68,6 +68,7 @@ async def test_overview_hub_section(hass, setup_entry, fake_hub, hass_ws_client)
     section = result["entries"][0]
     assert section["entry_id"] == setup_entry.entry_id and section["loaded"] is True
     assert section["title"] == "eQ-3 MAX! C0FFEE"
+    assert section["show_on_off"] is False
     hub_info = section["hub"]
     assert hub_info["connected"] is True
     assert hub_info["connection"] == "usb" and hub_info["target"] == "/dev/serial/by-path/usb-0:13"
@@ -577,3 +578,17 @@ async def test_candidates_show_area_and_area_partners(hass, setup_entry, fake_hu
     fake_hub.last.devices[HT].links = ["NEQ9000011"]
     devices = by_serial((await overview(client))["entries"][0])
     assert devices["NEQ9000011"]["area_candidates"] == []  # already linked
+
+
+async def test_option_show_on_off_reaches_the_page_without_reload(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    sub_id = (await call(client, type="eq3_max/subscribe"))["id"]
+    hass.config_entries.async_update_entry(setup_entry, options={**setup_entry.options, "show_on_off": True})
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    event = await client.receive_json()
+    assert event["id"] == sub_id and event["event"] == {"type": "update"}
+    assert (await overview(client))["entries"][0]["show_on_off"] is True
+    assert fake_hub.last is hub  # no reload

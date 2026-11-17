@@ -7,6 +7,14 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.1] – 2026-11-17
+
+### Hinzugefügt
+- **Seite „eQ-3 MAX!“: Sollwerte 4,5 und 30,5 °C wahlweise als „Off“ und „On“,** wie auf dem
+  Display der Geräte. Einschalten unter Einstellungen → Geräte & Dienste → eQ-3 MAX! →
+  Konfigurieren → Einstellungen; ohne die Option bleibt es bei den Zahlen. Die
+  Thermostat-Entitäten melden weiter die Temperatur (#11).
+
 ## [0.9.0] – 2026-11-17
 
 ### Geändert

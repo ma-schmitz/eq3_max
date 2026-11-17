@@ -728,6 +728,17 @@ function num(value, digits = 1) {
   return Number(value).toLocaleString(numberLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+// The devices' display reads "On" for the highest target (valve fully open) and, on most
+// of them, "Off" for the lowest. An option of the integration turns that on for the page.
+const ON_TEMPERATURE = 30.5;
+const OFF_TEMPERATURE = 4.5;
+
+function targetText(value, onOff) {
+  if (onOff && value === ON_TEMPERATURE) return "On";
+  if (onOff && value === OFF_TEMPERATURE) return "Off";
+  return `${num(value)} °C`;
+}
+
 function plainNum(value) {
   return Number(value).toLocaleString(numberLocale(), { maximumFractionDigits: 2 });
 }
@@ -1368,7 +1379,7 @@ class Eq3MaxPanel extends HTMLElement {
       body = [
         h("div", { class: "temps" },
           h("span", { class: "cur" }, num(st.measured), h("small", {}, "°C")),
-          h("span", { class: "target", title: t("Sollwert") }, icon("mdi:target"), `${num(st.target)} °C`)),
+          h("span", { class: "target", title: t("Sollwert") }, icon("mdi:target"), targetText(st.target, entry.show_on_off))),
         dev.type === "heating_thermostat"
           ? h("div", { class: "valve", title: t("Ventilöffnung") }, t("Ventil"),
             h("span", { class: "meter" }, h("span", { style: `width:${st.valve || 0}%` })),

@@ -23,6 +23,11 @@ Funkfehler); was nicht null ist, ist farbig hinterlegt.
 | Fensterkontakt | offen / geschlossen |
 | Eco-Taster | – |
 
+**„On“/„Off“ statt 30,5/4,5 °C** (ab 0.9.1): Unter Einstellungen → Geräte & Dienste →
+eQ-3 MAX! → Konfigurieren → Einstellungen lässt sich einschalten, dass die Karten die beiden
+Grenz-Sollwerte wie das Display der Geräte zeigen. Die Thermostat-Entitäten melden weiter die
+Temperatur.
+
 Dazu bei allen: Batterie, RSSI (Balken und dBm), „zuletzt gemeldet“, Zahl der Verknüpfungen
 (bei mehreren Funkmodulen auch das Modul). Farbe und Randstreifen zeigen den Zustand:
 **orange** = Ventil offen bzw. Fenster offen, **rot** = Batterie schwach, Funkfehler oder nicht

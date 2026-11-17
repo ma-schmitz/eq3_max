@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] – 2026-11-17
+
+### Added
+- **Page "eQ-3 MAX!": targets 4.5 and 30.5 °C optionally as "Off" and "On",** as on the
+  devices' display. Turn it on under Settings → Devices & services → eQ-3 MAX! → Configure →
+  Settings; without the option the numbers stay. The thermostat entities still report the
+  temperature (#11).
+
 ## [0.9.0] – 2026-11-17
 
 ### Changed

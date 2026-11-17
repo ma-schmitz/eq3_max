@@ -137,7 +137,7 @@ async def test_options_brake(hass, entry):
     assert r["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {
         "brake": True, "away_temperature": 18.0, "away_hours": 24,
-        "allow_user_config": True, "allow_user_week_profile": True,
+        "allow_user_config": True, "allow_user_week_profile": True, "show_on_off": False,
     }
 
 
@@ -159,7 +159,7 @@ async def test_options_away_defaults_and_values(hass, entry):
     defaults = {str(k): k.default() for k in r["data_schema"].schema}
     assert defaults == {
         "brake": False, "away_temperature": 18.0, "away_hours": 24,
-        "allow_user_config": True, "allow_user_week_profile": True,
+        "allow_user_config": True, "allow_user_week_profile": True, "show_on_off": False,
     }
     r = await hass.config_entries.options.async_configure(
         r["flow_id"], {"brake": False, "away_temperature": 16.5, "away_hours": 72}
@@ -167,7 +167,7 @@ async def test_options_away_defaults_and_values(hass, entry):
     assert r["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {
         "brake": False, "away_temperature": 16.5, "away_hours": 72,
-        "allow_user_config": True, "allow_user_week_profile": True,
+        "allow_user_config": True, "allow_user_week_profile": True, "show_on_off": False,
     }
     assert isinstance(entry.options["away_hours"], int)
     r = await open_options(hass, entry)

@@ -25,6 +25,8 @@ CONF_AWAY_HOURS = "away_hours"
 # Whether users without admin rights may change device settings / week programs (default: yes).
 CONF_ALLOW_USER_CONFIG = "allow_user_config"
 CONF_ALLOW_USER_WEEK_PROFILE = "allow_user_week_profile"
+# Page "eQ-3 MAX!": show the targets 4.5/30.5 °C as "Off"/"On" like the devices' display (default: numbers).
+CONF_SHOW_ON_OFF = "show_on_off"
 DEFAULT_AWAY_TEMPERATURE = 18.0
 DEFAULT_AWAY_HOURS = 24
 MIN_AWAY_HOURS = 1

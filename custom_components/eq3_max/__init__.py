@@ -136,9 +136,11 @@ async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
         # the permissions as attributes, so they write their state again.
         from homeassistant.helpers.dispatcher import async_dispatcher_send  # noqa: PLC0415
 
-        from .const import signal_update  # noqa: PLC0415
+        from .const import SIGNAL_PANEL_UPDATE, signal_update  # noqa: PLC0415
 
         for address in list(entry.runtime_data.hub.devices):
             async_dispatcher_send(hass, signal_update(entry.entry_id), address)
+        # The page shows options too (targets as "On"/"Off").
+        async_dispatcher_send(hass, SIGNAL_PANEL_UPDATE)
         return
     await hass.config_entries.async_reload(entry.entry_id)

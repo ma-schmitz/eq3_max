@@ -23,6 +23,10 @@ not acknowledged, radio error); anything that is not zero is highlighted in colo
 | Window contact | open / closed |
 | Eco button | – |
 
+**"On"/"Off" instead of 30.5/4.5 °C** (from 0.9.1): under Settings → Devices & services →
+eQ-3 MAX! → Configure → Settings you can have the cards show the two limit targets the way
+the devices' display does. The thermostat entities still report the temperature.
+
 Plus on all of them: battery, RSSI (bar and dBm), "last reported", number of links
 (with several radio modules also the module). Colour and side stripe show the state:
 **orange** = valve open or window open, **red** = battery low, radio error or not

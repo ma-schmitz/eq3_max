@@ -281,7 +281,7 @@ def test_connection_steps_translated():
         for key in ("name_missing", "name_taken", "radio_in_use"):
             assert data["options"]["error"][key]
         assert set(options["settings"]["data"]) == {
-            "brake", "away_temperature", "away_hours", "allow_user_config", "allow_user_week_profile",
+            "brake", "away_temperature", "away_hours", "allow_user_config", "allow_user_week_profile", "show_on_off",
         }
         assert "port" in options["connection_usb"]["data"]
         assert set(options["connection_network"]["data"]) == {"host", "port"}

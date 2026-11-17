@@ -27,6 +27,7 @@ from .const import (
     CONF_AWAY_TEMPERATURE,
     CONF_ALLOW_USER_CONFIG,
     CONF_ALLOW_USER_WEEK_PROFILE,
+    CONF_SHOW_ON_OFF,
     CONF_BRAKE,
     CONF_CONNECTION,
     CONF_DEVICES,
@@ -686,6 +687,7 @@ class MaxCulOptionsFlow(OptionsFlow):
                         unit_of_measurement="h", mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Required(CONF_SHOW_ON_OFF, default=options.get(CONF_SHOW_ON_OFF, False)): bool,
             }
         )
         return self.async_show_form(step_id="settings", data_schema=schema)

@@ -146,13 +146,15 @@
           "away_temperature": "Urlaubstemperatur",
           "away_hours": "Urlaubsdauer (Stunden)",
           "allow_user_config": "Benutzer ohne Admin-Rechte dürfen Geräteeinstellungen ändern",
-          "allow_user_week_profile": "Benutzer ohne Admin-Rechte dürfen Wochenprogramme ändern"
+          "allow_user_week_profile": "Benutzer ohne Admin-Rechte dürfen Wochenprogramme ändern",
+          "show_on_off": "Sollwerte 4,5 und 30,5 °C als „Off“ und „On“ anzeigen"
         },
         "data_description": {
           "away_temperature": "Solltemperatur des Presets Abwesend.",
           "away_hours": "Das Preset Abwesend endet nach so vielen Stunden, aufgerundet auf die nächste halbe Stunde.",
           "allow_user_config": "Komfort/Eco, Offset, Fenster, Boost, Ventil und Anzeige, z. B. über die Thermostatkarte. Temperatur und Modus bleiben für alle frei; Admins und Automationen dürfen immer.",
-          "allow_user_week_profile": "Wochenprogramme schreiben (Dienst set_week_profile/copy_week_profile, Thermostatkarte)."
+          "allow_user_week_profile": "Wochenprogramme schreiben (Dienst set_week_profile/copy_week_profile, Thermostatkarte).",
+          "show_on_off": "Seite „eQ-3 MAX!“: wie auf dem Display der Geräte. Die Thermostat-Entitäten melden weiter die Temperatur."
         }
       },
       "radios": {
