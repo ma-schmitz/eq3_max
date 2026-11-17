@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.6] – 2026-11-17
+
+### Fixed
+- **A window contact reporting to a partner proves the link (#6).** A contact took a link,
+  but its acknowledgement never arrived, so the link stayed "waiting" or "failed" although
+  thermostat and wall thermostat already followed the window. A telegram from the contact (or
+  eco button) to the partner now counts as the acknowledgement; nothing is sent again.
+- The telegram trace shows the state of each waiting link change of a sleeping device.
+
+### Changed
+- **Copying a week program: targets grouped by area, with a "whole area" tick** (discussion #9).
+  Devices of the same name are told apart by their room. A note says that thermostats linked
+  in a room get the program along with it, so one device per room is enough.
+
 ## [0.8.5] – 2026-11-16
 
 ### Fixed

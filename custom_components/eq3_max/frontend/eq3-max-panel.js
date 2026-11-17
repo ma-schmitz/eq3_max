@@ -206,6 +206,9 @@ const EN = {
   "wird gestellt …": "setting …",
   "Uhr jetzt stellen": "Set clock now",
   "Auf andere Thermostate kopieren": "Copy to other thermostats",
+  "ganzer Bereich": "whole area",
+  "Mit einem Thermostat verknüpfte Thermostate des Raums bekommen das Programm automatisch mit; je Raum reicht dann ein Gerät.":
+    "Thermostats of the room linked to a thermostat get the program along with it; one device per room is then enough.",
   "Erst ein Programm schreiben, dann lässt es sich kopieren.": "Write a program first, then it can be copied.",
   // Funkmodul
   "Alle Funkmodule nutzen dieselbe Zentralen-Adresse. Das zugeordnete Modul sendet die Befehle an das Gerät, empfangen wird über alle. Umstellen sendet nichts an das Gerät und braucht kein Neuanlernen.":
@@ -651,6 +654,10 @@ const STYLE = `
   .wp-day .wp-name { width: 92px; font-weight: 500; }
   .wp-days { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 4px 0; }
   .wp-check { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; cursor: pointer; }
+  .wp-area { padding: 6px 0; border-bottom: 1px solid var(--e3-divider); }
+  .wp-area:last-of-type { border-bottom: 0; }
+  .wp-area-all { gap: 6px; }
+  .wp-area .wp-days { padding-left: 24px; }
   .wp-point { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--e3-divider); flex-wrap: wrap; }
   .wp-point .ctl { display: flex; align-items: center; gap: 6px; }
   .wp-point input[type=number] { width: 80px; text-align: right; }
@@ -1738,11 +1745,40 @@ class Eq3MaxPanel extends HTMLElement {
     // Copy to other thermostats of the same radio module.
     const others = entry.devices.filter((d) => d.serial !== dev.serial && (d.type === "heating_thermostat" || d.type === "wall_thermostat"));
     const hasStored = Object.keys(stored).length > 0;
-    const targetBoxes = others.map((d) => {
-      const box = h("input", { type: "checkbox", "data-focus": `${key}:c:${d.serial}` });
-      box.checked = draft.targets.has(d.serial);
-      box.addEventListener("change", () => { box.checked ? draft.targets.add(d.serial) : draft.targets.delete(d.serial); copyButton.disabled = busy || !draft.targets.size; });
-      return h("label", { class: "wp-check" }, box, d.name);
+    // Grouped by area (#9): devices of the same name are told apart by their room, and a
+    // whole area is one tick. Several devices of one linked room are no problem: a room
+    // that already gets the same program joins that job.
+    const byArea = new Map();
+    for (const d of others) {
+      const areaKey = d.area_id || "";
+      if (!byArea.has(areaKey)) byArea.set(areaKey, { name: d.area_name || t("Ohne Bereich"), devices: [] });
+      byArea.get(areaKey).devices.push(d);
+    }
+    const areaGroups = [...byArea.entries()].sort(([ka, a], [kb, b]) => {
+      if (!ka) return 1;
+      if (!kb) return -1;
+      return a.name.localeCompare(b.name, LANG);
+    });
+    const targetBoxes = areaGroups.map(([areaKey, group]) => {
+      const picked = group.devices.filter((d) => draft.targets.has(d.serial)).length;
+      const all = h("input", { type: "checkbox", "data-focus": `${key}:ca:${areaKey}` });
+      all.checked = picked === group.devices.length;
+      all.indeterminate = picked > 0 && picked < group.devices.length;
+      all.addEventListener("change", () => {
+        for (const d of group.devices) all.checked ? draft.targets.add(d.serial) : draft.targets.delete(d.serial);
+        this._render();
+      });
+      return h("div", { class: "wp-area" },
+        h("label", { class: "wp-check wp-area-all" }, all, h("b", {}, group.name), h("span", { class: "sub" }, t("ganzer Bereich"))),
+        h("div", { class: "wp-days" }, group.devices.map((d) => {
+          const box = h("input", { type: "checkbox", "data-focus": `${key}:c:${d.serial}` });
+          box.checked = draft.targets.has(d.serial);
+          box.addEventListener("change", () => {
+            box.checked ? draft.targets.add(d.serial) : draft.targets.delete(d.serial);
+            this._render();
+          });
+          return h("label", { class: "wp-check" }, box, d.name);
+        })));
     });
     const copyButton = h("button", {
       class: "action", disabled: busy || !draft.targets.size,
@@ -1844,7 +1880,10 @@ class Eq3MaxPanel extends HTMLElement {
         ? h("fieldset", {},
           h("legend", {}, t("Auf andere Thermostate kopieren")),
           hasStored
-            ? [h("div", { class: "wp-days" }, targetBoxes), h("div", { class: "setfoot" }, copyButton)]
+            ? [
+              h("div", { class: "sub", style: "margin:2px 0 6px" },
+                t("Mit einem Thermostat verknüpfte Thermostate des Raums bekommen das Programm automatisch mit; je Raum reicht dann ein Gerät.")),
+              targetBoxes, h("div", { class: "setfoot" }, copyButton)]
             : h("div", { class: "empty" }, t("Erst ein Programm schreiben, dann lässt es sich kopieren.")))
         : null,
     ];

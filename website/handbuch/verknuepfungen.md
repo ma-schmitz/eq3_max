@@ -33,6 +33,9 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   the contact stops listening (#6); as it has a partner now, the others follow on the next
   window event or the next press. New batteries are not enough, a contact
   does not report again after a restart.
+- **Lost acknowledgement (from 0.8.6):** a contact or button reporting its event to the partner
+  carries the link – only a linked device does that. A change still open ("waiting for …" or
+  "failed") counts as acknowledged then, nothing is sent again (#6).
 - States in `ausstehend`: pending · waiting for … · failed (will be retried) ·
   **failed (rejected)** (the device refused, no automatic retry) ·
   one-sided (only one side knows the other).

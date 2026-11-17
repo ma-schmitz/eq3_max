@@ -34,6 +34,9 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   Druck:** Nach der ersten hört der Kontakt nicht mehr zu (#6); da er jetzt einen Partner hat,
   kommen die übrigen beim nächsten Fenster öffnen/schließen oder mit dem nächsten Druck. Ein
   Batteriewechsel reicht nicht, danach meldet sich ein Kontakt nicht neu an.
+- **Verlorene Quittung (ab 0.8.6):** Meldet ein Kontakt oder Taster sein Ereignis an den Partner,
+  trägt er die Verknüpfung – das tut nur ein verknüpftes Gerät. Ein noch offener Auftrag
+  („wartet auf …“ oder „fehlgeschlagen“) gilt damit als bestätigt, gesendet wird nichts mehr (#6).
 - Zustände in `ausstehend`: ausstehend · wartet auf … · fehlgeschlagen (wird wiederholt) ·
   **fehlgeschlagen (abgelehnt)** (Gerät hat abgelehnt, keine automatische Wiederholung) ·
   einseitig (nur eine Seite kennt die andere).

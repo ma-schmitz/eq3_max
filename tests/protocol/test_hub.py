@@ -1724,14 +1724,15 @@ async def test_fast_no_ack_waits_again_without_retries_and_stays_fast():
 
 
 async def test_contact_frame_to_its_thermostat_triggers_too():
-    """A contact retrying an unreachable partner (every 6-30 s in the trace of
+    """(To another partner than the one being linked: a telegram to that one would prove
+    the link.) A contact retrying an unreachable partner (every 6-30 s in the trace of
     09.11.2026) waits for that partner's answer after each attempt: as good a moment
     as any to reach it, so every telegram of a sleeper arms the flush."""
     cul = FakeCul()
     h = _fast_hub(cul)
     await _started(h, cul)
     try:
-        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, WT, 0, "12"))
         await until(lambda: h.devices[FK].window_open is True)
         await until(lambda: len(fast(cul)) == 1)
         assert matches(fast(cul)[0], link_frame(FK, HT, 1))
@@ -1752,7 +1753,7 @@ async def test_contact_talking_again_abandons_the_fast_attempt_on_air_and_retrie
         cul.feed(to_us(7))
         await until(lambda: len(fast(cul)) == 1)
         assert h.devices[FK].link_op(HT_S)["state"] == "ausstehend"
-        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, WT, 0, "12"))
         await until(lambda: h.devices[FK].link_op(HT_S)["state"] == waiting, timeout=0.2)  # long before the ack timeout
         await until(lambda: len(fast(cul)) == 2)
         ack(cul, FK, fast(cul)[1])
@@ -1774,9 +1775,9 @@ async def test_contact_burst_to_partners_delays_the_fast_send_until_the_burst_en
         await asyncio.sleep(0.04)
         cul.feed(line(7, 0x04, MsgType.SHUTTER_CONTACT_STATE, FK, 0xA1B00F, 0, "12"))  # partner unknown to us
         await asyncio.sleep(0.04)
-        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, WT, 0, "12"))
         await asyncio.sleep(0.03)
-        cul.feed(line(7, 0x00, MsgType.ACK, HT, FK, 0, "0012"))  # the thermostat answers the contact
+        cul.feed(line(7, 0x00, MsgType.ACK, WT, FK, 0, "0012"))  # the partner answers the contact
         assert fast(cul) == []  # 110 ms in: a flush 80 ms after the first telegram would be out already
         await until(lambda: len(fast(cul)) == 1)
         assert matches(fast(cul)[0], link_frame(FK, HT, 1))
@@ -3001,3 +3002,54 @@ async def test_only_one_link_goes_out_per_pong(hub):
     await asyncio.sleep(0.05)
     assert {l[24:30] for l in fast(cul)} == {f"{HT:06X}"}
     assert h.devices[FK].link_op(WT_S)["state"] == "wartet auf Gerät"
+
+
+async def test_contact_talking_to_a_partner_proves_a_link_we_gave_up_on():
+    """#6, trace of 17.11.2026: the contact took the link, its acknowledgement never
+    reached us and the operation ended as failed. It reports the window to that partner
+    all the same, which only a device carrying the link does: the telegram counts as the
+    acknowledgement, nothing is sent."""
+    cul = FakeCul()
+    h = _fast_hub(cul)
+    await _started(h, cul)
+    try:
+        h.devices[FK].set_link_state(HT_S, "add", "fehlgeschlagen")
+        cul.feed(line(2, 0x04, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        await until(lambda: h.devices[FK].links == [HT_S])
+        assert h.devices[FK].pending_links == []
+        assert link_status(h.devices, h.devices[FK]).partners == [HT_S]
+        await asyncio.sleep(0.15)
+        assert fast(cul) == []
+    finally:
+        await h.stop()
+
+
+async def test_contact_talking_to_a_partner_ends_the_attempt_on_air():
+    cul = FakeCul()
+    h = _fast_hub(cul, fast_ack_timeout=0.4)
+    await _started(h, cul)
+    try:
+        cul.feed(to_us(7))
+        await until(lambda: len(fast(cul)) == 1)
+        cul.feed(line(7, 0x04, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        await until(lambda: h.devices[FK].links == [HT_S])
+        await asyncio.sleep(0.6)
+        assert len(fast(cul)) == 1 and h.devices[FK].pending_links == []
+    finally:
+        await h.stop()
+
+
+async def test_contact_talking_to_a_partner_we_want_removed_proves_nothing():
+    cul = FakeCul()
+    h = _fast_hub(cul)
+    await h.start()
+    await until(lambda: h.connected)
+    try:
+        h.devices[FK].links = [HT_S]
+        h.unlink(FK, HT, force=True)
+        cul.feed(line(2, 0x04, MsgType.SHUTTER_CONTACT_STATE, FK, HT, 0, "12"))
+        await until(lambda: len(fast(cul)) == 1)
+        assert matches(fast(cul)[0], link_frame(FK, HT, 1, 0x21))
+        assert h.devices[FK].links == [HT_S]
+    finally:
+        await h.stop()

@@ -23,7 +23,23 @@ entity: climate.wohnzimmer
 layout: kompakt      # kompakt | ring | kachel
 name: Wohnzimmer     # optional, sonst der Gerätename
 show_modes: true     # optional, Modus-Knöpfe zeigen
+temperature_sensor: sensor.wohnzimmer_temperatur  # optional (ab Karte 0.1.2)
+humidity_sensor: sensor.wohnzimmer_feuchte        # optional (ab Karte 0.1.2)
 ```
+
+Seit **Karte 0.1.2** wird sie bei „Karte hinzufügen → Nach Entität“ für MAX!-Thermostate unter
+„Community“ vorgeschlagen.
+
+### Externe Sensoren
+
+Hängt das Thermostat am Heizkörper, misst es dort oft wärmer oder kälter als im Raum.
+`temperature_sensor` zeigt stattdessen einen Raumsensor als Ist-Temperatur; ist er nicht
+verfügbar, nimmt die Karte wieder den Wert des Thermostats. `humidity_sensor` zeigt die
+Luftfeuchte. Beide lassen sich im visuellen Editor auswählen.
+
+Das ist **nur Anzeige**: Das Thermostat regelt weiter nach seinem eigenen Fühler. Deshalb steht
+dessen Wert klein darunter („Thermostat 21,4 °C“, im Ring als Tooltip über „Ist“) – eine große
+Abweichung erklärt, warum ein Raum wärmer oder kälter wird als erwartet.
 
 ## Drei Layouts
 
@@ -40,7 +56,8 @@ show_modes: true     # optional, Modus-Knöpfe zeigen
 - **Modus-Knöpfe:** Manuell, Auto (Wochenprogramm), Komfort, Eco, Boost, Aus. Ist das Thermostat
   abwesend geschaltet, steht „Abwesend bis …“ da; ein Modus-Knopf beendet es.
 - **Klick auf die Ist-Temperatur** öffnet den Home-Assistant-Dialog mit dem Verlauf, **Klick auf
-  das Ventil** den Ventilverlauf. Im Ring öffnet ein Tipp in die Mitte den Verlauf.
+  das Ventil** den Ventilverlauf. Im Ring öffnet ein Tipp in die Mitte den Verlauf; Feuchte- und Ventilzeile öffnen ihren eigenen.
+  Nur der Bogen selbst stellt den Sollwert ein (ab 0.1.2; vorher setzte ein Tippen aufs Ventil 30,5 °C).
 - Der farbige Streifen links zeigt den Zustand: orange = heizt, orange-gelb = Fenster offen,
   rot = Batterie schwach oder Funkfehler.
 

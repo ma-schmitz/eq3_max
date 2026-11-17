@@ -7,6 +7,22 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.6] – 2026-11-17
+
+### Behoben
+- **Meldet ein Fensterkontakt an einen Partner, gilt die Verknüpfung als bestätigt (#6).** Ein
+  Kontakt hatte eine Verknüpfung angenommen, seine Quittung kam aber nie an: Sie blieb auf
+  „wartet“ oder „fehlgeschlagen“, obwohl Heizkörper- und Wandthermostat längst auf das Fenster
+  reagierten. Ein Telegramm des Kontakts (oder Eco-Tasters) an den Partner zählt jetzt als
+  Quittung, gesendet wird nichts mehr.
+- Der Telegramm-Mitschnitt zeigt den Zustand jeder wartenden Verknüpfungsänderung eines
+  schlafenden Geräts.
+
+### Geändert
+- **Wochenprogramm kopieren: Ziele nach Bereich gruppiert, mit Häkchen „ganzer Bereich“**
+  (Diskussion #9). Gleich benannte Geräte sind am Raum zu unterscheiden. Ein Hinweis sagt, dass
+  verknüpfte Thermostate eines Raums das Programm mitbekommen, ein Gerät je Raum also reicht.
+
 ## [0.8.5] – 2026-11-16
 
 ### Behoben

@@ -1165,6 +1165,28 @@ class MaxHub:
             if entry["state"] == LINK_WAITING:
                 self._submit_link(dev, entry, awake=True, fast=True)
 
+    def _link_proven(self, dev: MaxDevice, partner_address: int) -> None:
+        """The sleeper reports its state to this device, which only one carrying the link
+        does: an addition still open counts as acknowledged. Its acknowledgement can get
+        lost while the device took the link; the operation then waited or was given up for
+        good although everything worked (#6, 17.11.2026)."""
+        partner = self.devices.get(partner_address)
+        if partner is None:
+            return
+        entry = dev.link_op(partner.serial)
+        if entry is None or entry["op"] != LINK_ADD:
+            return
+        dev.commit_link(partner.serial, LINK_ADD)
+        key = self._link_key(dev, partner_address)
+        for radio in self._radios.values():
+            radio.scheduler.abandon_key(key)
+        self._link_missed_at.pop((dev.address, partner.serial), None)
+        _LOGGER.info(
+            "MAX! %s (%s): link add %s proven by its telegram to that device",
+            dev.name or dev.serial, dev.serial, partner.serial,
+        )
+        self._notify_pair(dev, partner.serial)
+
     def _send_links_after_pong(self, dev: MaxDevice) -> None:
         """A device that just paired with us (new batteries, teach-in button) stays awake
         for a few seconds, waiting for its configuration. For a sleeper that is the one
@@ -1681,6 +1703,8 @@ class MaxHub:
         if status:
             self._resubmit_failed_group(dev)
         if dev.is_sleeper:
+            if kind in (MsgType.SHUTTER_CONTACT_STATE, MsgType.PUSH_BUTTON_STATE) and frame.dst != self.address:
+                self._link_proven(dev, frame.dst)
             if not (kind == MsgType.ACK and frame.dst == self.address):
                 # It transmits instead of listening: a fast attempt on air is moot.
                 self._abandon_fast_attempts(dev)
@@ -1690,8 +1714,9 @@ class MaxHub:
             # a retry towards an unreachable partner is a chance of its own.
             if dev.pending_links:
                 TRACE.info(
-                    "sleeper %06X talked to %s (type %02X): flush of its link operations %.0f ms after its last telegram",
+                    "sleeper %06X talked to %s (type %02X): flush of its link operations (%s) %.0f ms after its last telegram",
                     dev.address, "us" if frame.dst == self.address else f"{frame.dst:06X}", kind,
+                    ", ".join(f"{op['op']} {op['partner']}: {op['state']}" for op in dev.pending_links),
                     self._sleeper_debounce * 1000,
                 )
             self._schedule_flush(dev)

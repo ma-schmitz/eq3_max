@@ -23,7 +23,23 @@ entity: climate.living_room
 layout: kompakt      # kompakt | ring | kachel
 name: Living room    # optional, otherwise the device name
 show_modes: true     # optional, show the mode buttons
+temperature_sensor: sensor.living_room_temperature  # optional (card 0.1.2+)
+humidity_sensor: sensor.living_room_humidity        # optional (card 0.1.2+)
 ```
+
+Since **card 0.1.2** it is suggested for MAX! thermostats under "Community" in "Add card → By
+entity".
+
+### External sensors
+
+A thermostat on the radiator often measures warmer or colder than the room. `temperature_sensor`
+shows a room sensor as the current temperature instead; when it is unavailable, the card falls
+back to the thermostat's value. `humidity_sensor` shows the humidity. Both can be picked in the
+visual editor.
+
+This is **display only**: the thermostat keeps regulating on its own sensor. So its value stays
+small below ("Thermostat 21.4 °C", in the ring as a tooltip on "Now") – a large gap explains why a
+room gets warmer or colder than expected.
 
 ## Three layouts
 
@@ -40,7 +56,8 @@ show_modes: true     # optional, show the mode buttons
 - **Mode buttons:** Manual, Auto (week program), Comfort, Eco, Boost, Off. When the thermostat
   is set to away, "Away until …" shows; a mode button ends it.
 - **Click the current temperature** to open Home Assistant's dialog with its history, **click the
-  valve** for the valve history. In the ring, tap the centre for the history.
+  valve** for the valve history. In the ring, tap the centre for the history; the humidity and valve lines open their own.
+  Only the arc itself sets the target (0.1.2+; before, a tap on the valve set 30.5 °C).
 - The coloured stripe on the left shows the state: orange = heating, amber = window open,
   red = battery low or radio error.
 
