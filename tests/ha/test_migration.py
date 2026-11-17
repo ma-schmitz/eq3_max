@@ -10,6 +10,33 @@ def old(reg, domain, platform, uid, object_id):
     return reg.async_get_or_create(domain, platform, uid, suggested_object_id=object_id)
 
 
+def takeover_issue(hass, entry):
+    return ir.async_get(hass).async_get_issue(DOMAIN, f"takeover_{entry.entry_id}")
+
+
+async def set_up(hass, entry, *, takeover=True):
+    """Set the entry up; with takeover the admin confirms the repair that lists the predecessors."""
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    if takeover:
+        await confirm_takeover(hass, entry)
+
+
+async def confirm_takeover(hass, entry):
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "repairs", {})
+    assert takeover_issue(hass, entry) is not None
+    manager = hass.data["repairs"]["flow_manager"]
+    result = await manager.async_init(DOMAIN, data={"issue_id": f"takeover_{entry.entry_id}"})
+    assert result["type"] == "form" and result["step_id"] == "confirm", result
+    result = await manager.async_configure(result["flow_id"], {})
+    assert result["type"] == "create_entry", result
+    await hass.async_block_till_done()
+    return result
+
+
 async def test_takes_over_entity_ids_area_and_name(hass, entry, fake_hub):
     reg = er.async_get(hass)
     area = ar.async_get(hass).async_create("Bad unten")
@@ -20,15 +47,15 @@ async def test_takes_over_entity_ids_area_and_name(hass, entry, fake_hub):
     old(reg, "binary_sensor", "homematic", "NEQ9000010_STATE", "fk_ht_schlafzimmer_state")
     old(reg, "binary_sensor", "homematic", "KEQ9000001_LOWBAT", "taster_lowbat")
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
 
     new = reg.async_get("climate.ht_bad_unten")
     assert new.platform == DOMAIN and new.unique_id == "MEQ9000007_climate"
     assert new.area_id == area.id and new.name == "Bad unten"
     assert reg.async_get("binary_sensor.ht_bad_unten_lowbat").platform == DOMAIN
-    assert reg.async_get("sensor.ht_bad_unten_ventil").platform == DOMAIN
+    # The user's own template entity keeps its place, ours gets a suffix.
+    assert reg.async_get("sensor.ht_bad_unten_ventil").platform == "template"
+    assert reg.async_get_entity_id("sensor", DOMAIN, "MEQ9000007_ventil") == "sensor.ht_bad_unten_ventil_2"
     assert reg.async_get("sensor.ht_bad_unten_rssi").platform == DOMAIN
     assert reg.async_get("binary_sensor.fk_ht_schlafzimmer_state").unique_id == "NEQ9000010_state"
     assert reg.async_get("event.taster").unique_id == "KEQ9000001_event"
@@ -38,9 +65,7 @@ async def test_takes_over_entity_ids_area_and_name(hass, entry, fake_hub):
 async def test_second_setup_does_not_duplicate(hass, entry, fake_hub):
     reg = er.async_get(hass)
     old(reg, "climate", "homematic", "MEQ9000007", "ht_bad_unten")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     ids = [e.entity_id for e in er.async_entries_for_config_entry(reg, entry.entry_id) if e.domain == "climate"]
@@ -82,9 +107,7 @@ async def test_carries_icon_aliases_labels_options_and_user_flags(hass, entry, f
     reg.async_update_entity_options(climate.entity_id, "climate", {"foo": "bar"})
     lowbat = old(reg, "binary_sensor", "homematic", "MEQ9000007_LOWBAT", "ht_bad_unten_lowbat")
     reg.async_update_entity(lowbat.entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
 
     new = reg.async_get("climate.ht_bad_unten")
     assert new.platform == DOMAIN
@@ -102,9 +125,7 @@ async def test_user_hidden_carried(hass, entry, fake_hub):
     reg.async_update_entity(climate.entity_id, hidden_by=er.RegistryEntryHider.USER)
     old(reg, "binary_sensor", "homematic", "MEQ9000007_LOWBAT", "ht_bad_unten_lowbat")
     reg.async_update_entity("binary_sensor.ht_bad_unten_lowbat", hidden_by=er.RegistryEntryHider.INTEGRATION)
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     assert reg.async_get("climate.ht_bad_unten").hidden_by is er.RegistryEntryHider.USER
     assert reg.async_get("binary_sensor.ht_bad_unten_lowbat").hidden_by is None
 
@@ -112,9 +133,7 @@ async def test_user_hidden_carried(hass, entry, fake_hub):
 async def test_wall_thermostat_taken_over(hass, entry, fake_hub):
     reg = er.async_get(hass)
     old(reg, "climate", "homematic", "NEQ9000011", "wt_wohnzimmer")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     new = reg.async_get("climate.wt_wohnzimmer")
     assert new.platform == DOMAIN and new.unique_id == "NEQ9000011_climate"
     assert reg.async_get_entity_id("climate", "homematic", "NEQ9000011") is None
@@ -123,9 +142,7 @@ async def test_wall_thermostat_taken_over(hass, entry, fake_hub):
 async def test_window_contact_lowbat_taken_over(hass, entry, fake_hub):
     reg = er.async_get(hass)
     old(reg, "binary_sensor", "homematic", "NEQ9000010_LOWBAT", "fk_ht_schlafzimmer_lowbat")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     new = reg.async_get("binary_sensor.fk_ht_schlafzimmer_lowbat")
     assert new.platform == DOMAIN and new.unique_id == "NEQ9000010_lowbat"
 
@@ -174,9 +191,7 @@ async def test_takes_over_max_cul_predecessors(hass, entry, fake_hub):
     state = old_mc(reg, legacy, "binary_sensor", "NEQ9000010_state", "fk_ht_schlafzimmer_state")
     reg.async_update_entity(state.entity_id, area_id=sz.id)
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
 
     new = reg.async_get("climate.ht_bad_unten")
     assert new.platform == DOMAIN and new.unique_id == "MEQ9000007_climate"
@@ -208,9 +223,7 @@ async def test_base_from_max_cul_predecessors(hass, entry, fake_hub):
     old_mc(reg, legacy, "event", "KEQ9000001_event", "eco_taster")
     old_mc(reg, legacy, "binary_sensor", "NEQ9000011_lowbat", "wt_wz_lowbat")
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
 
     assert reg.async_get("climate.ht_bad_eg").platform == DOMAIN
     assert reg.async_get("sensor.ht_bad_eg_rssi").platform == DOMAIN
@@ -295,9 +308,7 @@ async def test_area_of_old_max_cul_device_carried(hass, entry, fake_hub):
     climate = old_mc(reg, legacy, "climate", "MEQ9000007_climate", "ht_bad_unten")
     reg.async_update_entity(climate.entity_id, device_id=device.id)
 
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
 
     assert reg.async_get("climate.ht_bad_unten").area_id == bad.id
 
@@ -326,9 +337,7 @@ async def test_serial_names_are_replaced_by_predecessor_names(hass, fake_hub):
                             suggested_object_id="fk_ht_kueche_1_state", original_name="fk-ht-kueche-1 STATE")
     reg.async_get_or_create("binary_sensor", "homematic", "KEQ9000001_LOWBAT",
                             suggested_object_id="taster_lowbat", original_name="anderer-name LOWBAT")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     names = {d["serial"]: d["name"] for d in entry.data[CONF_DEVICES]}
     assert names == {
         "MEQ9000007": "ht-bad-unten",
@@ -354,9 +363,7 @@ async def test_predecessor_user_name_wins_over_original_name(hass, fake_hub):
     old_fk = reg.async_get_or_create("binary_sensor", "homematic", "NEQ9000010_STATE",
                                      suggested_object_id="fk_state", original_name="NEQ9000010 STATE")
     reg.async_update_entity(old_fk.entity_id, name="fk-schlafzimmer Fenster")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     assert entry.data[CONF_DEVICES][0]["name"] == "fk-schlafzimmer"
 
 
@@ -364,9 +371,7 @@ async def test_links_sensor_follows_device_base_for_all_types(hass, entry, fake_
     reg = er.async_get(hass)
     old(reg, "binary_sensor", "homematic", "NEQ9000010_LOWBAT", "fk_ht_schlafzimmer_lowbat")
     old(reg, "climate", "homematic", "NEQ9000011", "wt_wohnzimmer_alt")
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await set_up(hass, entry)
     expected = {
         "MEQ9000007": "sensor.ht_bad_unten_verknuepfungen",
         "NEQ9000010": "sensor.fk_ht_schlafzimmer_verknuepfungen",
@@ -384,3 +389,97 @@ def test_plug_adapter_gets_only_diagnostic_entities():
 
     plug = MaxDevice(0x123ABD, "PLG1234567", DeviceType.PLUG_ADAPTER)
     assert [(s.domain, s.key) for s in specs_for(plug)] == [("sensor", "rssi"), ("sensor", "zuletzt_gemeldet")]
+
+
+# --- Takeover only after the admin confirmed it (HACS review, 17.11.2026) ---
+
+async def test_setup_alone_leaves_predecessors_untouched_and_raises_a_repair(hass, entry, fake_hub):
+    reg = er.async_get(hass)
+    area = ar.async_get(hass).async_create("Bad unten")
+    climate = old(reg, "climate", "homematic", "MEQ9000007", "ht_bad_unten")
+    reg.async_update_entity(climate.entity_id, area_id=area.id, name="Bad unten")
+    old(reg, "binary_sensor", "homematic", "NEQ9000010_STATE", "fk_ht_schlafzimmer_state")
+
+    await set_up(hass, entry, takeover=False)
+
+    kept = reg.async_get("climate.ht_bad_unten")
+    assert kept.platform == "homematic" and kept.area_id == area.id and kept.name == "Bad unten"
+    assert reg.async_get("binary_sensor.fk_ht_schlafzimmer_state").platform == "homematic"
+    assert reg.async_get_entity_id("climate", DOMAIN, "MEQ9000007_climate") == "climate.ht_bad_unten_2"
+    issue = takeover_issue(hass, entry)
+    assert issue is not None and issue.is_fixable
+    listed = issue.translation_placeholders["entities"]
+    assert "climate.ht_bad_unten" in listed and "binary_sensor.fk_ht_schlafzimmer_state" in listed
+    assert issue.translation_placeholders["count"] == "2"
+
+
+async def test_no_predecessors_no_repair(hass, entry, fake_hub):
+    await set_up(hass, entry, takeover=False)
+    assert takeover_issue(hass, entry) is None
+
+
+async def test_template_entities_are_never_listed_or_removed(hass, entry, fake_hub):
+    reg = er.async_get(hass)
+    old(reg, "sensor", "template", "ht_bad_unten_ventil", "ht_bad_unten_ventil")
+    old(reg, "binary_sensor", "template", "fenster", "fk_schlafzimmer_state")
+    await set_up(hass, entry, takeover=False)
+    assert takeover_issue(hass, entry) is None
+    assert reg.async_get("sensor.ht_bad_unten_ventil").platform == "template"
+    assert reg.async_get("binary_sensor.fk_schlafzimmer_state").platform == "template"
+    assert reg.async_get_entity_id("binary_sensor", DOMAIN, "NEQ9000010_state") == "binary_sensor.fk_schlafzimmer_state_2"
+
+
+async def test_confirmed_takeover_renames_our_entity_and_clears_the_repair(hass, entry, fake_hub):
+    reg = er.async_get(hass)
+    old(reg, "climate", "homematic", "MEQ9000007", "ht_bad_unten")
+    await set_up(hass, entry, takeover=False)
+    assert hass.states.get("climate.ht_bad_unten_2") is not None
+
+    await confirm_takeover(hass, entry)
+
+    assert reg.async_get("climate.ht_bad_unten").platform == DOMAIN
+    assert reg.async_get("climate.ht_bad_unten_2") is None
+    assert hass.states.get("climate.ht_bad_unten") is not None and hass.states.get("climate.ht_bad_unten_2") is None
+    assert takeover_issue(hass, entry) is None
+    assert entry.state is ConfigEntryState.LOADED
+    # Nothing left to take over: a reload raises no new repair.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert takeover_issue(hass, entry) is None
+
+
+async def test_predecessor_at_our_entity_id_with_another_unique_id_is_listed(hass, entry, fake_hub):
+    reg = er.async_get(hass)
+    old(reg, "sensor", "homematic", "irgendwas", "ht_bad_unten_ventil")
+    await set_up(hass, entry, takeover=False)
+    assert "sensor.ht_bad_unten_ventil" in takeover_issue(hass, entry).translation_placeholders["entities"]
+    await confirm_takeover(hass, entry)
+    assert reg.async_get("sensor.ht_bad_unten_ventil").platform == DOMAIN
+
+
+async def test_takeover_is_refused_while_the_predecessor_is_loaded(hass, entry, fake_hub):
+    from homeassistant.setup import async_setup_component
+
+    reg = er.async_get(hass)
+    old(reg, "climate", "homematic", "MEQ9000007", "ht_bad_unten")
+    await set_up(hass, entry, takeover=False)
+    hass.config.components.add("homematic")
+    assert await async_setup_component(hass, "repairs", {})
+    manager = hass.data["repairs"]["flow_manager"]
+    result = await manager.async_init(DOMAIN, data={"issue_id": f"takeover_{entry.entry_id}"})
+    result = await manager.async_configure(result["flow_id"], {})
+    assert result["type"] == "abort" and result["reason"] == "predecessor_active"
+    assert reg.async_get("climate.ht_bad_unten").platform == "homematic"
+    assert takeover_issue(hass, entry) is not None
+
+
+def test_takeover_repair_translated():
+    import json
+    from pathlib import Path
+
+    base = Path(__file__).parents[2] / "custom_components/eq3_max"
+    for path in (base / "strings.json", base / "translations/en.json", base / "translations/de.json"):
+        issue = json.loads(path.read_text())["issues"]["takeover"]
+        step = issue["fix_flow"]["step"]["confirm"]
+        assert issue["title"] and "{entities}" in step["description"], path
+        assert issue["fix_flow"]["abort"]["predecessor_active"], path

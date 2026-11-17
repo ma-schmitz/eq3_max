@@ -13,7 +13,7 @@ Overview and requirements: [Migration](index.md).
 | `climate.<name>` | `climate.<name>`, history continues |
 | `binary_sensor.<name>_state` (window contact) | `binary_sensor.<name>_state` |
 | `binary_sensor.<name>_lowbat` | `binary_sensor.<name>_lowbat` |
-| Template sensor `sensor.<name>_ventil` | `sensor.<name>_ventil` (valve), replaces the template entry |
+| Template sensor `sensor.<name>_ventil` | left untouched; delete it yourself first, then eq3_max gets the ID (step 3) |
 | Area, display name, icon, aliases, labels, "disabled", "hidden" | are kept |
 | Configuration (comfort, eco, maximum, minimum, offset, window-open temperature, boost, decalcification) | `number.*`/`select.*` with attribute `quelle: homegear` (source) |
 | Links | links per device, `sensor.<name>_verknuepfungen` |
@@ -76,8 +76,9 @@ Create a `.bak` copy of each file first.
 - Remove the `homematic:` block from `configuration.yaml`.
 - Remove helper constructs around Homegear (REST sensor "Homematic up",
   reconnect automations).
-- Retire template sensors that rebuild values from homematic attributes (`sensor.<name>_ventil`).
-  eq3_max provides them with the same IDs.
+- Remove template sensors that rebuild values from homematic attributes (`sensor.<name>_ventil`),
+  **including their entry under Settings → Entities**. eq3_max provides the values itself but
+  never touches template entities: if one still sits on the ID, the eq3_max entity gets a `_2`.
 - `check_config` must pass without errors.
 
 ## 4. Install the integration
@@ -100,12 +101,17 @@ Create a `.bak` copy of each file first.
    - Central address: the previous one (e.g. `C0FFEE`), also with the Cube
    - Source: JSON, `/config/eq3_max_export.json`
    - Confirm the device list
+5. **Confirm the takeover of the entities** (from 0.9.0). eq3_max does not touch the old
+   homematic entries on its own: Settings → System → **Repairs** shows "Entities of a
+   predecessor can be taken over" with the list of affected entities. Check the list, press
+   **Submit** – only then the old entries are removed and entity ID, area, name, icon, aliases
+   and labels move to the eq3_max entities. Until then these sit next to them with `_2`.
 
 ## 6. Acceptance test
 
 Check in order and take notes:
 
-1. All devices present, all thermostats with values, **no `_2` IDs**.
+1. All devices present, all thermostats with values, after the confirmed takeover **no `_2` IDs**.
 2. Change the target temperature on a thermostat → `ausstehend` (pending) is empty after a few seconds.
 3. Set a device that Homegear addressed with a group specifically → only this one changes.
 4. Open/close a window contact → the entity follows.

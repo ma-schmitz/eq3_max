@@ -7,7 +7,7 @@ The path from Homegear has been proven on an installation with 24 devices.
 
 | Before | Guide | Pair again? | Entity IDs |
 |---|---|---|---|
-| Homegear + legacy `homematic` integration | [From Homegear](homegear.md) | no | taken over automatically |
+| Homegear + legacy `homematic` integration | [From Homegear](homegear.md) | no | taken over after confirmation (repair) |
 | nothing, new installation | [Setup](../loslegen/einrichtung.md) | – | – |
 
 ## The principle

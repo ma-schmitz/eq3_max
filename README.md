@@ -25,7 +25,7 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
 - Radiator and wall thermostats as `climate`, valve position as a separate sensor
 - Window contacts, eco buttons (as event entities), battery, RSSI, radio errors
 - State survives restarts, lost commands are detected and repeated
-- Takes over existing Homegear pairings and entity IDs without re-pairing
+- Takes over existing Homegear pairings without re-pairing; entity IDs after confirmation (repair)
 - Airtime sensor and brake at 1 % (36 s per hour, on for new entries)
 - Presets "Comfort", "Eco" and "Away" (temporary with end time), factory reset and deleting devices
 - Group ids (set per thermostat or for a whole room)

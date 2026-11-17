@@ -259,6 +259,21 @@
     "stick_deaf": {
       "title": "CUL stick receives nothing",
       "description": "The CUL sends but receives nothing even after two resets. USB: move the stick to another USB port. Network: restart the CUN or Cube (a reconnect does not reset its radio)."
+    },
+    "takeover": {
+      "title": "Entities of a predecessor can be taken over",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Take over the entities of the predecessor?",
+            "description": "eQ-3 MAX! found {count} entities of a predecessor (Homematic/Homegear or max_cul) that belong to devices it now serves:\n\n{entities}\n\nOn **Submit** these entries are removed and the eQ-3 MAX! entities take their place: entity ID, area, name, icon, aliases and labels are carried over, so dashboards and automations keep working. Until then the eQ-3 MAX! entities sit next to them with a suffix (e.g. `_2`). Nothing is changed unless you confirm; entities of other integrations (e.g. your own templates) are never touched. If you want to keep the old entries, ignore this repair."
+          }
+        },
+        "abort": {
+          "predecessor_active": "The integration {integration} is still loaded. Remove it and restart Home Assistant first, then confirm again.",
+          "entry_gone": "The eQ-3 MAX! entry no longer exists."
+        }
+      }
     }
   },
   "services": {

@@ -7,6 +7,18 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.0] – 2026-11-17
+
+### Geändert
+- **Entitäten eines Vorgängers werden erst nach Bestätigung übernommen.** Bisher ersetzte die
+  Einrichtung die Registry-Einträge der Vorgänger (`homematic`, `max_cul`) von selbst. Jetzt
+  bleiben sie unangetastet, und eine Reparatur listet sie auf; erst **Absenden** entfernt sie und
+  überträgt Entity-ID, Bereich, Name, Symbol, Aliase und Labels auf die Entitäten von eQ-3 MAX!.
+  Bis dahin stehen diese mit einem Zusatz (`_2`) daneben.
+- **Template-Entitäten werden nie angefasst.** Eine Template-Entität auf einer ID, die eQ-3 MAX!
+  gern hätte (z. B. `sensor.<name>_ventil`), behält ihren Platz; wer die ID freigeben will,
+  löscht sie selbst.
+
 ## [0.8.6] – 2026-11-17
 
 ### Behoben

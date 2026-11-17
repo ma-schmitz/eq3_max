@@ -33,12 +33,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     from .const import DOMAIN  # noqa: PLC0415
     from .coordinator import MaxCulCoordinator  # noqa: PLC0415
-    from .migration import BLOCKING_INTEGRATIONS, MigrationBlocked, async_migrate_entities  # noqa: PLC0415
+    from .migration import (  # noqa: PLC0415
+        BLOCKING_INTEGRATIONS,
+        TAKEOVER_ISSUE,
+        MigrationBlocked,
+        async_prepare_entities,
+        takeover_issue_id,
+    )
     from .panel import async_register_panel  # noqa: PLC0415
 
     coordinator = MaxCulCoordinator(hass, entry)
     try:
-        async_migrate_entities(hass, entry, coordinator.identity_devices())
+        takeovers = async_prepare_entities(hass, entry, coordinator.identity_devices())
     except MigrationBlocked as err:
         issue_id = f"{err.integration}_active"
         ir.async_create_issue(
@@ -52,6 +58,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryError(str(err)) from err
     for integration in BLOCKING_INTEGRATIONS:
         ir.async_delete_issue(hass, DOMAIN, f"{integration}_active")
+    if takeovers:
+        # Entities of the predecessors (homematic, max_cul) are never touched on our own: the
+        # repair lists them, and only an admin confirming it hands them over (repairs.py).
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            takeover_issue_id(entry.entry_id),
+            is_fixable=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=TAKEOVER_ISSUE,
+            translation_placeholders={
+                "count": str(len(takeovers)),
+                "entities": "\n".join(f"- `{t.old_id}` ({t.platform})" for t in takeovers),
+            },
+            data={"entry_id": entry.entry_id},
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, takeover_issue_id(entry.entry_id))
     try:
         await coordinator.async_start()
     except (OSError, ConnectionError) as err:
@@ -76,6 +100,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async_unregister_panel(hass, entry)
         await entry.runtime_data.async_stop()
     return ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    from homeassistant.helpers import issue_registry as ir  # noqa: PLC0415
+
+    from .migration import takeover_issue_id  # noqa: PLC0415
+
+    ir.async_delete_issue(hass, DOMAIN, takeover_issue_id(entry.entry_id))
 
 
 async def async_remove_config_entry_device(hass: HomeAssistant, entry: ConfigEntry, device_entry: DeviceEntry) -> bool:

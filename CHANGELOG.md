@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] – 2026-11-17
+
+### Changed
+- **Entities of a predecessor are only taken over after confirmation.** Until now the setup
+  replaced the registry entries of the predecessors (`homematic`, `max_cul`) on its own. Now it
+  leaves them alone and raises a repair that lists them; only **Submit** removes them and moves
+  entity ID, area, name, icon, aliases and labels to the eQ-3 MAX! entities. Until then these
+  sit next to them with a suffix (`_2`).
+- **Template entities are never touched.** A template entity on an entity ID eQ-3 MAX! would
+  like (e.g. `sensor.<name>_ventil`) keeps its place; delete it yourself to free the ID.
+
 ## [0.8.6] – 2026-11-17
 
 ### Fixed

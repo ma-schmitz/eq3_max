@@ -7,7 +7,7 @@ Erprobt ist der Weg von Homegear an einer Installation mit 24 Geräten.
 
 | Bisher | Anleitung | Neu anlernen? | Entity-IDs |
 |---|---|---|---|
-| Homegear + legacy `homematic`-Integration | [Von Homegear](homegear.md) | nein | automatisch übernommen |
+| Homegear + legacy `homematic`-Integration | [Von Homegear](homegear.md) | nein | nach Bestätigung übernommen (Reparatur) |
 | nichts, Neuinstallation | [Einrichtung](../loslegen/einrichtung.md) | – | – |
 
 ## Das Prinzip

@@ -259,6 +259,21 @@
     "stick_deaf": {
       "title": "CUL-Stick empfängt nichts",
       "description": "Der CUL sendet, empfängt aber auch nach zwei Neustarts nichts. USB: Stick an einen anderen USB-Port stecken. Netzwerk: CUN bzw. Cube neu starten (ein Neuverbinden setzt dessen Funkmodul nicht zurück)."
+    },
+    "takeover": {
+      "title": "Entitäten eines Vorgängers können übernommen werden",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Entitäten des Vorgängers übernehmen?",
+            "description": "eQ-3 MAX! hat {count} Entitäten eines Vorgängers (Homematic/Homegear oder max_cul) gefunden, die zu Geräten gehören, die es jetzt bedient:\n\n{entities}\n\nMit **Absenden** werden diese Einträge entfernt, und die Entitäten von eQ-3 MAX! treten an ihre Stelle: Entitäts-ID, Bereich, Name, Symbol, Aliasse und Labels gehen mit, Dashboards und Automationen laufen also weiter. Bis dahin stehen die Entitäten von eQ-3 MAX! mit einem Zusatz (z. B. `_2`) daneben. Ohne Bestätigung wird nichts geändert; Entitäten anderer Integrationen (z. B. eigene Templates) werden nie angefasst. Wer die alten Einträge behalten will, ignoriert diese Reparatur."
+          }
+        },
+        "abort": {
+          "predecessor_active": "Die Integration {integration} ist noch geladen. Erst entfernen und Home Assistant neu starten, dann erneut bestätigen.",
+          "entry_gone": "Den Eintrag von eQ-3 MAX! gibt es nicht mehr."
+        }
+      }
     }
   },
   "services": {

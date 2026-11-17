@@ -25,7 +25,7 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
 - Heizkörper- und Wandthermostate als `climate`, Ventilstellung als eigener Sensor
 - Fensterkontakte, Eco-Taster (als Event-Entitäten), Batterie, RSSI, Funkfehler
 - Zustand übersteht Neustarts, verlorene Befehle werden erkannt und wiederholt
-- Übernahme bestehender Homegear-Kopplungen und -Entity-IDs ohne Neuanlernen
+- Übernahme bestehender Homegear-Kopplungen ohne Neuanlernen; Entity-IDs nach Bestätigung (Reparatur)
 - Sendezeit-Sensor und Bremse auf 1 % (36 s pro Stunde, bei neuen Einträgen an)
 - Presets „Komfort“, „Eco“ und „Abwesend“ (temporär mit Endzeit), Werksreset und Löschen von Geräten
 - Gruppen-IDs (je Thermostat oder für einen ganzen Raum)

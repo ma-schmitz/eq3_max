@@ -13,7 +13,7 @@ Assistant. Kein Gerät muss neu angelernt werden, die Entity-IDs bleiben.
 | `climate.<name>` | `climate.<name>`, Verlauf läuft weiter |
 | `binary_sensor.<name>_state` (Fensterkontakt) | `binary_sensor.<name>_state` |
 | `binary_sensor.<name>_lowbat` | `binary_sensor.<name>_lowbat` |
-| Template-Sensor `sensor.<name>_ventil` | `sensor.<name>_ventil`, ersetzt den Template-Eintrag |
+| Template-Sensor `sensor.<name>_ventil` | bleibt unangetastet; vorher selbst löschen, dann bekommt eq3_max die ID (Schritt 3) |
 | Bereich, Anzeigename, Symbol, Aliase, Labels, „deaktiviert“, „ausgeblendet“ | bleiben erhalten |
 | Konfiguration (Komfort, Eco, Maximal, Minimal, Offset, Fenster-auf-Temperatur, Boost, Entkalkung) | `number.*`/`select.*` mit Attribut `quelle: homegear` |
 | Verknüpfungen | Verknüpfungen je Gerät, `sensor.<name>_verknuepfungen` |
@@ -77,7 +77,9 @@ Vorher jeweils eine `.bak`-Kopie anlegen.
 - Hilfskonstrukte rund um Homegear entfernen (REST-Sensor „Homematic up“,
   Reconnect-Automationen).
 - Template-Sensoren, die Werte aus homematic-Attributen nachbauen (`sensor.<name>_ventil`),
-  stilllegen. eq3_max liefert sie mit denselben IDs.
+  entfernen, **samt Eintrag unter Einstellungen → Entitäten**. eq3_max liefert die Werte selbst,
+  fasst Template-Entitäten aber nie an: Liegt noch eine auf der ID, bekommt die von eq3_max
+  ein `_2`.
 - `check_config` muss fehlerfrei sein.
 
 ## 4. Integration einspielen
@@ -100,12 +102,18 @@ Vorher jeweils eine `.bak`-Kopie anlegen.
    - Zentralen-Adresse: die bisherige (z. B. `C0FFEE`), auch beim Cube
    - Quelle: JSON, `/config/eq3_max_export.json`
    - Geräteliste bestätigen
+5. **Übernahme der Entitäten bestätigen** (ab 0.9.0). eq3_max fasst die alten
+   homematic-Einträge nicht von selbst an: Unter Einstellungen → System → **Reparaturen**
+   steht „Entitäten eines Vorgängers können übernommen werden“ mit der Liste der betroffenen
+   Entitäten. Liste prüfen, **Absenden** – erst dann werden die alten Einträge entfernt und
+   Entity-ID, Bereich, Name, Symbol, Aliase und Labels gehen auf die Entitäten von eq3_max
+   über. Bis dahin stehen diese mit `_2` daneben.
 
 ## 6. Abnahme
 
 Der Reihe nach prüfen und notieren:
 
-1. Alle Geräte da, alle Thermostate mit Werten, **keine `_2`-IDs**.
+1. Alle Geräte da, alle Thermostate mit Werten, nach der bestätigten Übernahme **keine `_2`-IDs**.
 2. Sollwert an einem Thermostat ändern → `ausstehend` ist nach einigen Sekunden leer.
 3. Ein Gerät, das Homegear mit Gruppe angesprochen hat, gezielt stellen → nur dieses ändert sich.
 4. Fensterkontakt auf/zu → Entität folgt.
