@@ -44,6 +44,7 @@ class FakeHub:
         self.commands = []
         self.pairing = None
         self.pairing_radio = None
+        self.pairing_foreign = {}
         self.started = False
         self.raw_history = {}
         self.resets = []

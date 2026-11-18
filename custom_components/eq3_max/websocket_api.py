@@ -306,6 +306,11 @@ def _hub(ctx: _Context) -> dict[str, Any]:
         "queue": hub.queue_length,
         "pairing_remaining": round(hub.pairing_remaining),
         "pairing_radio": getattr(hub, "pairing_radio", None),
+        # Devices still paired to another central (seen while pairing was open).
+        "pairing_foreign": [
+            {"serial": serial, "address": f"{info['address']:06X}", "central": f"{info['central']:06X}"}
+            for serial, info in getattr(hub, "pairing_foreign", {}).items()
+        ],
         "radios": _radios(ctx),
     }
 

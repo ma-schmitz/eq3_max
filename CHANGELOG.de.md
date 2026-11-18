@@ -7,6 +7,15 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **Anlernen: Warnung bei Geräten, die noch an einer anderen Zentrale angelernt sind.** Ein
+  solches Gerät (gebraucht gekauft, aus einem anderen MAX!-System) schickt seine
+  Anlernanfrage an seine alte Zentrale; die Integration beantwortet sie nie – bisher ohne
+  jeden Hinweis. Bei offenem Anlernfenster steht jetzt pro Gerät einmal eine Warnung im Log,
+  und die Seite „eQ-3 MAX!“ zeigt unter dem Anlern-Knopf einen Hinweis: Gerät auf
+  Werkseinstellungen zurücksetzen und neu anlernen. Bei geschlossenem Fenster bleibt es
+  still, damit MAX!-Geräte der Nachbarn das Log nicht füllen.
+
 ## [0.9.1] – 2026-11-17
 
 ### Hinzugefügt

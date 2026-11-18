@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Pairing: warning for devices still paired to another central.** Such a device (bought
+  used, from another MAX! system) sends its pairing request to its old central, which the
+  integration never answers – so far without a word. While the pairing window is open it
+  now logs one warning per device and the "eQ-3 MAX!" panel shows a hint below the pairing
+  button: reset the device to factory settings and pair it again. With the window closed it
+  stays silent, so the neighbours' MAX! devices do not fill the log.
+
 ## [0.9.1] – 2026-11-17
 
 ### Added

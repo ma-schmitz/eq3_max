@@ -15,6 +15,14 @@ unbeantwortet. Praktisch, wenn das Gerät neben einem Modul liegt, später aber 
 anderes laufen soll – oder umgekehrt. Der Knopf `button.eq3_max_anlernen` lernt immer über
 alle Module an.
 
+**Es passiert nichts, obwohl das Gerät seine Anlernanfrage sendet?** Dann ist es vermutlich
+noch an einer anderen Zentrale angelernt (gebraucht gekauft, aus einem anderen MAX!-System)
+und schickt die Anfrage an diese; die Integration beantwortet sie nie. Bei offenem
+Anlernfenster zeigt die Seite einen Hinweis unter dem Knopf und das Log eine Warnung („… wants
+to pair but is still paired to the central …“). Gerät auf Werkseinstellungen zurücksetzen
+(Thermostat: Batterien raus, alle Tasten gedrückt halten, Batterien einlegen, bis „rES“
+erscheint) und neu anlernen.
+
 Nach einem **Batteriewechsel** meldet sich ein bekanntes Gerät von selbst neu an und behält
 seine Werte. Steht ein Thermostat danach auf „InS“, Boost-Taste drücken (siehe [FAQ](../faq.md)).
 

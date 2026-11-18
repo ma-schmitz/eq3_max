@@ -3053,3 +3053,60 @@ async def test_contact_talking_to_a_partner_we_want_removed_proves_nothing():
         assert h.devices[FK].links == [HT_S]
     finally:
         await h.stop()
+
+
+# --- Pairing request of a device still paired to another central ---
+
+FOREIGN_DEV = 0x1A2B3C
+FOREIGN_CENTRAL = 0x654321
+FOREIGN_SERIAL = "MEQ9000099"
+
+
+def foreign_ping(dst=FOREIGN_CENTRAL):
+    payload = "1101A1" + FOREIGN_SERIAL.encode().hex().upper()
+    return line(0, 0x04, MsgType.PAIR_PING, FOREIGN_DEV, dst, 0, payload)
+
+
+def pongs(cul):
+    return [l for l in cul.written if l[:2] in ("Zs", "Zf") and l[8:10] == "01"]
+
+
+async def test_pairing_ping_to_another_central_warns_once_and_stays_unanswered(hub, caplog):
+    h, cul, rec = hub
+    h.open_pairing(60)
+    with caplog.at_level(logging.WARNING):
+        for _ in range(3):
+            cul.feed(foreign_ping())
+        await until(lambda: FOREIGN_SERIAL in h.pairing_foreign)
+        await asyncio.sleep(0.2)
+    warnings = [r.getMessage() for r in caplog.records if "still paired to the central" in r.getMessage()]
+    assert warnings == [
+        "MAX! MEQ9000099 (1A2B3C) wants to pair but is still paired to the central 654321 "
+        "(this central: C0FFEE); reset the device to factory settings and pair it again"
+    ]
+    assert h.pairing_foreign == {FOREIGN_SERIAL: {"address": FOREIGN_DEV, "central": FOREIGN_CENTRAL}}
+    assert None in rec.updates  # the panel learns about it
+    assert pongs(cul) == []
+    assert FOREIGN_DEV not in h.devices
+
+
+async def test_pairing_ping_to_another_central_is_silent_with_window_closed(hub, caplog):
+    h, cul, rec = hub
+    with caplog.at_level(logging.WARNING):
+        cul.feed(foreign_ping())
+        await asyncio.sleep(0.3)
+    assert not [r for r in caplog.records if "still paired" in r.getMessage()]
+    assert h.pairing_foreign == {}
+
+
+async def test_new_pairing_window_clears_foreign_and_reset_device_pairs(hub):
+    h, cul, rec = hub
+    h.open_pairing(60)
+    cul.feed(foreign_ping())
+    await until(lambda: FOREIGN_SERIAL in h.pairing_foreign)
+    h.open_pairing(60)
+    assert h.pairing_foreign == {}
+    # After its factory reset the device pings nobody in particular and is answered.
+    cul.feed(foreign_ping(dst=0))
+    await until(lambda: len(pongs(cul)) == 1)
+    assert FOREIGN_DEV in h.devices

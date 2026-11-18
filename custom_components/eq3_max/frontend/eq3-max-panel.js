@@ -100,6 +100,7 @@ const EN = {
   "getrennt": "disconnected",
   "Neue Geräte 60 s lang annehmen": "Accept new devices for 60 s",
   "Funkmodul nicht verbunden": "Radio module not connected",
+  "{serial} ({address}) möchte sich anlernen, ist aber noch an einer anderen Zentrale ({central}) angelernt. Gerät auf Werkseinstellungen zurücksetzen (Batterien raus, alle Tasten gedrückt halten, Batterien rein bis „rES“) und erneut anlernen.": "{serial} ({address}) wants to pair but is still paired to another central ({central}). Reset the device to factory settings (batteries out, hold all buttons, batteries in until \"rES\") and pair it again.",
   "Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken.": "Pairing open for 60 s – now press the pairing button on the device.",
   "Anlernen (60 s)": "Pair (60 s)",
   "Funkmodul fürs Anlernen": "Radio module for pairing",
@@ -1329,6 +1330,10 @@ class Eq3MaxPanel extends HTMLElement {
             this._call(`pair:${entry.entry_id}`, message, t("Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."));
           },
         }, left > 0 ? t("Anlernen läuft … {n} s", { n: left }) : t("Anlernen (60 s)"))),
+      // Still paired to another central: never answered, the device needs a factory reset.
+      (hub.pairing_foreign || []).length ? h("div", { class: "notice", style: "margin-top:12px" },
+        hub.pairing_foreign.map((f) => h("div", {},
+          t("{serial} ({address}) möchte sich anlernen, ist aber noch an einer anderen Zentrale ({central}) angelernt. Gerät auf Werkseinstellungen zurücksetzen (Batterien raus, alle Tasten gedrückt halten, Batterien rein bis „rES“) und erneut anlernen.", { serial: f.serial, address: f.address, central: f.central })))) : null,
       h("div", { class: "radios" }, radios.map((radio) => h("div", { class: "radio" },
         h("div", { class: "top" },
           h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? t("verbunden") : t("getrennt") }),

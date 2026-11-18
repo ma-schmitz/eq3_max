@@ -258,6 +258,15 @@ async def test_pair_opens_pairing(hass, setup_entry, fake_hub, hass_ws_client):
     assert fake_hub.last.pairing == 60
 
 
+async def test_overview_lists_devices_paired_to_another_central(hass, setup_entry, fake_hub, hass_ws_client):
+    fake_hub.last.pairing_foreign = {"MEQ9000099": {"address": 0x1A2B3C, "central": 0x654321}}
+    client = await hass_ws_client(hass)
+    result = await overview(client)
+    assert result["entries"][0]["hub"]["pairing_foreign"] == [
+        {"serial": "MEQ9000099", "address": "1A2B3C", "central": "654321"}
+    ]
+
+
 async def test_pair_rejects_unknown_entry_and_disconnected_hub(hass, setup_entry, fake_hub, hass_ws_client):
     client = await hass_ws_client(hass)
     reply = await call(client, type="eq3_max/pair", entry_id="nope")

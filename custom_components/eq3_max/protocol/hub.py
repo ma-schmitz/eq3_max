@@ -54,6 +54,7 @@ from .messages import (
     build_time_information,
     decode_ack,
     decode_frame,
+    PairPing,
     decode_pair_ping,
     decode_push_button_state,
     decode_set_temperature,
@@ -331,6 +332,9 @@ class MaxHub:
         self._pairing_until = 0.0
         # Module that answers new devices while pairing is open (None: whichever hears them).
         self.pairing_radio: str | None = None
+        # Devices that asked to pair while the window was open but are still paired to
+        # another central (serial -> address, central); cleared on the next opening.
+        self.pairing_foreign: dict[str, dict[str, int]] = {}
         # Last press per push button: (counter, time).
         self._last_press: dict[int, tuple[int, float]] = {}
         self.raw_history: dict[int, deque[str]] = {}
@@ -1367,6 +1371,7 @@ class MaxHub:
             raise FrameError(f"unknown radio module {radio!r}", key="radio_unknown", name=radio)
         self.pairing_radio = radio
         self._pairing_until = self._now() + seconds
+        self.pairing_foreign = {}
 
     @property
     def pairing_remaining(self) -> float:
@@ -1857,6 +1862,20 @@ class MaxHub:
         )
         self._reply_time(frame.src)
 
+    def _note_foreign_pairing(self, frame: Frame, ping: PairPing, known: MaxDevice | None) -> None:
+        """A new device pings its old central while pairing is open: it still belongs
+        there and is never answered. Say so once instead of staying silent. With the window
+        closed nothing is said: the neighbours' MAX! devices ping their own central."""
+        if known is not None or self._now() >= self._pairing_until or ping.serial in self.pairing_foreign:
+            return
+        self.pairing_foreign[ping.serial] = {"address": frame.src, "central": frame.dst}
+        _LOGGER.warning(
+            "MAX! %s (%06X) wants to pair but is still paired to the central %06X (this central: %06X); "
+            "reset the device to factory settings and pair it again",
+            ping.serial, frame.src, frame.dst, self.address,
+        )
+        self._notify(None)
+
     def _handle_pair(self, frame: Frame, radio: str = MAIN_RADIO) -> None:
         ping = decode_pair_ping(frame.payload)
         known = self.devices.get(frame.src) or next(
@@ -1868,6 +1887,7 @@ class MaxHub:
             )
         to_me = frame.dst == self.address
         if not to_me and frame.dst != 0:
+            self._note_foreign_pairing(frame, ping, known)
             return
         # A ping addressed to us is accepted even from an unknown device and with the
         # pairing window closed: the device was paired to this central before.
