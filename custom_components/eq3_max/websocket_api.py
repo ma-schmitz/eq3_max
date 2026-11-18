@@ -4,6 +4,7 @@ eq3_max/overview    hub, devices, areas, links and configuration of every entry
 eq3_max/subscribe   event {"type": "update"} after changes (debounced)
 eq3_max/link        link two devices (device registry ids)
 eq3_max/unlink      remove a link
+eq3_max/cancel_link drop an open link operation, nothing goes on air
 eq3_max/pair        open pairing for 60 s
 eq3_max/set_config  one whole configuration set: one telegram
 eq3_max/set_radio   radio module a device's commands go through (nothing on air)
@@ -51,6 +52,7 @@ from .services import (
     async_set_week_profile,
     async_set_time,
     async_set_week_profile_days,
+    cancel_link,
     change_link,
     resolve_max_device,
 )
@@ -85,7 +87,7 @@ TYPE_NAMES = {
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     for command in (
-        ws_overview, ws_subscribe, ws_link, ws_unlink, ws_pair, ws_set_config, ws_set_group, ws_set_poll, ws_set_radio,
+        ws_overview, ws_subscribe, ws_link, ws_unlink, ws_cancel_link, ws_pair, ws_set_config, ws_set_group, ws_set_poll, ws_set_radio,
         ws_set_week_profile, ws_copy_week_profile, ws_set_time, ws_rename_radio,
     ):
         websocket_api.async_register_command(hass, command)
@@ -445,6 +447,21 @@ def ws_link(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg
 @callback
 def ws_unlink(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     _ws_change_link(hass, connection, msg, unlink=True)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): "eq3_max/cancel_link", vol.Required("device_id"): str, vol.Optional("partner"): str}
+)
+@callback
+def ws_cancel_link(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Drop an open link operation (partner: serial number); nothing goes on air."""
+    try:
+        dropped = cancel_link(hass, msg["device_id"], msg.get("partner"))
+    except HomeAssistantError as err:
+        _error(connection, msg, err)
+        return
+    connection.send_result(msg["id"], {"cancelled": dropped})
 
 
 @websocket_api.require_admin

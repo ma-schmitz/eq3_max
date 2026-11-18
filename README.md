@@ -192,6 +192,11 @@ services `eq3_max.link` and `eq3_max.unlink` create or remove a link
   other devices. Partners that had it acknowledged in their list get
   RemoveLinkPartner (thermostats immediately, sleepers at their next telegram);
   until acknowledged, this shows on the partner under `ausstehend`.
+- **Cancelling a request.** An open or failed request can be dropped without sending
+  anything: button **"Cancel request"** on the "eQ-3 MAX!" page (tab Links) or the service
+  `eq3_max.cancel_link`. For requests that can never complete, e.g. a removal the device
+  refused (`fehlgeschlagen (abgelehnt)`). At startup, links and requests to devices the
+  integration no longer has (deleted via "Delete device") are dropped by themselves.
 
 ```yaml
 action: eq3_max.link
@@ -240,6 +245,7 @@ WebSocket commands (all administrators only; errors with translated text):
 | `eq3_max/overview` | – | radio modules, devices, areas, links, configuration |
 | `eq3_max/subscribe` | – | event `{"type": "update"}` after changes |
 | `eq3_max/link`, `eq3_max/unlink` | `device_id`, `partner_device_id` | like the services `link`/`unlink` |
+| `eq3_max/cancel_link` | `device_id`, optional `partner` (serial number) | drop open link requests, nothing goes on air; answer `cancelled` |
 | `eq3_max/pair` | `entry_id` | open pairing for 60 s |
 | `eq3_max/rename_radio` | `entry_id`, `radio`, `name` | rename a radio module (the main one is `""`); the integration reloads |
 | `eq3_max/set_config` | `device_id`, `kind` (`temp`/`valve`), `values` | whole set in one telegram; answer `factory_keys` = factory defaults sent along |
@@ -258,6 +264,8 @@ WebSocket commands (all administrators only; errors with translated text):
   device page.
 - `eq3_max.link` / `eq3_max.unlink` – link two devices or remove the
   link, see "Links".
+- `eq3_max.cancel_link` – drop the open link request of a device with one partner
+  (`partner`: serial number or device) or all of them, without sending anything.
 
 ```yaml
 action: eq3_max.set_away

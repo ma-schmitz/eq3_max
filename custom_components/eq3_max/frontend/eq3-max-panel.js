@@ -171,6 +171,9 @@ const EN = {
   "Kopieren": "Copy",
   "Feste Temperatur": "Fixed temperature",
   "Abbrechen": "Cancel",
+  "Auftrag abbrechen": "Cancel request",
+  "Verwirft den offenen Auftrag, ohne etwas an die Geräte zu senden.": "Drops the open request without sending anything to the devices.",
+  "Auftrag für {name} abgebrochen.": "Request for {name} cancelled.",
   "Funkmodul umbenennen": "Rename radio module",
   "Name des Funkmoduls": "Name of the radio module",
   "Speichern": "Save",
@@ -1964,6 +1967,20 @@ class Eq3MaxPanel extends HTMLElement {
       }
       if (item.state === "one_sided") buttons.push(this._linkButton("link", dev, item, t("Verknüpfen")));
       if (item.op !== "remove") buttons.push(this._linkButton("unlink", dev, item, t("Lösen"), true));
+      // Drop the open request without sending anything (e.g. a refused removal, a partner deleted since).
+      if (item.op) {
+        const key = `cancel:${dev.serial}:${item.serial}`;
+        buttons.push(h("button", {
+          class: "action",
+          title: t("Verwirft den offenen Auftrag, ohne etwas an die Geräte zu senden."),
+          disabled: this._busy.has(key) || !dev.device_id,
+          onclick: (ev) => {
+            ev.stopPropagation();
+            this._call(key, { type: "eq3_max/cancel_link", device_id: dev.device_id, partner: item.serial },
+              t("Auftrag für {name} abgebrochen.", { name: item.name }));
+          },
+        }, t("Auftrag abbrechen")));
+      }
       const what = item.op === "remove" ? t("Lösen") : item.op === "add" ? t("Verknüpfen") : null;
       // item.text kommt vom Server auf Deutsch; die bekannten Texte stehen in EN.
       const text = item.text ? t(item.text) : "";

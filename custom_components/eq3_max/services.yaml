@@ -109,3 +109,16 @@ set_time:
         device:
           integration: eq3_max
           multiple: true
+
+cancel_link:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: eq3_max
+    partner:
+      required: false
+      example: "MEQ0000001"
+      selector:
+        text:

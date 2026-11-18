@@ -43,6 +43,7 @@ def by_serial(section):
         {"type": "eq3_max/subscribe"},
         {"type": "eq3_max/link", "device_id": "x", "partner_device_id": "y"},
         {"type": "eq3_max/unlink", "device_id": "x", "partner_device_id": "y"},
+        {"type": "eq3_max/cancel_link", "device_id": "x", "partner": "MEQ9000098"},
         {"type": "eq3_max/pair", "entry_id": "x"},
         {"type": "eq3_max/rename_radio", "entry_id": "x", "radio": "", "name": "EG"},
         {"type": "eq3_max/set_config", "device_id": "x", "kind": "temp", "values": {"komfort": 21}},
@@ -505,6 +506,32 @@ async def test_forced_unlink_over_websocket_and_service(hass, setup_entry, fake_
         blocking=True,
     )
     assert hub.commands[-1] == ("unlink", FK, HT, "force")
+
+
+async def test_cancel_link_over_websocket_and_service(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    client = await hass_ws_client(hass)
+    reply = await call(client, type="eq3_max/link", device_id=device_id(hass, FK), partner_device_id=device_id(hass, HT))
+    assert reply["success"], reply
+    # By serial number: also works for a partner the integration no longer has.
+    reply = await call(client, type="eq3_max/cancel_link", device_id=device_id(hass, FK), partner="MEQ9000007")
+    assert reply["success"] and reply["result"] == {"cancelled": ["MEQ9000007"]}
+    assert hub.commands[-1] == ("cancel_link", FK, "MEQ9000007")
+    # The service takes the partner's device id as well.
+    hub.devices[HT].set_link_op("NEQ9000010", FK, hub.devices[FK].device_type, "add", "ausstehend")
+    await hass.services.async_call(
+        DOMAIN, "cancel_link", {"device_id": device_id(hass, HT), "partner": device_id(hass, FK)}, blocking=True
+    )
+    assert hub.commands[-1] == ("cancel_link", HT, "NEQ9000010")
+    assert hub.devices[HT].pending_links == []
+
+
+async def test_cancel_link_without_request_translated_error(hass, setup_entry, fake_hub, hass_ws_client):
+    client = await hass_ws_client(hass)
+    reply = await call(client, type="eq3_max/cancel_link", device_id=device_id(hass, FK), partner="MEQ9000098")
+    assert not reply["success"]
+    assert reply["error"]["translation_key"] == "link_op_unknown"
+    assert reply["error"]["translation_placeholders"] == {"serial": "MEQ9000098"}
 
 
 async def test_set_time_over_websocket_and_service(hass, setup_entry, fake_hub, hass_ws_client):

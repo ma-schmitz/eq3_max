@@ -46,6 +46,9 @@ FACTORY_RESET_SCHEMA = vol.Schema({vol.Required(ATTR_DEVICE_ID): cv.string})
 LINK_SCHEMA = vol.Schema({vol.Required(ATTR_DEVICE_ID): cv.string, vol.Required(ATTR_PARTNER_DEVICE_ID): cv.string})
 ATTR_FORCE = "force"
 UNLINK_SCHEMA = LINK_SCHEMA.extend({vol.Optional(ATTR_FORCE, default=False): cv.boolean})
+SERVICE_CANCEL_LINK = "cancel_link"
+ATTR_PARTNER = "partner"
+CANCEL_LINK_SCHEMA = vol.Schema({vol.Required(ATTR_DEVICE_ID): cv.string, vol.Optional(ATTR_PARTNER): cv.string})
 SERVICE_SET_WEEK_PROFILE = "set_week_profile"
 SERVICE_COPY_WEEK_PROFILE = "copy_week_profile"
 SERVICE_SET_TIME = "set_time"
@@ -83,6 +86,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_FACTORY_RESET, _async_factory_reset, schema=FACTORY_RESET_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_LINK, _async_link, schema=LINK_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_UNLINK, _async_unlink, schema=UNLINK_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_CANCEL_LINK, _async_cancel_link, schema=CANCEL_LINK_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_SET_WEEK_PROFILE, _async_set_week_profile, schema=SET_WEEK_PROFILE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_COPY_WEEK_PROFILE, _async_copy_week_profile, schema=COPY_WEEK_PROFILE_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_SET_TIME, _async_set_time, schema=SET_TIME_SCHEMA)
@@ -160,6 +164,29 @@ async def _async_unlink(call: ServiceCall) -> None:
         call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_PARTNER_DEVICE_ID], unlink=True,
         force=call.data.get(ATTR_FORCE, False),
     )
+
+
+async def _async_cancel_link(call: ServiceCall) -> None:
+    await async_check_allowed(call.hass, None, call.context, "admin")
+    cancel_link(call.hass, call.data[ATTR_DEVICE_ID], call.data.get(ATTR_PARTNER))
+
+
+def cancel_link(hass: HomeAssistant, device_id: str, partner: str | None = None) -> list[str]:
+    """Drop open link operations of a device (all, or the one with the partner given by
+    serial number or device registry id); nothing goes on air. The partner may be a
+    device the integration no longer has. Returns the partner serials dropped."""
+    entry, device = resolve_max_device(hass, device_id)
+    hub = entry.runtime_data.hub
+    serial = partner
+    if partner:
+        # A device registry id of a known device, otherwise a serial number.
+        registry_device = dr.async_get(hass).async_get(partner)
+        if registry_device is not None:
+            serial = next((v for d, v in registry_device.identifiers if d == DOMAIN), partner)
+    try:
+        return hub.cancel_link(device.address, serial or None)
+    except FrameError as err:
+        raise translated(err, ServiceValidationError) from err
 
 
 def change_link(

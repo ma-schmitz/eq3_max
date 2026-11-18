@@ -7,6 +7,18 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **Verknüpfungsaufträge abbrechen.** Ein offener oder fehlgeschlagener Auftrag lässt sich
+  jetzt verwerfen, ohne dass etwas gesendet wird: Knopf „Auftrag abbrechen“ auf der Seite
+  „eQ-3 MAX!“ (Reiter Verknüpfungen), Dienst `eq3_max.cancel_link` und WebSocket-Befehl
+  `eq3_max/cancel_link`. Bisher blieb ein Auftrag, der nie abgeschlossen werden kann – z. B.
+  ein vom Gerät abgelehntes Lösen zu einem inzwischen gelöschten Partner –, für immer stehen
+  und ließ sich nur durch Stoppen von Home Assistant und Bearbeiten der Speicherdatei entfernen.
+
+### Geändert
+- **Verknüpfungen und Aufträge zu gelöschten Geräten fallen beim Start weg.** Nach „Gerät
+  löschen“ behielten die übrigen Geräte das gelöschte als Partner samt offener Aufträge.
+
 ## [0.9.1] – 2026-11-17
 
 ### Hinzugefügt

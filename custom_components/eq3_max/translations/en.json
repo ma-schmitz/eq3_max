@@ -376,6 +376,20 @@
           "description": "Radiator or wall thermostats."
         }
       }
+    },
+    "cancel_link": {
+      "name": "Cancel link request",
+      "description": "Drops open or failed link requests of a MAX! device without sending anything to the device. For requests that can never complete, e.g. towards a deleted device or a removal the device refused.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "MAX! device with the open request."
+        },
+        "partner": {
+          "name": "Partner",
+          "description": "Serial number (e.g. MEQ0000001) or device of the partner. Empty: all open requests of the device."
+        }
+      }
     }
   },
   "entity": {
@@ -698,6 +712,9 @@
     },
     "not_allowed_admin": {
       "message": "Only administrators may do this"
+    },
+    "link_op_unknown": {
+      "message": "No open link request with {serial}"
     }
   },
   "selector": {

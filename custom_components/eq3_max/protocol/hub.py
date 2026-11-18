@@ -534,6 +534,7 @@ class MaxHub:
         for radio in self._radios.values():
             await radio.transport.start()
             radio.task = asyncio.create_task(radio.scheduler.run())
+        self._forget_unknown_partners()
         for dev in self.devices.values():
             if dev.has_pending:
                 # Going out now: a "failed" mark from the store would make the first
@@ -955,6 +956,58 @@ class MaxHub:
         self._queue_link(target, partner.serial, partner.address, partner.device_type, LINK_REMOVE)
         self._notify(target)
         self._notify(partner)
+
+    def cancel_link(self, address: int, partner_serial: str | None = None) -> list[str]:
+        """Drop open link operations of a device without sending anything.
+
+        With `partner_serial` only the operation for that partner, in both directions
+        (the panel shows an operation stored on the partner at either device); without
+        it every open operation of the device. The partner need not be known any more
+        (deleted devices). Returns the partner serials whose operations were dropped."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError(f"unknown device {address:06X}", key="device_unknown")
+        partners = [partner_serial] if partner_serial else [op["partner"] for op in dev.pending_links]
+        by_serial = {d.serial: d for d in self.devices.values()}
+        dropped: list[str] = []
+        for serial in partners:
+            entry = dev.link_op(serial)
+            if entry is not None:
+                self._cancel_key(self._link_key(dev, entry["address"]))
+                dev.drop_link_op(serial)
+                dropped.append(serial)
+            other = by_serial.get(serial)
+            back = other.link_op(dev.serial) if other is not None else None
+            if other is not None and back is not None:
+                self._cancel_key(self._link_key(other, dev.address))
+                other.drop_link_op(dev.serial)
+                if serial not in dropped:
+                    dropped.append(serial)
+                self._notify(other)
+        if partner_serial and not dropped:
+            raise FrameError(
+                f"no open link operation with {partner_serial}", key="link_op_unknown", serial=partner_serial
+            )
+        for serial in dropped:
+            _LOGGER.info(
+                "MAX! %s (%s): open link operation with %s cancelled, nothing sent",
+                dev.name or dev.serial, dev.serial, serial,
+            )
+        self._notify(dev)
+        return dropped
+
+    def _forget_unknown_partners(self) -> None:
+        """Links and open operations towards devices the integration no longer has
+        (deleted on the device page) can never complete: drop them."""
+        known = {d.serial for d in self.devices.values()}
+        for dev in self.devices.values():
+            gone = {*dev.links, *(op["partner"] for op in dev.pending_links)} - known
+            for serial in sorted(gone):
+                dev.forget_partner(serial)
+                _LOGGER.info(
+                    "MAX! %s (%s): partner %s is no longer known, link and open operation dropped",
+                    dev.name or dev.serial, dev.serial, serial,
+                )
 
     def _change_link(self, a: int, b: int, op: str) -> None:
         for target, partner in plan_link(self.devices, a, b, op):

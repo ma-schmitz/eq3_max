@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Cancel link requests.** An open or failed link request can now be dropped without
+  sending anything: button "Cancel request" on the "eQ-3 MAX!" page (tab Links), service
+  `eq3_max.cancel_link` and WebSocket command `eq3_max/cancel_link`. Until now a request that
+  could never complete – e.g. a removal the device refused, towards a partner deleted since –
+  stayed for good and could only be removed by stopping Home Assistant and editing the
+  storage file.
+
+### Changed
+- **Links and requests to deleted devices are dropped at startup.** After "Delete device"
+  the other devices kept the deleted one as partner and its open requests.
+
 ## [0.9.1] – 2026-11-17
 
 ### Added

@@ -43,6 +43,17 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
 - Bekannt (09.10.2026): Ein Heizkörperthermostat **lehnt das Entfernen eines Wandthermostats ab**;
   Hinzufügen funktioniert.
 - Ein Werksreset löst die Verknüpfungen auch bei den früheren Partnern.
+- **Auftrag abbrechen.** Ein offener oder fehlgeschlagener Auftrag lässt sich verwerfen, ohne
+  dass etwas gesendet wird: Knopf **„Auftrag abbrechen“** daneben auf der Seite „eQ-3 MAX!“, oder
+  ```yaml
+  action: eq3_max.cancel_link
+  data:
+    device_id: <Gerät mit dem Auftrag>
+    partner: MEQ0000001   # Seriennummer oder Gerät; leer: alle Aufträge des Geräts
+  ```
+  Nützlich für Aufträge, die nie abgeschlossen werden können, z. B. ein vom Gerät abgelehntes
+  Lösen. Verknüpfungen und Aufträge zu Geräten, die aus der Integration gelöscht wurden, fallen
+  beim nächsten Start weg.
 - **Altverknüpfungen (ab 0.7.0).** Nach getauschten oder umgezogenen Thermostaten trägt ein
   Gerät manchmal noch einen Partner, den die Integration nicht kennt und der es selbst
   nicht mehr kennt. Der Partner quittiert dann nie: Ein Wandthermostat meldet bei jeder

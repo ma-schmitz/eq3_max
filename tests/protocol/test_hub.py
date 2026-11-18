@@ -3053,3 +3053,80 @@ async def test_contact_talking_to_a_partner_we_want_removed_proves_nothing():
         assert h.devices[FK].links == [HT_S]
     finally:
         await h.stop()
+
+
+# --- Cancelling open link requests ---
+
+from custom_components.eq3_max.protocol.devices import LINK_ADD, LINK_REJECTED, LINK_REMOVE  # noqa: E402
+
+GONE_SERIAL = "MEQ9000098"
+GONE = 0x1A2B3D
+
+
+def link_frames(cul):
+    """Add/RemoveLinkPartner (0x20/0x21) in either send mode."""
+    return [l for l in cul.written if l[:2] in ("Zs", "Zf") and l[8:10] in ("20", "21")]
+
+
+async def test_cancel_link_drops_both_directions_and_sends_nothing(hub):
+    h, cul, rec = hub
+    h.link(HT, FK)
+    await until(lambda: len(link_frames(cul)) == 1)  # the thermostat's part goes out at once
+    ack(cul, HT, link_frames(cul)[0])
+    await until(lambda: h.devices[HT].link_op(FK_S) is None)
+    assert h.devices[FK].link_op(HT_S)["op"] == LINK_ADD
+    assert h.cancel_link(FK, HT_S) == [HT_S]
+    assert h.devices[FK].pending_links == []
+    cul.feed(line(8, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await asyncio.sleep(0.3)
+    assert len(link_frames(cul)) == 1  # the contact got nothing
+
+
+async def test_without_cancel_the_contact_gets_its_part(hub):
+    """Counterpart of the test above: the request does go out on the contact's telegram."""
+    h, cul, rec = hub
+    h.link(HT, FK)
+    await until(lambda: len(link_frames(cul)) == 1)
+    cul.feed(line(8, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: len(link_frames(cul)) == 2)
+
+
+async def test_cancel_link_from_the_other_side_and_all_at_once(hub):
+    h, cul, rec = hub
+    h.link(HT, FK)
+    # The panel shows the thermostat's view of the contact's request: cancelling there works too.
+    assert h.cancel_link(HT, FK_S) == [FK_S]
+    assert h.devices[HT].link_op(FK_S) is None and h.devices[FK].link_op(HT_S) is None
+    fk = h.devices[FK]
+    fk.set_link_op(GONE_SERIAL, GONE, DeviceType.HEATING_THERMOSTAT, LINK_REMOVE, LINK_REJECTED)
+    fk.set_link_op(HT_S, HT, DeviceType.HEATING_THERMOSTAT, LINK_ADD, "wartet auf Gerät")
+    assert sorted(h.cancel_link(FK)) == sorted([GONE_SERIAL, HT_S])
+    assert fk.pending_links == []
+    assert link_status(h.devices, fk).pending == []
+
+
+async def test_cancel_link_without_request_is_refused(hub):
+    h, cul, rec = hub
+    with pytest.raises(FrameError) as err:
+        h.cancel_link(FK, HT_S)
+    assert err.value.key == "link_op_unknown" and err.value.placeholders == {"serial": HT_S}
+
+
+async def test_start_drops_links_and_requests_to_deleted_devices():
+    cul = FakeCul()
+    devs = devices()
+    fk = next(d for d in devs if d.address == FK)
+    fk.links = [GONE_SERIAL, HT_S]
+    fk.set_link_op(GONE_SERIAL, GONE, DeviceType.HEATING_THERMOSTAT, LINK_REMOVE, LINK_REJECTED)
+    rec = Recorder()
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, devs, on_update=rec.updates.append, on_button=lambda d, t: None,
+        on_device_added=rec.added.append, on_problem=rec.problems.append, open_connection=cul.open,
+        ack_timeout=0.05, now=lambda: 1_700_000_000.0, local_now=LocalClock(),
+    )
+    await h.start()
+    try:
+        assert fk.links == [HT_S]
+        assert fk.pending_links == []
+    finally:
+        await h.stop()
