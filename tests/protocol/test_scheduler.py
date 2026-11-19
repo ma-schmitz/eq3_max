@@ -583,3 +583,20 @@ async def test_two_modules_never_send_at_the_same_time():
     finally:
         for task in tasks:
             task.cancel()
+
+
+async def test_pending_lists_the_command_on_air_first_then_the_waiting_ones_in_sending_order(setup):
+    sched, sender, _ = setup
+    assert sched.pending() == []
+    sched.submit(Command(dst=DEV, build=frame, key="set:1"))
+    await until(lambda: len(sender.lines) == 1)
+    sched.submit(Command(dst=DEV, build=frame, key="wp:1:0:1"))
+    sched.submit(Command(dst=0x222222, build=frame))
+    sched.submit(Command(dst=0x333333, build=frame, key="pong:3", priority=PRIO_REPLY))
+    assert sched.pending() == [
+        {"dst": DEV, "key": "set:1", "attempts": 1, "on_air": True},
+        {"dst": 0x333333, "key": "pong:3", "attempts": 0, "on_air": False},
+        {"dst": DEV, "key": "wp:1:0:1", "attempts": 0, "on_air": False},
+        {"dst": 0x222222, "key": None, "attempts": 0, "on_air": False},
+    ]
+    assert sched.queue_length == 3

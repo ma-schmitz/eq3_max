@@ -132,6 +132,16 @@ class RadioScheduler:
     def queue_length(self) -> int:
         return len(self._queue)
 
+    def pending(self) -> list[dict[str, object]]:
+        """What is left to send: the command on air first, then the waiting ones in the
+        order they go out. Per command: dst, key, attempts so far, on_air."""
+        waiting = sorted(self._queue, key=lambda c: (c.priority, c.seq))
+        inflight = [] if self._inflight_cmd is None else [self._inflight_cmd]
+        return [
+            {"dst": cmd.dst, "key": cmd.key, "attempts": cmd.sent, "on_air": cmd is self._inflight_cmd}
+            for cmd in [*inflight, *waiting]
+        ]
+
     @property
     def airtime_last_hour(self) -> float:
         cutoff = self._clock() - WINDOW_S

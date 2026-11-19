@@ -628,3 +628,22 @@ async def test_option_show_on_off_reaches_the_page_without_reload(hass, setup_en
     assert event["id"] == sub_id and event["event"] == {"type": "update"}
     assert (await overview(client))["entries"][0]["show_on_off"] is True
     assert fake_hub.last is hub  # no reload
+
+
+async def test_overview_lists_the_queue_of_a_radio_module(hass, setup_entry, fake_hub, hass_ws_client):
+    hub = fake_hub.last
+    hub.pending = [
+        {"dst": HT, "key": f"set:{HT}", "attempts": 2, "on_air": True},
+        {"dst": HT, "key": f"wp:{HT}:0:1", "attempts": 0, "on_air": False},
+        {"dst": FK, "key": f"link:{FK}:{HT}", "attempts": 0, "on_air": False},
+        {"dst": FK, "key": None, "attempts": 0, "on_air": False},
+    ]
+    client = await hass_ws_client(hass)
+    result = await overview(client)
+    radio = result["entries"][0]["hub"]["radios"][0]
+    assert radio["pending"] == [
+        {"address": f"{HT:06X}", "kind": "set", "attempts": 2, "on_air": True},
+        {"address": f"{HT:06X}", "kind": "wp", "attempts": 0, "on_air": False, "day": 0},
+        {"address": f"{FK:06X}", "kind": "link", "attempts": 0, "on_air": False, "partner": f"{HT:06X}"},
+        {"address": f"{FK:06X}", "kind": "reset", "attempts": 0, "on_air": False},
+    ]

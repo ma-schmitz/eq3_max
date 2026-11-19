@@ -10,6 +10,10 @@ Seitenleiste (nur Administratoren). Auf der Geräteseite des Funkmoduls und jede
 **Kopf:** Name der Zentrale mit Zustand (verbunden / getrennt) und Knopf **„Anlernen (60 s)“**
 mit Countdown. Darunter eine Kachel je Funkmodul: USB-Pfad bzw. Netzwerkziel (der Stift neben dem Namen benennt das Modul um), Warteschlange
 und Sendezeit der letzten Stunde als Balken (Grenze 36 s; gelb ab der Hälfte, rot ab 80 %).
+Ein Klick auf **„Warteschlange N“** klappt die Liste der anstehenden Befehle auf (ab 0.9.3):
+Gerät, Art des Befehls und Zustand („wird gesendet“, „wartet auf Sendezeit“, „wartet“), in
+Sendereihenfolge. Die Zahl zählt die wartenden Befehle; der Befehl, der gerade auf Sendung
+ist, steht zusätzlich in der Liste.
 Eine Leiste mit Kennzahlen zählt Thermostate, gerade heizende Thermostate (Ventil offen),
 offene Fenster, schwache Batterien und auffällige Geräte (ausstehend, nicht quittiert,
 Funkfehler); was nicht null ist, ist farbig hinterlegt.

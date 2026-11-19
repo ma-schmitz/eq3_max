@@ -333,9 +333,29 @@ def _radios(ctx: _Context) -> list[dict[str, Any]]:
                 "queue": st.get("queue", 0),
                 # A command is held back: by the brake, or the stick refused it (LOVF).
                 "waiting_budget": bool(st.get("waiting_budget")),
+                # The command on air first, then the waiting ones in sending order.
+                "pending": [_pending(cmd) for cmd in st.get("pending", [])],
             }
         )
     return result
+
+
+def _pending(cmd: dict[str, Any]) -> dict[str, Any]:
+    """One command of a module's queue for the page. The kind comes from the command
+    key ("set:<address>", "wp:<address>:<day>:<part>", "link:<address>:<partner>", ...);
+    only the factory reset has none."""
+    parts = (cmd.get("key") or "reset").split(":")
+    item: dict[str, Any] = {
+        "address": f"{cmd['dst']:06X}",
+        "kind": parts[0],
+        "attempts": cmd.get("attempts", 0),
+        "on_air": bool(cmd.get("on_air")),
+    }
+    if parts[0] == "wp" and len(parts) > 2 and parts[2].isdigit():
+        item["day"] = int(parts[2])  # 0 = Saturday
+    if parts[0] == "link" and len(parts) > 2 and parts[2].isdigit():
+        item["partner"] = f"{int(parts[2]):06X}"
+    return item
 
 
 def build_overview(hass: HomeAssistant) -> dict[str, Any]:

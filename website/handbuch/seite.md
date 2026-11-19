@@ -10,7 +10,10 @@ sidebar (administrators only). On the device page of the radio module and of eve
 **Header:** name of the central unit with its state (connected / disconnected) and the
 **"Pair (60 s)"** button with countdown. Below it one tile per radio module: USB path or
 network target (the pencil next to the name renames the module), queue and the airtime of the last hour as a bar (limit 36 s; yellow
-from half, red from 80 %). A bar of key figures counts thermostats, thermostats heating
+from half, red from 80 %). A click on **"Queue N"** unfolds the list of pending commands
+(from 0.9.3): device, kind of command and state ("being sent", "waiting for airtime",
+"waiting"), in sending order. The number counts the waiting commands; the command on air is
+listed in addition. A bar of key figures counts thermostats, thermostats heating
 right now (valve open), open windows, low batteries and devices needing attention (pending,
 not acknowledged, radio error); anything that is not zero is highlighted in colour.
 

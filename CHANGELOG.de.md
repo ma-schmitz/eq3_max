@@ -7,6 +7,23 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.3] – 2026-11-19
+
+### Hinzugefügt
+- **Warteschlange ansehen.** „Warteschlange N“ im Kopf der Seite „eQ-3 MAX!“ ist jetzt ein
+  Knopf: ein Klick klappt die Liste der anstehenden Befehle auf – je Befehl das Gerät, die
+  Art (Sollwert / Betriebsart, Wochenprogramm mit Wochentag, Einstellungen, Verknüpfung mit
+  Partner, Uhrzeit, Werksreset …) und der Zustand („wird gesendet“, „wartet auf Sendezeit“,
+  „wartet“, ab dem zweiten Versuch mit Zähler). Die Reihenfolge ist die Sendereihenfolge;
+  der Befehl, der gerade auf Sendung ist, steht zuerst. Bei mehreren Funkmodulen ist die
+  Liste je Modul gegliedert. Die WebSocket-Übersicht (`eq3_max/overview`) liefert dafür je
+  Funkmodul das neue Feld `pending`.
+
+### Behoben
+- **Seite: „wartet auf Sendezeit“ nicht mittig.** Der Hinweis am Funkmodul brach bei wenig
+  Platz im Inneren um und stand dann linksbündig. Er bleibt jetzt einzeilig und mittig; wird
+  es eng, rutscht er als Ganzes in die nächste Zeile.
+
 ## [0.9.2] – 2026-11-19
 
 ### Hinzugefügt

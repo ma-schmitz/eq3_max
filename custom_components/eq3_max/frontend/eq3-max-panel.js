@@ -93,8 +93,8 @@ const EN = {
   "Noch keine Geräte angelernt.": "No devices paired yet.",
   "Sendezeit der letzten Stunde (Grenze {limit} s)": "Airtime of the last hour (limit {limit} s)",
   "Sendezeit": "Airtime",
-  "1 Gerät · Warteschlange {queue}": "1 device · queue {queue}",
-  "{n} Geräte · Warteschlange {queue}": "{n} devices · queue {queue}",
+  "1 Gerät": "1 device",
+  "{n} Geräte": "{n} devices",
   "verbunden": "connected",
   "nicht alle verbunden": "not all connected",
   "getrennt": "disconnected",
@@ -106,6 +106,26 @@ const EN = {
   "Funkmodul fürs Anlernen": "Radio module for pairing",
   "alle Funkmodule": "all radio modules",
   "Warteschlange {queue}": "Queue {queue}",
+  "Warteschlange anzeigen": "Show queue",
+  "Warteschlange ausblenden": "Hide queue",
+  "Die Warteschlange ist leer.": "The queue is empty.",
+  "wird gesendet": "being sent",
+  "wartet": "waiting",
+  "{n}. Versuch": "attempt {n}",
+  "Sollwert / Betriebsart": "Setpoint / mode",
+  "Wochenprogramm": "Week program",
+  "Wochenprogramm {day}": "Week program {day}",
+  "Aufwecken": "Wake-up",
+  "Gruppen-ID": "Group id",
+  "Verknüpfung": "Link",
+  "Verknüpfung mit {name}": "Link with {name}",
+  "Temperatur-Einstellungen": "Temperature settings",
+  "Anzeige": "Display",
+  "Ventil-Einstellungen": "Valve settings",
+  "Uhrzeit": "Time",
+  "Antwort an das Gerät": "Reply to the device",
+  "Werksreset": "Factory reset",
+  "Befehl": "Command",
   "Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.":
     "The airtime is used up (1 % rule); commands go out as soon as time is available again.",
   "wartet auf Sendezeit": "waiting for airtime",
@@ -341,6 +361,8 @@ const HVAC_LABELS = { off: "Aus" };
 const TONE_COLORS = {
   heat: "var(--e3-heat)", open: "var(--e3-open)", alert: "var(--e3-error)", off: "var(--e3-muted)", idle: "var(--e3-accent)",
 };
+// Wochentage, wie MAX! sie zählt (0 = Samstag); so stehen sie in den Befehlsschlüsseln.
+const QUEUE_DAYS = ["Samstag", "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
 const WP_DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const SOURCE_LABELS = { homegear: "Homegear", werksvorgabe: "Werksvorgabe", gesetzt: "gesetzt", gemeldet: "gemeldet" };
 const LINK_LABELS = {
@@ -453,8 +475,8 @@ const STYLE = `
   .hub-head .title { font-weight: 600; font-size: 17px; }
   .hub-head .sub { color: var(--e3-muted); font-size: 13px; }
   .pill {
-    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px;
-    font-size: 13px; font-weight: 500;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 999px; padding: 3px 10px;
+    font-size: 13px; font-weight: 500; text-align: center; white-space: nowrap; flex: none;
     background: color-mix(in srgb, var(--e3-ok) 14%, transparent); color: var(--e3-ok);
   }
   .pill.bad { background: color-mix(in srgb, var(--e3-error) 14%, transparent); color: var(--e3-error); }
@@ -467,8 +489,22 @@ const STYLE = `
     border: 1px solid var(--e3-divider); border-radius: 12px; padding: 10px 12px;
     display: flex; flex-direction: column; gap: 8px; min-width: 0;
   }
-  .radio .top { display: flex; align-items: center; gap: 8px; }
+  .radio .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .radio .name { font-weight: 600; flex: 1; }
+  .qlink {
+    font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+    text-decoration: underline dotted; text-underline-offset: 3px;
+  }
+  .qlink:hover, .qlink:focus-visible { color: var(--primary-text-color); text-decoration-style: solid; }
+  .queue { border: 1px solid var(--e3-divider); border-radius: 12px; padding: 8px 12px; font-size: 13.5px; }
+  .queue .qhead { font-weight: 600; margin: 6px 0 2px; }
+  .queue .qrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 5px 0; border-top: 1px solid var(--e3-divider); }
+  .queue .qrow:first-child, .queue .qhead + .qrow { border-top: 0; }
+  .queue .qrow .who { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .queue .qrow .what { flex: 1 1 auto; color: var(--e3-muted); white-space: nowrap; }
+  .queue .qrow .st { color: var(--e3-muted); white-space: nowrap; margin-left: auto; }
+  .queue .qrow.air .st { color: var(--e3-accent); font-weight: 500; }
+  .queue .qrow.held .st { color: var(--e3-error); font-weight: 500; }
   .radio .conn { display: flex; align-items: center; gap: 6px; color: var(--e3-muted); font-size: 12.5px; min-width: 0; }
   .radio .conn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .radio .conn ha-icon { --mdc-icon-size: 16px; }
@@ -868,6 +904,7 @@ class Eq3MaxPanel extends HTMLElement {
     this._confirm = null; // "serial:kind"
     this._busy = new Set();
     this._pairRadio = {}; // entry_id -> Funkmodul fürs Anlernen ("*" = alle)
+    this._queueOpen = new Set(); // entry_ids, deren Warteschlange aufgeklappt ist
     this._renaming = null; // {entry_id, radio, value}: Funkmodul, dessen Name gerade bearbeitet wird
     this._pairingUntil = {}; // entry_id -> ms
     this._toast = null;
@@ -1307,6 +1344,64 @@ class Eq3MaxPanel extends HTMLElement {
       `${num(airtime)} / ${limit} s`);
   }
 
+  /** "Warteschlange N" als Knopf: klappt die Liste der anstehenden Befehle auf und zu. */
+  _queueToggle(entry, count) {
+    const open = this._queueOpen.has(entry.entry_id);
+    return h("button", {
+      class: "qlink",
+      "aria-expanded": open ? "true" : "false",
+      title: open ? t("Warteschlange ausblenden") : t("Warteschlange anzeigen"),
+      onclick: () => {
+        if (open) this._queueOpen.delete(entry.entry_id);
+        else this._queueOpen.add(entry.entry_id);
+        this._render();
+      },
+    }, t("Warteschlange {queue}", { queue: count }));
+  }
+
+  _queueKind(entry, cmd) {
+    const nameOf = (address) => {
+      const dev = entry.devices.find((d) => d.address === address);
+      return dev ? dev.name : address;
+    };
+    switch (cmd.kind) {
+      case "set": return t("Sollwert / Betriebsart");
+      case "wp": return cmd.day === undefined || !QUEUE_DAYS[cmd.day]
+        ? t("Wochenprogramm") : t("Wochenprogramm {day}", { day: t(QUEUE_DAYS[cmd.day]) });
+      case "wake": return t("Aufwecken");
+      case "group": return t("Gruppen-ID");
+      case "link": return cmd.partner ? t("Verknüpfung mit {name}", { name: nameOf(cmd.partner) }) : t("Verknüpfung");
+      case "cfg_temp": return t("Temperatur-Einstellungen");
+      case "cfg_display": return t("Anzeige");
+      case "cfg_valve": return t("Ventil-Einstellungen");
+      case "time": return t("Uhrzeit");
+      case "pong": return t("Antwort an das Gerät");
+      case "reset": return t("Werksreset");
+      default: return t("Befehl");
+    }
+  }
+
+  /** Was noch zu senden ist: je Funkmodul der Befehl auf Sendung, dann die wartenden. */
+  _renderQueue(entry, radios) {
+    const multi = isMulti(entry);
+    const rows = [];
+    for (const radio of radios) {
+      const pending = radio.pending || [];
+      if (!pending.length) continue;
+      if (multi) rows.push(h("div", { class: "qhead" }, radioLabel(radio)));
+      for (const cmd of pending) {
+        const dev = entry.devices.find((d) => d.address === cmd.address);
+        const held = cmd.on_air && radio.waiting_budget;
+        const state = held ? t("wartet auf Sendezeit") : cmd.on_air ? t("wird gesendet") : t("wartet");
+        rows.push(h("div", { class: `qrow ${held ? "held" : cmd.on_air ? "air" : ""}` },
+          h("span", { class: "who" }, dev ? dev.name : cmd.address),
+          h("span", { class: "what" }, this._queueKind(entry, cmd)),
+          h("span", { class: "st" }, cmd.attempts > 1 ? `${state} · ${t("{n}. Versuch", { n: cmd.attempts })}` : state)));
+      }
+    }
+    return h("div", { class: "queue" }, rows.length ? rows : h("div", { class: "empty", style: "padding:6px 0" }, t("Die Warteschlange ist leer.")));
+  }
+
   _renderHub(entry) {
     const hub = entry.hub;
     const multi = isMulti(entry);
@@ -1318,9 +1413,8 @@ class Eq3MaxPanel extends HTMLElement {
       h("div", { class: "hub-head" },
         h("div", {},
           h("div", { class: "title" }, entry.title),
-          h("div", { class: "sub" }, n === 1
-            ? t("1 Gerät · Warteschlange {queue}", { queue: hub.queue })
-            : t("{n} Geräte · Warteschlange {queue}", { n, queue: hub.queue }))),
+          h("div", { class: "sub" }, n === 1 ? t("1 Gerät") : t("{n} Geräte", { n }), " · ",
+            this._queueToggle(entry, hub.queue))),
         h("span", { class: `pill ${hub.connected ? "" : "bad"}` }, h("span", { class: `dot ${hub.connected ? "ok" : ""}` }),
           hub.connected ? t("verbunden") : multi ? t("nicht alle verbunden") : t("getrennt")),
         h("span", { class: "spacer" }),
@@ -1346,7 +1440,7 @@ class Eq3MaxPanel extends HTMLElement {
         h("div", { class: "top" },
           h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? t("verbunden") : t("getrennt") }),
           this._radioName(entry, radio),
-          multi ? h("span", { class: "sub" }, t("Warteschlange {queue}", { queue: radio.queue })) : null,
+          multi ? h("span", { class: "sub" }, this._queueToggle(entry, radio.queue)) : null,
           radio.waiting_budget
             ? h("span", { class: "pill bad", title: t("Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.") }, t("wartet auf Sendezeit"))
             : null),
@@ -1354,6 +1448,7 @@ class Eq3MaxPanel extends HTMLElement {
           icon(radio.connection === "network" ? "mdi:lan" : "mdi:usb"),
           h("span", {}, `${radio.connection === "network" ? t("Netzwerk") : t("USB")} · ${radio.target}`)),
         this._airtime(radio.airtime, hub.airtime_limit)))),
+      this._queueOpen.has(entry.entry_id) ? this._renderQueue(entry, radios) : null,
       this._renderStats(entry),
     );
   }

@@ -458,7 +458,8 @@ class MaxHub:
 
     def radio_status(self) -> list[dict[str, Any]]:
         """Per module: id, target, connected, version, airtime, queue, waiting_budget
-        (a command is held back for airtime; main first)."""
+        (a command is held back for airtime; main first), pending (the command on air
+        and the waiting ones, see RadioScheduler.pending)."""
         return [
             {
                 "id": radio.id,
@@ -468,6 +469,7 @@ class MaxHub:
                 "airtime": radio.scheduler.airtime_last_hour,
                 "queue": radio.scheduler.queue_length,
                 "waiting_budget": radio.scheduler.waiting_for_budget,
+                "pending": radio.scheduler.pending(),
             }
             for radio in self._radios.values()
         ]

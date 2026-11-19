@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.3] – 2026-11-19
+
+### Added
+- **Look into the queue.** "Queue N" in the header of the "eQ-3 MAX!" page is now a button:
+  a click unfolds the list of pending commands – per command the device, the kind (setpoint
+  / mode, week program with weekday, settings, link with partner, time, factory reset …) and
+  the state ("being sent", "waiting for airtime", "waiting", from the second attempt on with
+  a counter). The order is the sending order; the command on air comes first. With several
+  radio modules the list is grouped by module. The WebSocket overview (`eq3_max/overview`)
+  carries the new field `pending` per radio module for this.
+
+### Fixed
+- **Page: "waiting for airtime" not centred.** With little room the hint at the radio module
+  wrapped inside and was left-aligned then. It now stays on one line and centred; when space
+  runs out it moves to the next line as a whole.
+
 ## [0.9.2] – 2026-11-19
 
 ### Added
