@@ -7,6 +7,41 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.2] – 2026-11-19
+
+### Hinzugefügt
+- **Anlernen: Warnung bei Geräten, die noch an einer anderen Zentrale angelernt sind.** Ein
+  solches Gerät (gebraucht gekauft, aus einem anderen MAX!-System) schickt seine
+  Anlernanfrage an seine alte Zentrale; die Integration beantwortet sie nie – bisher ohne
+  jeden Hinweis. Bei offenem Anlernfenster steht jetzt pro Gerät einmal eine Warnung im Log,
+  und die Seite „eQ-3 MAX!“ zeigt unter dem Anlern-Knopf einen Hinweis: Gerät auf
+  Werkseinstellungen zurücksetzen und neu anlernen. Bei geschlossenem Fenster bleibt es
+  still, damit MAX!-Geräte der Nachbarn das Log nicht füllen.
+- **Verknüpfungsaufträge abbrechen.** Ein offener oder fehlgeschlagener Auftrag lässt sich
+  jetzt verwerfen, ohne dass etwas gesendet wird: Knopf „Auftrag abbrechen“ auf der Seite
+  „eQ-3 MAX!“ (Reiter Verknüpfungen), Dienst `eq3_max.cancel_link` und WebSocket-Befehl
+  `eq3_max/cancel_link`. Bisher blieb ein Auftrag, der nie abgeschlossen werden kann – z. B.
+  ein vom Gerät abgelehntes Lösen zu einem inzwischen gelöschten Partner –, für immer stehen
+  und ließ sich nur durch Stoppen von Home Assistant und Bearbeiten der Speicherdatei entfernen.
+
+### Geändert
+- **Verknüpfungen und Aufträge zu gelöschten Geräten fallen beim Start weg,** soweit sich
+  nichts mehr tun lässt: eine Verknüpfung ohne offenen Auftrag, ein vom Gerät abgelehntes Lösen,
+  ein Verknüpfen. Ein noch wartendes Lösen bleibt stehen – es kann weiter ankommen (z. B. am
+  Fensterkontakt, nachdem sein Thermostat zurückgesetzt und gelöscht wurde) und lässt sich
+  sonst mit „Auftrag abbrechen“ verwerfen. Nach „Gerät löschen“ behielten die übrigen Geräte
+  das gelöschte bisher als Partner samt offener Aufträge.
+- **Seite „eQ-3 MAX!“: Verknüpfungen mit Bereich.** Partner und offene Aufträge stehen als
+  „Name · Bereich“ da, wie schon die Auswahlliste (Diskussion #12).
+
+### Behoben
+- **Seite „eQ-3 MAX!“: Wochenprogramm ließ sich nicht bearbeiten.** „Punkt hinzufügen“ tat
+  nichts, und bei einem Gerät ohne gültiges Programm (z. B. nach einem Werksreset) ging der
+  Reiter gar nicht auf: Die Prüfung der Punkte stürzte ab, sobald sie etwas zu melden hatte
+  (`t is not a function`). Die Thermostatkarte war nicht betroffen (#13).
+
+Die Warnung beim Anlernen und das Abbrechen von Aufträgen stammen von @BSass (#14, #15).
+
 ## [0.9.1] – 2026-11-17
 
 ### Hinzugefügt

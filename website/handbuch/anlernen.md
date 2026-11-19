@@ -15,6 +15,13 @@ stay unanswered. Handy when the device lies next to one module but is meant to r
 another later – or the other way round. The button `button.eq3_max_anlernen` always pairs
 through all modules.
 
+**Nothing happens although the device sends its pairing request?** It is probably still paired
+to another central (bought used, from another MAX! system) and addresses its request to that
+one; the integration never answers it. While the pairing window is open the panel shows a hint
+below the button and the log a warning ("… wants to pair but is still paired to the central
+…"). Reset the device to factory settings (thermostat: batteries out, hold all buttons, insert
+the batteries until "rES" appears) and pair it again.
+
 After a **battery change** a known device re-registers by itself and keeps its values. If a
 thermostat then shows "InS", press the boost button (see [FAQ](../faq.md)).
 

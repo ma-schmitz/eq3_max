@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.2] – 2026-11-19
+
+### Added
+- **Pairing: warning for devices still paired to another central.** Such a device (bought
+  used, from another MAX! system) sends its pairing request to its old central, which the
+  integration never answers – so far without a word. While the pairing window is open it
+  now logs one warning per device and the "eQ-3 MAX!" panel shows a hint below the pairing
+  button: reset the device to factory settings and pair it again. With the window closed it
+  stays silent, so the neighbours' MAX! devices do not fill the log.
+- **Cancel link requests.** An open or failed link request can now be dropped without
+  sending anything: button "Cancel request" on the "eQ-3 MAX!" page (tab Links), service
+  `eq3_max.cancel_link` and WebSocket command `eq3_max/cancel_link`. Until now a request that
+  could never complete – e.g. a removal the device refused, towards a partner deleted since –
+  stayed for good and could only be removed by stopping Home Assistant and editing the
+  storage file.
+
+### Changed
+- **Links and requests to deleted devices are dropped at startup,** as far as nothing can be
+  done about them any more: a link without an open request, a removal the device refused, an
+  addition. A removal still waiting stays – it can still arrive (e.g. at a window contact
+  after its thermostat was reset and deleted) and can otherwise be dropped with "Cancel
+  request". After "Delete device" the other devices used to keep the deleted one as partner
+  and its open requests.
+- **Page "eQ-3 MAX!": links with their area.** Partners and open requests read "name · area",
+  as the selection list already did (discussion #12).
+
+### Fixed
+- **Page "eQ-3 MAX!": the week program could not be edited.** "Add point" did nothing, and for
+  a device without a valid program (e.g. after a factory reset) the tab did not open at all:
+  the check of the points crashed as soon as it had something to report
+  (`t is not a function`). The thermostat card was not affected (#13).
+
+The pairing warning and cancelling requests were contributed by @BSass (#14, #15).
+
 ## [0.9.1] – 2026-11-17
 
 ### Added

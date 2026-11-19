@@ -44,6 +44,7 @@ class FakeHub:
         self.commands = []
         self.pairing = None
         self.pairing_radio = None
+        self.pairing_foreign = {}
         self.started = False
         self.raw_history = {}
         self.resets = []
@@ -135,6 +136,19 @@ class FakeHub:
             self.commands.append(("unlink", a, b, "force"))
             return
         self._change_link("unlink", a, b, "remove")
+
+    def cancel_link(self, address, partner_serial=None):
+        from custom_components.eq3_max.protocol.messages import FrameError
+
+        dev = self.devices[address]
+        partners = [partner_serial] if partner_serial else [op["partner"] for op in dev.pending_links]
+        dropped = [s for s in partners if dev.link_op(s) is not None]
+        if partner_serial and not dropped:
+            raise FrameError("no open link request", key="link_op_unknown", serial=partner_serial)
+        for serial in dropped:
+            dev.drop_link_op(serial)
+        self.commands.append(("cancel_link", address, partner_serial))
+        return dropped
 
     def _change_link(self, name, a, b, op):
         from custom_components.eq3_max.protocol.hub import plan_link

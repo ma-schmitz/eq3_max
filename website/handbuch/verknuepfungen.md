@@ -42,6 +42,17 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
 - Known (09.10.2026): a radiator thermostat **refuses removal of a wall thermostat**;
   adding works.
 - A factory reset also removes the links on the former partners.
+- **Cancelling a request.** An open or failed request can be dropped without sending
+  anything: button **"Cancel request"** next to it on the "eQ-3 MAX!" page, or
+  ```yaml
+  action: eq3_max.cancel_link
+  data:
+    device_id: <device with the request>
+    partner: MEQ0000001   # serial number or device; empty: all requests of the device
+  ```
+  Useful for requests that can never complete, e.g. a removal the device refused. Links and
+  requests to devices deleted from the integration are dropped at the next start; only a removal
+  still waiting stays, it can still arrive.
 - **Leftover links (from 0.7.0).** After thermostats were swapped or moved, a device
   sometimes still holds a partner that the integration does not know and that no longer
   knows it. That partner never acknowledges: a wall thermostat reports a **radio error** on

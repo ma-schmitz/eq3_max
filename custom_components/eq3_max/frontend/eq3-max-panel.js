@@ -100,6 +100,7 @@ const EN = {
   "getrennt": "disconnected",
   "Neue Geräte 60 s lang annehmen": "Accept new devices for 60 s",
   "Funkmodul nicht verbunden": "Radio module not connected",
+  "{serial} ({address}) möchte sich anlernen, ist aber noch an einer anderen Zentrale ({central}) angelernt. Gerät auf Werkseinstellungen zurücksetzen (Batterien raus, alle Tasten gedrückt halten, Batterien rein bis „rES“) und erneut anlernen.": "{serial} ({address}) wants to pair but is still paired to another central ({central}). Reset the device to factory settings (batteries out, hold all buttons, batteries in until \"rES\") and pair it again.",
   "Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken.": "Pairing open for 60 s – now press the pairing button on the device.",
   "Anlernen (60 s)": "Pair (60 s)",
   "Funkmodul fürs Anlernen": "Radio module for pairing",
@@ -171,6 +172,9 @@ const EN = {
   "Kopieren": "Copy",
   "Feste Temperatur": "Fixed temperature",
   "Abbrechen": "Cancel",
+  "Auftrag abbrechen": "Cancel request",
+  "Verwirft den offenen Auftrag, ohne etwas an die Geräte zu senden.": "Drops the open request without sending anything to the devices.",
+  "Auftrag für {name} abgebrochen.": "Request for {name} cancelled.",
   "Funkmodul umbenennen": "Rename radio module",
   "Name des Funkmoduls": "Name of the radio module",
   "Speichern": "Save",
@@ -737,6 +741,11 @@ function targetText(value, onOff) {
   if (onOff && value === ON_TEMPERATURE) return "On";
   if (onOff && value === OFF_TEMPERATURE) return "Off";
   return `${num(value)} °C`;
+}
+
+// Devices of different rooms often carry the same name (#7, discussion #12).
+function nameWithArea(ref) {
+  return ref.area ? `${ref.name} · ${ref.area}` : ref.name;
 }
 
 function plainNum(value) {
@@ -1329,6 +1338,10 @@ class Eq3MaxPanel extends HTMLElement {
             this._call(`pair:${entry.entry_id}`, message, t("Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."));
           },
         }, left > 0 ? t("Anlernen läuft … {n} s", { n: left }) : t("Anlernen (60 s)"))),
+      // Still paired to another central: never answered, the device needs a factory reset.
+      (hub.pairing_foreign || []).length ? h("div", { class: "notice", style: "margin-top:12px" },
+        hub.pairing_foreign.map((f) => h("div", {},
+          t("{serial} ({address}) möchte sich anlernen, ist aber noch an einer anderen Zentrale ({central}) angelernt. Gerät auf Werkseinstellungen zurücksetzen (Batterien raus, alle Tasten gedrückt halten, Batterien rein bis „rES“) und erneut anlernen.", { serial: f.serial, address: f.address, central: f.central })))) : null,
       h("div", { class: "radios" }, radios.map((radio) => h("div", { class: "radio" },
         h("div", { class: "top" },
           h("span", { class: `dot ${radio.connected ? "ok" : ""}`, title: radio.connected ? t("verbunden") : t("getrennt") }),
@@ -1607,8 +1620,9 @@ class Eq3MaxPanel extends HTMLElement {
   _wpValidate(points) {
     let last = -1;
     for (let i = 0; i < points.length; i++) {
-      const t = Number(String(points[i].temperature).replace(",", "."));
-      if (!Number.isFinite(t) || t < 4.5 || t > 30.5 || Math.round(t * 2) !== t * 2) {
+      // Not "t": that is the translation the messages below go through (#13).
+      const temp = Number(String(points[i].temperature).replace(",", "."));
+      if (!Number.isFinite(temp) || temp < 4.5 || temp > 30.5 || Math.round(temp * 2) !== temp * 2) {
         return t("Punkt {n}: Temperatur muss zwischen 4,5 und 30,5 °C in 0,5-Schritten liegen", { n: i + 1 });
       }
       if (i === points.length - 1) break;
@@ -1953,7 +1967,7 @@ class Eq3MaxPanel extends HTMLElement {
     const rows = [];
     for (const partner of dev.links.partners) {
       rows.push(h("div", { class: "row" },
-        h("span", { class: "grow" }, partner.name),
+        h("span", { class: "grow" }, nameWithArea(partner)),
         chip(t("verknüpft"), "ok"),
         this._linkButton("unlink", dev, partner, t("Lösen"), true)));
     }
@@ -1964,11 +1978,25 @@ class Eq3MaxPanel extends HTMLElement {
       }
       if (item.state === "one_sided") buttons.push(this._linkButton("link", dev, item, t("Verknüpfen")));
       if (item.op !== "remove") buttons.push(this._linkButton("unlink", dev, item, t("Lösen"), true));
+      // Drop the open request without sending anything (e.g. a refused removal, a partner deleted since).
+      if (item.op) {
+        const key = `cancel:${dev.serial}:${item.serial}`;
+        buttons.push(h("button", {
+          class: "action",
+          title: t("Verwirft den offenen Auftrag, ohne etwas an die Geräte zu senden."),
+          disabled: this._busy.has(key) || !dev.device_id,
+          onclick: (ev) => {
+            ev.stopPropagation();
+            this._call(key, { type: "eq3_max/cancel_link", device_id: dev.device_id, partner: item.serial },
+              t("Auftrag für {name} abgebrochen.", { name: item.name }));
+          },
+        }, t("Auftrag abbrechen")));
+      }
       const what = item.op === "remove" ? t("Lösen") : item.op === "add" ? t("Verknüpfen") : null;
       // item.text kommt vom Server auf Deutsch; die bekannten Texte stehen in EN.
       const text = item.text ? t(item.text) : "";
       rows.push(h("div", { class: "row" },
-        h("span", { class: "grow" }, item.name),
+        h("span", { class: "grow" }, nameWithArea(item)),
         chip(LINK_LABELS[item.state] ? t(LINK_LABELS[item.state]) : item.state, LINK_CHIP[item.state] || ""),
         buttons,
         h("span", { class: "hint" }, what ? t("{what}: {text}", { what, text }) : text)));
@@ -1976,7 +2004,7 @@ class Eq3MaxPanel extends HTMLElement {
 
     const select = h("select", { "data-focus": `cand:${dev.serial}`, "aria-label": t("Partner auswählen") },
       h("option", { value: "" }, dev.candidates.length ? t("Partner auswählen …") : t("kein weiteres Gerät möglich")),
-      dev.candidates.map((c) => h("option", { value: c.serial }, c.area ? `${c.name} · ${c.area}` : c.name)));
+      dev.candidates.map((c) => h("option", { value: c.serial }, nameWithArea(c))));
     if (this._candidate && dev.candidates.some((c) => c.serial === this._candidate)) select.value = this._candidate;
     select.addEventListener("change", () => { this._candidate = select.value; this._render(); });
     const chosen = dev.candidates.find((c) => c.serial === select.value);

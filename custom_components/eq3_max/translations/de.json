@@ -376,6 +376,20 @@
           "description": "Heizkörper- oder Wandthermostate."
         }
       }
+    },
+    "cancel_link": {
+      "name": "Verknüpfungsauftrag abbrechen",
+      "description": "Verwirft offene oder fehlgeschlagene Verknüpfungsaufträge eines MAX!-Geräts, ohne etwas an das Gerät zu senden. Für Aufträge, die nie abgeschlossen werden können, z. B. zu einem gelöschten Gerät oder ein vom Gerät abgelehntes Lösen.",
+      "fields": {
+        "device_id": {
+          "name": "Gerät",
+          "description": "MAX!-Gerät mit dem offenen Auftrag."
+        },
+        "partner": {
+          "name": "Partner",
+          "description": "Seriennummer (z. B. MEQ0000001) oder Gerät des Partners. Leer: alle offenen Aufträge des Geräts."
+        }
+      }
     }
   },
   "entity": {
@@ -698,6 +712,9 @@
     },
     "not_allowed_admin": {
       "message": "Das dürfen nur Administratoren"
+    },
+    "link_op_unknown": {
+      "message": "Kein offener Verknüpfungsauftrag mit {serial}"
     }
   },
   "selector": {

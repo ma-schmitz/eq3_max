@@ -54,6 +54,7 @@ from .messages import (
     build_time_information,
     decode_ack,
     decode_frame,
+    PairPing,
     decode_pair_ping,
     decode_push_button_state,
     decode_set_temperature,
@@ -331,6 +332,9 @@ class MaxHub:
         self._pairing_until = 0.0
         # Module that answers new devices while pairing is open (None: whichever hears them).
         self.pairing_radio: str | None = None
+        # Devices that asked to pair while the window was open but are still paired to
+        # another central (serial -> address, central); cleared on the next opening.
+        self.pairing_foreign: dict[str, dict[str, int]] = {}
         # Last press per push button: (counter, time).
         self._last_press: dict[int, tuple[int, float]] = {}
         self.raw_history: dict[int, deque[str]] = {}
@@ -534,6 +538,7 @@ class MaxHub:
         for radio in self._radios.values():
             await radio.transport.start()
             radio.task = asyncio.create_task(radio.scheduler.run())
+        self._forget_unknown_partners()
         for dev in self.devices.values():
             if dev.has_pending:
                 # Going out now: a "failed" mark from the store would make the first
@@ -956,6 +961,64 @@ class MaxHub:
         self._notify(target)
         self._notify(partner)
 
+    def cancel_link(self, address: int, partner_serial: str | None = None) -> list[str]:
+        """Drop open link operations of a device without sending anything.
+
+        With `partner_serial` only the operation for that partner, in both directions
+        (the panel shows an operation stored on the partner at either device); without
+        it every open operation of the device. The partner need not be known any more
+        (deleted devices). Returns the partner serials whose operations were dropped."""
+        dev = self.devices.get(address)
+        if dev is None:
+            raise FrameError(f"unknown device {address:06X}", key="device_unknown")
+        partners = [partner_serial] if partner_serial else [op["partner"] for op in dev.pending_links]
+        by_serial = {d.serial: d for d in self.devices.values()}
+        dropped: list[str] = []
+        for serial in partners:
+            entry = dev.link_op(serial)
+            if entry is not None:
+                self._cancel_key(self._link_key(dev, entry["address"]))
+                dev.drop_link_op(serial)
+                dropped.append(serial)
+            other = by_serial.get(serial)
+            back = other.link_op(dev.serial) if other is not None else None
+            if other is not None and back is not None:
+                self._cancel_key(self._link_key(other, dev.address))
+                other.drop_link_op(dev.serial)
+                if serial not in dropped:
+                    dropped.append(serial)
+                self._notify(other)
+        if partner_serial and not dropped:
+            raise FrameError(
+                f"no open link operation with {partner_serial}", key="link_op_unknown", serial=partner_serial
+            )
+        for serial in dropped:
+            _LOGGER.info(
+                "MAX! %s (%s): open link operation with %s cancelled, nothing sent",
+                dev.name or dev.serial, dev.serial, serial,
+            )
+        self._notify(dev)
+        return dropped
+
+    def _forget_unknown_partners(self) -> None:
+        """What can never be settled with a device the integration no longer has (deleted on
+        the device page): a link nothing is outstanding for (only the serial is known, there
+        is no address to send a removal to), a removal the device refused, an addition.
+        A removal still waiting stays: it carries the address and can complete, e.g. at a
+        window contact after its partner was reset and then deleted."""
+        known = {d.serial for d in self.devices.values()}
+        for dev in self.devices.values():
+            gone = {*dev.links, *(op["partner"] for op in dev.pending_links)} - known
+            for serial in sorted(gone):
+                op = dev.link_op(serial)
+                if op is not None and op["op"] == LINK_REMOVE and op["state"] != LINK_REJECTED:
+                    continue
+                dev.forget_partner(serial)
+                _LOGGER.info(
+                    "MAX! %s (%s): partner %s is no longer known, link and open operation dropped",
+                    dev.name or dev.serial, dev.serial, serial,
+                )
+
     def _change_link(self, a: int, b: int, op: str) -> None:
         for target, partner in plan_link(self.devices, a, b, op):
             current = target.link_op(partner.serial)
@@ -1367,6 +1430,7 @@ class MaxHub:
             raise FrameError(f"unknown radio module {radio!r}", key="radio_unknown", name=radio)
         self.pairing_radio = radio
         self._pairing_until = self._now() + seconds
+        self.pairing_foreign = {}
 
     @property
     def pairing_remaining(self) -> float:
@@ -1857,6 +1921,20 @@ class MaxHub:
         )
         self._reply_time(frame.src)
 
+    def _note_foreign_pairing(self, frame: Frame, ping: PairPing, known: MaxDevice | None) -> None:
+        """A new device pings its old central while pairing is open: it still belongs
+        there and is never answered. Say so once instead of staying silent. With the window
+        closed nothing is said: the neighbours' MAX! devices ping their own central."""
+        if known is not None or self._now() >= self._pairing_until or ping.serial in self.pairing_foreign:
+            return
+        self.pairing_foreign[ping.serial] = {"address": frame.src, "central": frame.dst}
+        _LOGGER.warning(
+            "MAX! %s (%06X) wants to pair but is still paired to the central %06X (this central: %06X); "
+            "reset the device to factory settings and pair it again",
+            ping.serial, frame.src, frame.dst, self.address,
+        )
+        self._notify(None)
+
     def _handle_pair(self, frame: Frame, radio: str = MAIN_RADIO) -> None:
         ping = decode_pair_ping(frame.payload)
         known = self.devices.get(frame.src) or next(
@@ -1868,6 +1946,7 @@ class MaxHub:
             )
         to_me = frame.dst == self.address
         if not to_me and frame.dst != 0:
+            self._note_foreign_pairing(frame, ping, known)
             return
         # A ping addressed to us is accepted even from an unknown device and with the
         # pairing window closed: the device was paired to this central before.

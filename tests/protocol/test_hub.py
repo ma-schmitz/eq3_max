@@ -3053,3 +3053,160 @@ async def test_contact_talking_to_a_partner_we_want_removed_proves_nothing():
         assert h.devices[FK].links == [HT_S]
     finally:
         await h.stop()
+
+
+# --- Pairing request of a device still paired to another central ---
+
+FOREIGN_DEV = 0x1A2B3C
+FOREIGN_CENTRAL = 0x654321
+FOREIGN_SERIAL = "MEQ9000099"
+
+
+def foreign_ping(dst=FOREIGN_CENTRAL):
+    payload = "1101A1" + FOREIGN_SERIAL.encode().hex().upper()
+    return line(0, 0x04, MsgType.PAIR_PING, FOREIGN_DEV, dst, 0, payload)
+
+
+def pongs(cul):
+    return [l for l in cul.written if l[:2] in ("Zs", "Zf") and l[8:10] == "01"]
+
+
+async def test_pairing_ping_to_another_central_warns_once_and_stays_unanswered(hub, caplog):
+    h, cul, rec = hub
+    h.open_pairing(60)
+    with caplog.at_level(logging.WARNING):
+        for _ in range(3):
+            cul.feed(foreign_ping())
+        await until(lambda: FOREIGN_SERIAL in h.pairing_foreign)
+        await asyncio.sleep(0.2)
+    warnings = [r.getMessage() for r in caplog.records if "still paired to the central" in r.getMessage()]
+    assert warnings == [
+        "MAX! MEQ9000099 (1A2B3C) wants to pair but is still paired to the central 654321 "
+        f"(this central: {CENTRAL:06X}); reset the device to factory settings and pair it again"
+    ]
+    assert h.pairing_foreign == {FOREIGN_SERIAL: {"address": FOREIGN_DEV, "central": FOREIGN_CENTRAL}}
+    assert None in rec.updates  # the panel learns about it
+    assert pongs(cul) == []
+    assert FOREIGN_DEV not in h.devices
+
+
+async def test_pairing_ping_to_another_central_is_silent_with_window_closed(hub, caplog):
+    h, cul, rec = hub
+    with caplog.at_level(logging.WARNING):
+        cul.feed(foreign_ping())
+        await asyncio.sleep(0.3)
+    assert not [r for r in caplog.records if "still paired" in r.getMessage()]
+    assert h.pairing_foreign == {}
+
+
+async def test_new_pairing_window_clears_foreign_and_reset_device_pairs(hub):
+    h, cul, rec = hub
+    h.open_pairing(60)
+    cul.feed(foreign_ping())
+    await until(lambda: FOREIGN_SERIAL in h.pairing_foreign)
+    h.open_pairing(60)
+    assert h.pairing_foreign == {}
+    # After its factory reset the device pings nobody in particular and is answered.
+    cul.feed(foreign_ping(dst=0))
+    await until(lambda: len(pongs(cul)) == 1)
+    assert FOREIGN_DEV in h.devices
+
+
+# --- Cancelling open link requests ---
+
+from custom_components.eq3_max.protocol.devices import LINK_ADD, LINK_REJECTED, LINK_REMOVE  # noqa: E402
+
+GONE_SERIAL = "MEQ9000098"
+GONE = 0x1A2B3D
+
+
+def link_frames(cul):
+    """Add/RemoveLinkPartner (0x20/0x21) in either send mode."""
+    return [l for l in cul.written if l[:2] in ("Zs", "Zf") and l[8:10] in ("20", "21")]
+
+
+async def test_cancel_link_drops_both_directions_and_sends_nothing(hub):
+    h, cul, rec = hub
+    h.link(HT, FK)
+    await until(lambda: len(link_frames(cul)) == 1)  # the thermostat's part goes out at once
+    ack(cul, HT, link_frames(cul)[0])
+    await until(lambda: h.devices[HT].link_op(FK_S) is None)
+    assert h.devices[FK].link_op(HT_S)["op"] == LINK_ADD
+    assert h.cancel_link(FK, HT_S) == [HT_S]
+    assert h.devices[FK].pending_links == []
+    cul.feed(line(8, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await asyncio.sleep(0.3)
+    assert len(link_frames(cul)) == 1  # the contact got nothing
+
+
+async def test_without_cancel_the_contact_gets_its_part(hub):
+    """Counterpart of the test above: the request does go out on the contact's telegram."""
+    h, cul, rec = hub
+    h.link(HT, FK)
+    await until(lambda: len(link_frames(cul)) == 1)
+    cul.feed(line(8, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: len(link_frames(cul)) == 2)
+
+
+async def test_cancel_link_from_the_other_side_and_all_at_once(hub):
+    h, cul, rec = hub
+    h.link(HT, FK)
+    # The panel shows the thermostat's view of the contact's request: cancelling there works too.
+    assert h.cancel_link(HT, FK_S) == [FK_S]
+    assert h.devices[HT].link_op(FK_S) is None and h.devices[FK].link_op(HT_S) is None
+    fk = h.devices[FK]
+    fk.set_link_op(GONE_SERIAL, GONE, DeviceType.HEATING_THERMOSTAT, LINK_REMOVE, LINK_REJECTED)
+    fk.set_link_op(HT_S, HT, DeviceType.HEATING_THERMOSTAT, LINK_ADD, "wartet auf Gerät")
+    assert sorted(h.cancel_link(FK)) == sorted([GONE_SERIAL, HT_S])
+    assert fk.pending_links == []
+    assert link_status(h.devices, fk).pending == []
+
+
+async def test_cancel_link_without_request_is_refused(hub):
+    h, cul, rec = hub
+    with pytest.raises(FrameError) as err:
+        h.cancel_link(FK, HT_S)
+    assert err.value.key == "link_op_unknown" and err.value.placeholders == {"serial": HT_S}
+
+
+async def test_start_drops_links_and_requests_to_deleted_devices():
+    cul = FakeCul()
+    devs = devices()
+    fk = next(d for d in devs if d.address == FK)
+    fk.links = [GONE_SERIAL, HT_S]
+    fk.set_link_op(GONE_SERIAL, GONE, DeviceType.HEATING_THERMOSTAT, LINK_REMOVE, LINK_REJECTED)
+    rec = Recorder()
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, devs, on_update=rec.updates.append, on_button=lambda d, t: None,
+        on_device_added=rec.added.append, on_problem=rec.problems.append, open_connection=cul.open,
+        ack_timeout=0.05, now=lambda: 1_700_000_000.0, local_now=LocalClock(),
+    )
+    await h.start()
+    try:
+        assert fk.links == [HT_S]
+        assert fk.pending_links == []
+    finally:
+        await h.stop()
+
+
+async def test_start_keeps_a_waiting_removal_towards_a_deleted_device():
+    """Reset a thermostat, then delete it: the contact still has to be told, and the
+    request carries the address it needs."""
+    cul = FakeCul()
+    devs = devices()
+    fk = next(d for d in devs if d.address == FK)
+    fk.links = [GONE_SERIAL]
+    fk.set_link_op(GONE_SERIAL, GONE, DeviceType.HEATING_THERMOSTAT, LINK_REMOVE, "wartet auf Gerät")
+    fk.set_link_op("MEQ9000097", 0x1A2B3E, DeviceType.HEATING_THERMOSTAT, LINK_ADD, "wartet auf Gerät")
+    rec = Recorder()
+    h = MaxHub(
+        "/dev/serial/by-path/x", CENTRAL, devs, on_update=rec.updates.append, on_button=lambda d, t: None,
+        on_device_added=rec.added.append, on_problem=rec.problems.append, open_connection=cul.open,
+        ack_timeout=0.05, now=lambda: 1_700_000_000.0, local_now=LocalClock(),
+    )
+    await h.start()
+    try:
+        assert fk.links == [GONE_SERIAL]
+        assert [(op["partner"], op["op"]) for op in fk.pending_links] == [(GONE_SERIAL, LINK_REMOVE)]
+    finally:
+        await h.stop()

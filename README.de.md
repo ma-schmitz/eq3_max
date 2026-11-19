@@ -186,6 +186,12 @@ lösen sie (Telegramme 0x20 AddLinkPartner und 0x21 RemoveLinkPartner, wie FHEM
   übrigen Geräte. Partner, die es quittiert in ihrer Liste hatten, bekommen
   RemoveLinkPartner (Thermostate gleich, Schläfer beim nächsten Telegramm);
   bis zur Quittung steht das beim Partner unter `ausstehend`.
+- **Auftrag abbrechen.** Ein offener oder fehlgeschlagener Auftrag lässt sich verwerfen, ohne
+  dass etwas gesendet wird: Knopf **„Auftrag abbrechen“** auf der Seite „eQ-3 MAX!“ (Reiter
+  Verknüpfungen) oder Dienst `eq3_max.cancel_link`. Für Aufträge, die nie abgeschlossen werden
+  können, z. B. ein vom Gerät abgelehntes Lösen (`fehlgeschlagen (abgelehnt)`). Verknüpfungen
+  und Aufträge zu Geräten, die die Integration nicht mehr hat (über „Gerät löschen“
+  entfernt), fallen beim Start von selbst weg; nur ein noch wartendes Lösen bleibt stehen.
 
 ```yaml
 action: eq3_max.link
@@ -234,6 +240,7 @@ WebSocket-Befehle (alle nur für Administratoren; Fehler in der Sprache des Benu
 | `eq3_max/overview` | – | Funkmodule, Geräte, Bereiche, Verknüpfungen, Konfiguration |
 | `eq3_max/subscribe` | – | Ereignis `{"type": "update"}` nach Änderungen |
 | `eq3_max/link`, `eq3_max/unlink` | `device_id`, `partner_device_id` | wie die Dienste `link`/`unlink` |
+| `eq3_max/cancel_link` | `device_id`, optional `partner` (Seriennummer) | offene Verknüpfungsaufträge verwerfen, ohne etwas zu senden; Antwort `cancelled` |
 | `eq3_max/pair` | `entry_id` | Anlernen 60 s öffnen |
 | `eq3_max/rename_radio` | `entry_id`, `radio`, `name` | Funkmodul umbenennen (das Hauptmodul ist `""`); die Integration lädt neu |
 | `eq3_max/set_config` | `device_id`, `kind` (`temp`/`valve`), `values` | ganzer Satz in einem Telegramm; Antwort `factory_keys` = mitgesendete Werksvorgaben |
@@ -252,6 +259,8 @@ WebSocket-Befehle (alle nur für Administratoren; Fehler in der Sprache des Benu
   Geräteseite.
 - `eq3_max.link` / `eq3_max.unlink` – zwei Geräte verknüpfen bzw. die
   Verknüpfung lösen, siehe „Verknüpfungen“.
+- `eq3_max.cancel_link` – den offenen Verknüpfungsauftrag eines Geräts mit einem Partner
+  (`partner`: Seriennummer oder Gerät) oder alle verwerfen, ohne etwas zu senden.
 
 ```yaml
 action: eq3_max.set_away
