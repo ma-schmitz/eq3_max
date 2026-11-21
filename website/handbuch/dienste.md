@@ -77,9 +77,19 @@ data:
 - **The program applies to the whole room (from 0.7.0).** Wall thermostat and radiators
   each switch by their own copy. If you write days to a thermostat that is linked through
   a wall thermostat, the integration writes the same days to the other thermostats of the
-  room as well. The service waits for the named device; the others run alongside, their
+  room as well. The service waits for every named device; the others run alongside, their
   progress is shown in the "Week program" tab. With five devices that is up to 70 telegrams
-  for a whole week.
+  for a whole week. If a thermostat of the room is still busy with other days, the
+  integration writes the new days to it afterwards (from 0.10.0; before, it missed them).
+  If a [virtual wall thermostat](virtuelle-geraete.md), which sends nothing itself, is the
+  only or the first named device, the service waits until all thermostats of the room have
+  taken the program; otherwise it waits for the named ones only. If one fails, the
+  reason is shown at that thermostat; the service reports it only if that thermostat is
+  named itself. With a used-up
+  airtime budget that can take a long time, and an automation calling the service waits
+  that long. If you name the wall thermostat together with its radiators (or copy into a
+  room), the integration writes each thermostat once but still waits for every named one and
+  reports its failure; it does not write the source of a copy again.
 - The integration cannot read the program (the devices do not report it). It remembers the
   last acknowledged days per device; they are in the diagnostics and on the
   "eQ-3 MAX!" panel (data basis `week_profile`).

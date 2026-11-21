@@ -64,7 +64,11 @@ ohne Wandthermostat steht die Ist-Temperatur deshalb oft stundenlang still.
 Mit `select.…_ist_abfragen` stößt eq3_max das Gerät in einem festen Abstand an, aber nur,
 wenn in dieser Zeit keine Meldung von selbst kam: Sollwert um 0,5 °C hoch (an der oberen
 Grenze runter), warten, bis das Gerät seinen Status mit der Ist-Temperatur schickt (gemessen
-20 s bis gut 3 min, je nach Gerät; nach 5 min gibt eq3_max auf), dann zurück. Im Automatikbetrieb geht es danach zurück auf Automatik. Home
+20 s bis gut 3 min, je nach Gerät; nach 5 min gibt eq3_max auf), dann zurück. Im Automatikbetrieb geht es danach zurück auf Automatik; eine dort am Handrad
+geänderte Temperatur bekommt das Gerät mit zurück, solange ihr Schaltpunkt nicht vorbei ist.
+Solange eine in Automatik aus Home Assistant gesetzte Temperatur gilt, pausiert die Abfrage
+für dieses Thermostat (bis zum Schaltpunkt oder bis das Gerät etwas anderes meldet, höchstens
+12 Stunden). Home
 Assistant zeigt während des Anstoßes weiter den echten Sollwert; ein eigener Befehl in der
 Zeit hat Vorrang.
 

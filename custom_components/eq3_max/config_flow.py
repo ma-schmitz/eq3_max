@@ -64,11 +64,13 @@ from .protocol.transport import open_serial, open_tcp
 
 _ADDRESS_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
 _COMMAND_STATE = (
-    "pending_target", "pending_mode", "pending_until", "command_failed", "pending_config", "config_failed",
+    "pending_target", "pending_mode", "pending_until", "pending_queued", "command_failed", "pending_config", "config_failed",
     "pending_links", "pending_group", "group_failed",
 )
 # Learnt at runtime and kept in the store, not part of the imported snapshot.
-_RUNTIME_STATE = (*_COMMAND_STATE, "last_comfort", "rssi_by_radio", "poll_minutes", "measured_at", "window_changed_at")
+_RUNTIME_STATE = (*_COMMAND_STATE, "last_comfort", "rssi_by_radio", "poll_minutes", "measured_at", "window_changed_at",
+                  "source_ok", "delivered", "sent_measured", "sent_at", "override_target", "override_until",
+                  "resume_mode", "resume_target", "state_at", "ha_override_target", "ha_override_at")
 
 
 def entry_item(device: MaxDevice) -> dict[str, Any]:
@@ -79,6 +81,10 @@ def entry_item(device: MaxDevice) -> dict[str, Any]:
     # An imported device starts on the main module (the default).
     if not data.get("radio"):
         data.pop("radio", None)
+    # Only virtual devices carry these; a real device's entry stays as before.
+    for key in ("virtual", "source", "removing"):
+        if not data.get(key):
+            data.pop(key, None)
     return data
 
 
@@ -554,7 +560,9 @@ class MaxCulOptionsFlow(OptionsFlow):
             if hub is not None:
                 for dev in list(hub.devices.values()):
                     dev.rssi_by_radio.pop(radio, None)
-                    if dev.radio == radio:
+                    if dev.radio == radio and dev.virtual:
+                        dev.radio = ""  # no module of its own: nothing to move (the entry follows below)
+                    elif dev.radio == radio:
                         coordinator.async_set_radio(dev.address, "")
             # Its devices go back to the main module; the registry device goes.
             devices = [

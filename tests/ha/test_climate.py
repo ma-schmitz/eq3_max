@@ -174,10 +174,15 @@ async def test_set_preset_keeps_queued_temperature(hass, setup_entry, fake_hub):
 
 
 async def test_set_temperature_with_hvac_mode_auto_switches_to_auto(hass, setup_entry, fake_hub):
+    """Auto with a temperature: back to the program, the temperature holds until its next
+    switch point; Auto without a temperature: plain program."""
     hub = fake_hub.last
     await push(hass, hub, HT, target=18.0, mode=Mode.MANUAL)
     await hass.services.async_call("climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 21, "hvac_mode": "auto"}, blocking=True)
-    assert hub.commands == [(HT, None, Mode.AUTO)]
+    assert hub.commands == [(HT, 21.0, Mode.AUTO)]
+    ent = hass.data["climate"].get_entity(E)
+    await ent.async_set_temperature(hvac_mode=HVACMode.AUTO)
+    assert hub.commands[-1] == (HT, None, Mode.AUTO)
 
 
 async def test_set_temperature_with_only_hvac_mode_delegates(hass, setup_entry, fake_hub):
@@ -446,8 +451,10 @@ async def test_presets_comfort_and_eco(hass, setup_entry, fake_hub):
     assert hass.states.get(E).attributes["preset_mode"] == "eco"
     await push(hass, hub, HT, target=21.5, mode=Mode.MANUAL)
     assert hass.states.get(E).attributes["preset_mode"] == "comfort"
-    # The automatic program on the comfort value is no preset.
+    # In Auto too: a comfort/eco chosen there stays shown (the value decides).
     await push(hass, hub, HT, target=21.5, mode=Mode.AUTO)
+    assert hass.states.get(E).attributes["preset_mode"] == "comfort"
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO)
     assert hass.states.get(E).attributes["preset_mode"] == "none"
 
 
@@ -538,3 +545,114 @@ async def test_week_program_change_reaches_the_state_machine(hass, setup_entry, 
     await push(hass, hub, HT)
     assert old == {}
     assert hass.states.get(E).attributes["wochenprogramm"] == {"Montag": [{"temperature": 17.0, "until": "24:00"}]}
+
+
+# --- Sollwert im Auto-Betrieb: vorübergehend bis zum nächsten Schaltpunkt (wie am Handrad) ---
+
+
+async def test_auto_setpoint_stays_auto_until_next_switch_point(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    dev = hub.devices[HT]
+    dev.last_comfort = 20.0
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO)
+    await hass.services.async_call("climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 22}, blocking=True)
+    assert hub.commands == [(HT, 22.0, Mode.AUTO)]
+    st = hass.states.get(E)
+    assert st.state == HVACMode.AUTO
+    assert st.attributes["ausstehend"] == 22.0 and st.attributes["ausstehend_modus"] == "auto"
+    # An override is no comfort value: "heat" later still returns to the manual one.
+    assert dev.last_comfort == 20.0
+
+
+async def test_auto_setpoint_builds_on_queued_auto(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    await push(hass, hub, HT, target=19.0, mode=Mode.MANUAL)
+    await hass.services.async_call("climate", "set_hvac_mode", {ATTR_ENTITY_ID: E, "hvac_mode": "auto"}, blocking=True)
+    await hass.services.async_call("climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 21}, blocking=True)
+    assert hub.commands == [(HT, None, Mode.AUTO), (HT, 21.0, Mode.AUTO)]
+    # A queued manual command beats a reported AUTO.
+    hub.devices[HT].clear_pending()
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO)
+    await hass.services.async_call("climate", "set_hvac_mode", {ATTR_ENTITY_ID: E, "hvac_mode": "heat"}, blocking=True)
+    await hass.services.async_call("climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 23}, blocking=True)
+    assert hub.commands[-2:] == [(HT, 19.0, Mode.MANUAL), (HT, 23.0, Mode.MANUAL)]
+
+
+async def test_auto_setpoint_with_hvac_mode_heat_is_permanent(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO)
+    await hass.services.async_call(
+        "climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 22, "hvac_mode": "heat"}, blocking=True
+    )
+    assert hub.commands == [(HT, 22.0, Mode.MANUAL)]
+    assert hub.devices[HT].last_comfort == 22.0
+
+
+async def test_auto_presets_comfort_and_eco_stay_auto(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    dev = hub.devices[HT]
+    dev.config["komfort"], dev.config["eco"] = 21.5, 16.5
+    dev.last_comfort = 20.0
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO)
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "comfort"}, blocking=True)
+    assert hub.commands[-1] == (HT, 21.5, Mode.AUTO)
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "eco"}, blocking=True)
+    assert hub.commands[-1] == (HT, 16.5, Mode.AUTO)
+    assert dev.last_comfort == 20.0
+    # The choice sticks: AUTO on the comfort/eco value shows that preset.
+    dev.clear_pending()
+    await push(hass, hub, HT, target=21.5, mode=Mode.AUTO)
+    assert hass.states.get(E).attributes["preset_mode"] == "comfort"
+    await push(hass, hub, HT, target=16.5, mode=Mode.AUTO)
+    assert hass.states.get(E).attributes["preset_mode"] == "eco"
+    # An open window wins in Auto as well.
+    dev.config["fenster_temperatur"] = 16.5
+    await push(hass, hub, HT)
+    assert hass.states.get(E).attributes["preset_mode"] == "none"
+
+
+async def test_setpoint_in_away_and_boost_still_ends_in_manual(hass, setup_entry, fake_hub):
+    from datetime import datetime
+
+    hub = fake_hub.last
+    dev = hub.devices[HT]
+    dev.config["komfort"] = 21.5
+    await push(hass, hub, HT, target=18.0, mode=Mode.TEMPORARY, until=datetime(2026, 10, 10, 14, 30))
+    await hass.services.async_call("climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 22}, blocking=True)
+    assert hub.commands[-1] == (HT, 22.0, Mode.MANUAL)
+    dev.clear_pending()
+    await push(hass, hub, HT, target=30.0, mode=Mode.BOOST, until=None)
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "comfort"}, blocking=True)
+    assert hub.commands[-1] == (HT, 21.5, Mode.MANUAL)
+
+
+async def test_auto_device_off_and_turn_on_unchanged(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO, last_comfort=21.0)
+    await hass.services.async_call("climate", "set_hvac_mode", {ATTR_ENTITY_ID: E, "hvac_mode": "off"}, blocking=True)
+    assert hub.commands[-1] == (HT, 4.5, Mode.MANUAL)
+    hub.devices[HT].clear_pending()
+    await push(hass, hub, HT, target=19.0, mode=Mode.AUTO)
+    await hass.services.async_call("climate", "turn_on", {ATTR_ENTITY_ID: E}, blocking=True)
+    assert hub.commands[-1] == (HT, 19.0, Mode.MANUAL)
+
+
+async def test_preset_none_in_auto_returns_to_the_program(hass, setup_entry, fake_hub):
+    """"keins" in Auto drops a running override: plain AUTO, back to the week program."""
+    hub = fake_hub.last
+    await push(hass, hub, HT, target=22.0, mode=Mode.AUTO, last_comfort=20.0)
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "none"}, blocking=True)
+    assert hub.commands == [(HT, None, Mode.AUTO)]
+    assert hub.devices[HT].last_comfort == 20.0
+    # Manual: unchanged, it keeps the current target.
+    hub.devices[HT].clear_pending()
+    await push(hass, hub, HT, target=19.0, mode=Mode.MANUAL)
+    await hass.services.async_call("climate", "set_preset_mode", {ATTR_ENTITY_ID: E, "preset_mode": "none"}, blocking=True)
+    assert hub.commands[-1] == (HT, 19.0, Mode.MANUAL)
+
+
+async def test_unknown_mode_sends_manual(hass, setup_entry, fake_hub):
+    hub = fake_hub.last
+    assert hub.devices[HT].mode is None
+    await hass.services.async_call("climate", "set_temperature", {ATTR_ENTITY_ID: E, "temperature": 22}, blocking=True)
+    assert hub.commands == [(HT, 22.0, Mode.MANUAL)]

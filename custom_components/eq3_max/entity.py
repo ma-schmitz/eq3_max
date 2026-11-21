@@ -26,6 +26,10 @@ MODELS = {
     DeviceType.PLUG_ADAPTER: "Plug adapter (not supported yet)",
     DeviceType.CUBE: "Cube",
 }
+VIRTUAL_MODELS = {
+    DeviceType.SHUTTER_CONTACT: "Virtual window contact",
+    DeviceType.WALL_THERMOSTAT: "Virtual wall thermostat",
+}
 
 
 class MaxCulEntity(Entity):
@@ -36,6 +40,8 @@ class MaxCulEntity(Entity):
 
     _attr_should_poll = False
     _attr_has_entity_name = True
+    # Shows the value of a virtual device's source (window state, room temperature).
+    _shows_source = False
 
     def __init__(self, coordinator: MaxCulCoordinator, device: MaxDevice, key: str, label: str | None) -> None:
         self.coordinator = coordinator
@@ -49,7 +55,7 @@ class MaxCulEntity(Entity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device.serial)},
             manufacturer="eQ-3",
-            model=MODELS[device.device_type],
+            model=(VIRTUAL_MODELS if device.virtual else MODELS)[device.device_type],
             name=base,
             sw_version=device.firmware or None,
             serial_number=device.serial,
@@ -61,6 +67,14 @@ class MaxCulEntity(Entity):
     def device(self) -> MaxDevice:
         assert self.coordinator.hub is not None
         return self.coordinator.hub.devices[self._address]
+
+    @property
+    def available(self) -> bool:
+        """Without a usable source value a virtual device shows no window state or room
+        temperature (none is invented); its settings and links stay usable."""
+        assert self.coordinator.hub is not None
+        dev = self.coordinator.hub.devices.get(self._address)
+        return dev is not None and not (self._shows_source and dev.virtual and not dev.source_ok)
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(

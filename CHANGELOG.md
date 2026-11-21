@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] – 2026-11-21
+
+### Added
+- **Virtual window contact.** On the "eQ-3 MAX!" panel, "Create virtual device" creates a
+  window contact that exists only in Home Assistant. The source is any `binary_sensor` (for
+  example a Zigbee contact); "open" and "closed" go to every linked radiator thermostat with
+  acknowledgement (the thermostat confirms receipt). If a thermostat does not acknowledge, the
+  state is repeated every 5 minutes, after three failures in a row every 15 minutes, and once
+  when the radio module is back; two state changes to the same thermostat are at least one
+  minute apart, and at most 12 telegrams per hour go to each thermostat. Nothing is sent
+  periodically. After a restart it only sends if the state differs from the last delivered
+  one. Works with any radio module. You do not choose a radio module when creating it: a
+  virtual device sends through the module of the thermostat concerned.
+- **Virtual wall thermostat.** The source is a temperature `sensor` (°F and K are converted).
+  The thermostats of a room regulate on that temperature instead of their own sensor. A
+  source that has not reported for 3 hours counts as unavailable; sensors that only write a
+  new state when the value changes (template or helper sensors) can therefore drop out at
+  times; better use a device sensor that reports regularly.
+- **Virtual wall thermostat: temperature.** The temperature is sent every 5 minutes, fixed
+  and on time. A thermostat waits just under 10 minutes for its wall thermostat and then
+  regulates on its own sensor (with a radio error) until the next telegram arrives. A window
+  change goes out at once (at most once a minute). One telegram (a radio message) is enough
+  for the whole room if all its thermostats share a group and a radio module (the
+  integration assigns the group when you link), otherwise one is sent to each thermostat in
+  turn (about 13 s per hour per thermostat; with more than one thermostat they regulate on
+  their own sensor at times; the panel then shows a hint and offers "Assign for the
+  room"). A thermostat that leaves the
+  virtual room loses its group ID. A falling temperature is passed on in steps of at most
+  1.0 °C per telegram so that the thermostats' built-in open-window detection does not
+  trigger.
+- **Virtual wall thermostat: setpoint and boost.** Setpoints stay in sync across the room: a
+  change at a handwheel reaches all thermostats of the room after a few seconds, and so does a
+  setpoint set in Home Assistant. Auto is only available with a complete week program
+  written through eq3_max (every temperature telegram also sets the thermostats' setpoint);
+  without one the room runs manually, and the panel says so. In automatic mode the room
+  follows the week program; a change at the handwheel or in Home Assistant holds until the
+  next switch point. An away period ends by itself at the set time; then what applied before
+  applies again. Boost stays with the thermostat where it was
+  started (the wall thermostat keeps showing the room's mode); a boost on the virtual wall
+  thermostat applies to the whole room and ends with the thermostats' boost duration, after
+  an hour at the latest.
+- **Virtual wall thermostat: first link.** The first thermostat you link hands its setpoint,
+  mode, week program and comfort/eco/window settings over to a virtual wall thermostat that
+  has no setpoint of its own yet; what was already entered there stays, and a window-open
+  temperature or a boost does not become the room's setpoint. Thermostats
+  linked later get the room's setpoint and mode. Their week program is not overwritten
+  unasked (the panel shows a hint and offers to copy the room's program).
+- **Virtual devices: good to know.** A virtual wall thermostat costs about 13 s of airtime per
+  hour (of 36 s per radio module); one radio module is enough for two. With the option "Limit
+  airtime to 36 s" 10 s per hour stay free for commands; without it the radio module itself
+  decides. The thermostats linked with a virtual wall thermostat must be on a radio module
+  connected by USB or serial, not on a network module; there is no eco button. A long job
+  can leave a room without temperature for up to about an hour. If
+  Home Assistant is not running, nobody answers for the wall thermostat: the thermostats keep
+  heating with their own sensor, but a setpoint change at the handwheel can leave them
+  silent for up to an hour; there is no technical remedy. The same applies while the
+  integration is not loaded (radio module missing, integration disabled or reloading).
+  Before going back to a version older than 0.10.0, remove all virtual devices: an older
+  version takes them for real devices at an address nobody answers. "Remove" first removes the links.
+  "Remove anyway" deletes at once; a thermostat that still knows the link can then fall
+  silent for up to an hour. Details in the manual under "Virtual devices".
+
+### Changed
+- **Change in behaviour: a setpoint in Auto holds until the next switch point.** Changing the
+  temperature in Home Assistant (or on the thermostat card) of a thermostat that runs in Auto
+  now does the same as the handwheel: the value holds until the next switch point of the week
+  program, the thermostat stays in Auto and follows its program again afterwards. Until now
+  every change from Home Assistant switched to manual for good. The same applies to the
+  presets "Comfort" and "Eco". To keep a value permanently, switch to "Heat" (manual) first or
+  send `hvac_mode: heat` with the temperature. `hvac_mode: auto` with a temperature returns to
+  the program and holds that temperature until the next switch point (until now the
+  temperature was ignored there). The preset "None" in Auto ends such a change and returns to
+  the program; "Comfort" and "Eco" stay shown in Auto while the value holds. If the command
+  does not reach the thermostat in time – by the next switch point or, when eq3_max does not
+  know the week program, within 15 minutes – it is no longer repeated; instead the thermostat
+  goes back to plain Auto (its program). While such a change from Home Assistant holds,
+  polling the current temperature pauses for that thermostat (at most 12 hours). Nothing changes in manual mode
+  or during "Away" or "Boost". In the room of a virtual wall thermostat without a week program
+  every setpoint stays manual.
+- **Installation through the HACS search.** eq3_max has been in the HACS default catalog since
+  2026-11-19. README and website therefore lead with searching for "eQ-3 MAX!" in HACS; the
+  detour via "Custom repositories" is gone.
+
+### Fixed
+
+- **Week program for a room day by day: no thermostat of the room is left with missing days
+  any more.** When days were written for a room in quick succession (say Monday to Friday
+  first, then the weekend), a thermostat of the room still busy with the first days did not
+  get the others – only a warning in the log. Now the integration writes them to it right
+  afterwards; until then the "Week program" tab shows them as outstanding. For a virtual wall
+  thermostat the call waits until the room's thermostats are done; if one fails, the reason
+  is shown at that thermostat.
+- **Week program for a whole room: each thermostat is written once.** When the wall
+  thermostat and its radiators were selected together (say by area in the "Week program"
+  tab, or when copying), the radiators got the program twice – once as room mates, once as a
+  target of their own – which cost airtime. The source of a copy within a room is no longer
+  written again.
+
 ## [0.9.3] – 2026-11-19
 
 ### Added

@@ -11,10 +11,9 @@
 
 === "Via HACS"
 
-    1. Open HACS → menu at the top right → **Custom repositories**.
-    2. Enter the address of this repository, category **Integration**.
-    3. Search for **eQ-3 MAX!** and download it.
-    4. Restart Home Assistant.
+    1. Open HACS and search for **eQ-3 MAX!**.
+    2. Open the integration and choose **Download**.
+    3. Restart Home Assistant.
 
 === "Manually"
 

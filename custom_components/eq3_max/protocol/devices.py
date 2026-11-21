@@ -23,14 +23,17 @@ from .messages import (
     encode_config_valve,
 )
 
-_DATETIME_KEYS = ("until", "pending_until")
+_DATETIME_KEYS = ("until", "pending_until", "pending_queued", "override_until", "state_at", "ha_override_at")
 # Kept in the config entry; the entry wins over the store. config/config_source
 # only when non-empty (old entries have none).
 # links (partner serials) only when present (old entries have none).
 IDENTITY_KEYS = (
     "address", "serial", "device_type", "name", "firmware", "group", "config", "config_source", "links", "radio",
+    "virtual", "source", "removing",
 )
 CONFIG_ENTRY_KEYS = ("config", "config_source")
+# Identity keys of virtual devices; left out of the entry item while not set.
+VIRTUAL_KEYS = ("virtual", "source", "removing")
 DEFAULT_WINDOW_OPEN_TEMPERATURE = 12.0
 
 # Device configuration (0x11 ConfigTemperatures: HT and WT; 0x12 ConfigValve: HT, and the
@@ -52,6 +55,8 @@ CONFIG_VALVE_KEYS = (
 )
 # What a wall thermostat uses of the valve set; the rest goes along as factory values.
 CONFIG_WALL_VALVE_KEYS = ("boost_dauer",)
+# A virtual wall thermostat has no offset (it measures nothing itself) and no display.
+CONFIG_VIRTUAL_WALL_KEYS = ("komfort", "eco", "maximal", "minimal", "fenster_temperatur", "fenster_dauer")
 # Values a room shares: thermostats linked through a wall thermostat get the same. These
 # are what the wall thermostat's own menu sets for its room when it runs without a central
 # (Pro, comfort/eco, bOS, dEC, AEr); paired with a central that menu is locked and the
@@ -152,7 +157,16 @@ class MaxDevice:
     pending_target: float | None = None
     pending_mode: Mode | None = None
     pending_until: datetime | None = None
+    # Local time the pending command was first queued (an override in automatic mode
+    # goes stale, see MaxHub._stale_override).
+    pending_queued: datetime | None = None
     command_failed: bool = False
+    # Local time of the device's last state report (ack with state or status).
+    state_at: datetime | None = None
+    # A setpoint in automatic mode sent by eq3_max and acknowledged, and when: while it
+    # holds, polling the measured temperature pauses (see MaxHub._override_active).
+    ha_override_target: float | None = None
+    ha_override_at: datetime | None = None
     # Last manual target above "off": the comfort value heat returns to after away/boost.
     last_comfort: float | None = None
     # Last acknowledged (or imported/assumed) configuration and where each value came from.
@@ -190,6 +204,26 @@ class MaxDevice:
     radio: str = ""
     # Last RSSI per radio module that heard the device ("" = the main module).
     rssi_by_radio: dict[str, float] = field(default_factory=dict)
+    # Virtual device: no hardware, fed from the Home Assistant entity `source`; `removing`
+    # while its links are being taken apart before it is deleted.
+    virtual: bool = False
+    source: str = ""
+    removing: bool = False
+    # Whether the source entity delivers a usable value (runtime).
+    source_ok: bool = True
+    # Contact: partner serial -> last state delivered to that partner.
+    delivered: dict[str, bool] = field(default_factory=dict)
+    # Measured temperature last sent by 0x42 and when (epoch seconds).
+    sent_measured: float | None = None
+    sent_at: float | None = None
+    # Virtual wall thermostat in automatic mode: a setpoint changed meanwhile (handwheel,
+    # Home Assistant) holds until the program's next switch point (naive local time; None:
+    # the program never changes), like at a real wall thermostat.
+    override_target: float | None = None
+    override_until: datetime | None = None
+    # Virtual wall thermostat during an away period: the state it returns to at its end.
+    resume_mode: Mode | None = None
+    resume_target: float | None = None
 
     @property
     def is_heating_thermostat(self) -> bool:
@@ -202,6 +236,8 @@ class MaxDevice:
     @property
     def is_sleeper(self) -> bool:
         """Battery devices that only listen right after they sent something."""
+        if self.virtual:
+            return False
         return self.device_type in (DeviceType.SHUTTER_CONTACT, DeviceType.PUSH_BUTTON)
 
     @property
@@ -221,6 +257,8 @@ class MaxDevice:
     def config_keys(self) -> tuple[str, ...]:
         if self.is_heating_thermostat:
             return CONFIG_TEMP_KEYS + CONFIG_VALVE_KEYS
+        if self.virtual and self.device_type is DeviceType.WALL_THERMOSTAT:
+            return CONFIG_VIRTUAL_WALL_KEYS
         if self.device_type is DeviceType.WALL_THERMOSTAT:
             return CONFIG_TEMP_KEYS + CONFIG_WALL_VALVE_KEYS + CONFIG_DISPLAY_KEYS
         return ()
@@ -457,16 +495,20 @@ class MaxDevice:
         self.rf_error = st.rf_error
         self.battery_low = st.battery_low
 
-    def set_pending(self, target: float | None, mode: Mode, until: datetime | None = None) -> None:
+    def set_pending(
+        self, target: float | None, mode: Mode, until: datetime | None = None, *, queued: datetime | None = None
+    ) -> None:
         self.pending_target = target
         self.pending_mode = mode
         self.pending_until = until
+        self.pending_queued = queued
         self.command_failed = False
 
     def clear_pending(self) -> None:
         self.pending_target = None
         self.pending_mode = None
         self.pending_until = None
+        self.pending_queued = None
         self.command_failed = False
 
     def clear_pending_if_reached(self) -> None:
@@ -485,6 +527,7 @@ class MaxDevice:
         data["device_type"] = int(self.device_type)
         data["mode"] = None if self.mode is None else int(self.mode)
         data["pending_mode"] = None if self.pending_mode is None else int(self.pending_mode)
+        data["resume_mode"] = None if self.resume_mode is None else int(self.resume_mode)
         for key in _DATETIME_KEYS:
             value = getattr(self, key)
             data[key] = None if value is None else value.isoformat()
@@ -492,7 +535,8 @@ class MaxDevice:
 
     def identity_dict(self) -> dict[str, Any]:
         data = self.to_dict()
-        return {key: data[key] for key in IDENTITY_KEYS}
+        # Only virtual devices carry these: a real device's entry item stays as before.
+        return {key: data[key] for key in IDENTITY_KEYS if key not in VIRTUAL_KEYS or data[key]}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MaxDevice:
@@ -529,7 +573,7 @@ class MaxDevice:
             if day in WEEKDAYS and isinstance(points, list)
         }
         values["rssi_by_radio"] = {str(k): float(v) for k, v in (values.get("rssi_by_radio") or {}).items()}
-        for key in ("mode", "pending_mode"):
+        for key in ("mode", "pending_mode", "resume_mode"):
             if values.get(key) is not None:
                 values[key] = Mode(values[key])
         for key in _DATETIME_KEYS:
@@ -553,4 +597,6 @@ def _link_op_from_dict(data: Any) -> dict[str, Any] | None:
         return None
     if isinstance(data.get("misses"), int):
         op["misses"] = data["misses"]
+    if data.get("force") is True:
+        op["force"] = True
     return op

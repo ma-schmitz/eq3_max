@@ -111,14 +111,29 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_remove_config_entry_device(hass: HomeAssistant, entry: ConfigEntry, device_entry: DeviceEntry) -> bool:
-    """Device page "delete": forget the device (no radio); never a radio module."""
-    from .const import CONF_ADDRESS, DOMAIN  # noqa: PLC0415
+    """Device page "delete": forget the device (no radio); never a radio module. A virtual
+    device first has its partners let go of it: False while that runs, it then
+    disappears by itself (coordinator._on_device_removed). Without a loaded entry there
+    is no radio: it is forgotten like a real one."""
+    from homeassistant.config_entries import ConfigEntryState  # noqa: PLC0415
+
+    from .const import CONF_ADDRESS, CONF_DEVICES, DOMAIN  # noqa: PLC0415
     from .coordinator import async_forget_device  # noqa: PLC0415
+    from .errors import translated  # noqa: PLC0415
+    from .protocol.messages import FrameError  # noqa: PLC0415
 
     serials = {value for domain, value in device_entry.identifiers if domain == DOMAIN}
     # Radio modules (main: the address, extra: "address:id") go via the options.
     if any(serial == entry.data[CONF_ADDRESS] or serial.startswith(f"{entry.data[CONF_ADDRESS]}:") for serial in serials):
         return False
+    virtual = [item for item in entry.data[CONF_DEVICES] if item.get("serial") in serials and item.get("virtual")]
+    if virtual and entry.state is ConfigEntryState.LOADED:
+        hub = entry.runtime_data.hub
+        try:
+            # A list, not a generator: every removal starts, even after a False.
+            return all([hub.virtual.remove(item["address"]) for item in virtual])
+        except FrameError as err:
+            raise translated(err) from err
     for serial in serials:
         async_forget_device(hass, entry, serial)
     return True

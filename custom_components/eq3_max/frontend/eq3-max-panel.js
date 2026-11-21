@@ -304,6 +304,15 @@ const EN = {
   "Setzen": "Set",
   "Entfernen": "Remove",
   "Für den Raum vergeben": "Assign for the room",
+  "Für diesen Raum ist noch kein vollständiges Wochenprogramm bekannt. Er läuft deshalb manuell; Automatik ist möglich, sobald hier ein Wochenprogramm geschrieben wurde.":
+    "No complete week program is known for this room yet. It therefore runs manually; Auto becomes possible as soon as a week program has been written here.",
+  "Wochenprogramm festlegen": "Set week program",
+  "Die Thermostate dieses Raums haben keine gemeinsame Gruppe; die Temperatur geht an jedes einzeln (je Thermostat etwa 13 s Sendezeit je Stunde), und zeitweise regeln sie auf den eigenen Fühler. Eine gemeinsame Gruppe behebt das.":
+    "The thermostats of this room have no common group; the temperature goes to each of them separately (about 13 s of airtime per hour per thermostat), and at times they regulate on their own sensor. A common group fixes this.",
+  "Das Thermostat dieses Raums hat keine Gruppen-ID; die Temperatur wird einzeln an es gesendet. Mit einer Gruppen-ID geht sie an die Gruppe, und später verknüpfte Thermostate kommen dazu.":
+    "The thermostat of this room has no group id; the temperature is sent to it directly. With a group id it goes to the group, and thermostats linked later join it.",
+  "Die Thermostate dieses Raums sind an verschiedenen Funkmodulen; die Temperatur geht an jedes einzeln (je Thermostat etwa 13 s Sendezeit je Stunde), und zeitweise regeln sie auf den eigenen Fühler. Eine Gruppe hilft hier nicht – dafür müssten alle am selben Funkmodul sein.":
+    "The thermostats of this room are on different radio modules; the temperature goes to each of them separately (about 13 s of airtime per hour per thermostat), and at times they regulate on their own sensor. A group does not help here – for that they would all have to be on the same radio module.",
   "Gruppen-ID {group} gesendet – wartet auf Quittung.": "Group id {group} sent – waiting for acknowledgement.",
   "Gruppen-ID entfernt – wartet auf Quittung.": "Group id removed – waiting for acknowledgement.",
   "Raum bekommt Gruppen-ID {group} ({n} Geräte) – wartet auf Quittung.": "Room gets group id {group} ({n} devices) – waiting for acknowledgement.",
@@ -331,6 +340,48 @@ const EN = {
   "Senden": "Send",
   "Satz „{title}“ gesendet – wartet auf Quittung.": "Set \"{title}\" sent – waiting for acknowledgement.",
   " Werksvorgaben mitgesendet: {labels}.": " Factory defaults sent along: {labels}.",
+  // Virtuelle Geräte
+  "Virtuelles Gerät anlegen": "Create virtual device",
+  "Ein virtuelles Gerät tritt gegenüber den Thermostaten wie ein MAX!-Gerät auf und bekommt seine Werte von einer Entität aus Home Assistant.":
+    "A virtual device appears to the thermostats like a MAX! device and takes its values from a Home Assistant entity.",
+  "Art": "Kind",
+  "Name": "Name",
+  "Quelle": "Source",
+  "Entität suchen …": "Search entity …",
+  "Keine passende Entität gefunden.": "No suitable entity found.",
+  "Bitte eine Entität aus der Liste wählen.": "Please pick an entity from the list.",
+  "Quelle: ein binärer Sensor; an heißt offen.": "Source: a binary sensor; on means open.",
+  "Quelle: ein Temperatursensor; sein Wert geht als Ist-Temperatur an die verknüpften Thermostate.":
+    "Source: a temperature sensor; its value goes to the linked thermostats as the measured temperature.",
+  "Kostet etwa 13 s der 36 s Sendezeit je Stunde; ein Funkmodul reicht für zwei virtuelle Wandthermostate. Läuft Home Assistant nicht, antwortet niemand für das virtuelle Wandthermostat.":
+    "Costs about 13 s of the 36 s airtime per hour; one radio module is enough for two virtual wall thermostats. While Home Assistant is not running, nobody answers for the virtual wall thermostat.",
+  "Anlegen": "Create",
+  "„{name}“ angelegt – die Integration lädt neu.": "\"{name}\" created – the integration reloads.",
+  "virtuell": "virtual",
+  "Quelle nicht verfügbar": "Source unavailable",
+  "wird entfernt": "being removed",
+  "Virtuelles Gerät": "Virtual device",
+  "Ändern": "Change",
+  "Quelle von {name}: {source}": "Source of {name}: {source}",
+  "Quelle von {name}": "Source of {name}",
+  "Die Quelle meldet gerade keinen verwertbaren Wert; das Gerät sendet so lange nichts.":
+    "The source currently reports no usable value; until it does, the device sends nothing.",
+  "Entfernen löst zuerst alle Verknüpfungen; das Gerät verschwindet, sobald die verknüpften Geräte das quittiert haben.":
+    "Removing first unlinks all partners; the device disappears once the linked devices have acknowledged that.",
+  "„{name}“ entfernen? Die verknüpften Geräte bekommen zuerst den Auftrag, die Verknüpfung zu lösen.":
+    "Remove \"{name}\"? The linked devices are first told to drop the link.",
+  "„{name}“ entfernt.": "\"{name}\" removed.",
+  "Wird entfernt, sobald alle verknüpften Geräte das Lösen quittiert haben.":
+    "Will be removed once all linked devices have acknowledged the unlinking.",
+  "Trotzdem entfernen": "Remove anyway",
+  "Ein Thermostat, das die Verknüpfung noch kennt, sendet danach ins Leere und kann bis zu einer Stunde verstummen.":
+    "A thermostat that still knows the link then sends into the void and can go silent for up to an hour.",
+  "{contact} ist mit {thermostat} verknüpft, aber nicht mit diesem Wandthermostat. Damit es bei offenem Fenster die Fenster-auf-Temperatur sendet, den Kontakt auch hier verknüpfen.":
+    "{contact} is linked with {thermostat} but not with this wall thermostat. So that it sends the window open temperature while the window is open, link the contact here too.",
+  "Das Wochenprogramm von {name} weicht von dem des Wandthermostats ab.":
+    "The week program of {name} differs from the wall thermostat's.",
+  "Programm des Wandthermostats übernehmen": "Take over the wall thermostat's program",
+  "Wochenprogramm des Wandthermostats auf {name} kopiert.": "Wall thermostat's week program copied to {name}.",
 };
 
 /** Text in der Sprache des Benutzers; {name}-Platzhalter aus params. */
@@ -570,11 +621,12 @@ const STYLE = `
     width: 38px; height: 38px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
     background: color-mix(in srgb, var(--tone, var(--e3-muted)) 14%, transparent); color: var(--tone, var(--e3-muted));
   }
-  .card .head { display: flex; align-items: center; gap: 10px; }
+  .card .head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
   .card .who { flex: 1; min-width: 0; }
   .card .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .card .kind { color: var(--e3-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card .badges { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  /* Below the title, so a chip never cuts it off. */
+  .card .badges { display: flex; flex-wrap: wrap; gap: 3px; flex: 1 0 100%; padding-left: 48px; margin-top: -4px; }
   .temps { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .temps .cur { font-size: 30px; font-weight: 400; letter-spacing: -.02em; line-height: 1; }
   .temps .cur small { font-size: 15px; color: var(--e3-muted); margin-left: 2px; }
@@ -702,6 +754,23 @@ const STYLE = `
   .wp-point .ctl { display: flex; align-items: center; gap: 6px; }
   .wp-point input[type=number] { width: 80px; text-align: right; }
   .wp-point input[type=text] { width: 68px; text-align: center; }
+  /* --- Virtuelle Geräte --- */
+  .vform {
+    border: 1px solid var(--e3-accent); border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .vform .vtitle { font-weight: 600; }
+  .vform .setfoot { margin-top: 0; }
+  .vfields { display: grid; gap: 10px 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); align-items: start; }
+  .vfield { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .vfield > label, .vfield > .vlabel { font-size: 13px; font-weight: 500; color: var(--e3-muted); }
+  .vfield .wp-days { padding: 6px 0; }
+  .source-input { width: 100%; min-width: 0; }
+  .source-hint { min-height: 16px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notice.bad { border-left-color: var(--e3-error); background: color-mix(in srgb, var(--e3-error) 8%, var(--e3-card)); }
+  .vsrc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .vsrc .grow { flex: 1; min-width: 160px; }
+  .vsrc .source-edit { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; max-width: 90%;
     background: var(--e3-card); color: var(--primary-text-color); border-radius: 10px; padding: 10px 16px;
@@ -857,11 +926,38 @@ function optionLabel(item, opt) {
 /** Zustand für Farbe und Akzent der Karte: heat · open · alert · off · idle. */
 function cardTone(dev) {
   const st = dev.state;
-  if (st.rf_error || st.command_failed || st.config_failed.length || st.battery_low) return "alert";
+  // A virtual device has no battery and no radio error of its own.
+  if (st.command_failed || st.config_failed.length || (!dev.virtual && (st.rf_error || st.battery_low))) return "alert";
   if (dev.type === "shutter_contact") return st.window_open ? "open" : "idle";
   if (st.hvac === "off") return "off";
   if (dev.type === "heating_thermostat" && st.valve > 0) return "heat";
   return "idle";
+}
+
+/** Entities a virtual device can be fed from: binary sensors for a window contact,
+ * temperature sensors for a wall thermostat. Sorted by name; `exclude` = entity ids
+ * of this integration's own virtual devices (a circular source). */
+function sourceOptions(hass, kind, exclude) {
+  const states = (hass && hass.states) || {};
+  const result = [];
+  for (const [id, state] of Object.entries(states)) {
+    if (exclude.has(id)) continue;
+    const attrs = (state && state.attributes) || {};
+    if (kind === "window") {
+      if (!id.startsWith("binary_sensor.")) continue;
+    } else {
+      if (!id.startsWith("sensor.")) continue;
+      const unit = attrs.unit_of_measurement;
+      if (attrs.device_class !== "temperature" && unit !== "°C" && unit !== "°F" && unit !== "K") continue;
+    }
+    result.push({ id, name: attrs.friendly_name || id });
+  }
+  return result.sort((a, b) => a.name.localeCompare(b.name, LANG) || a.id.localeCompare(b.id));
+}
+
+function entityName(hass, id) {
+  const state = hass && hass.states && hass.states[id];
+  return (state && state.attributes && state.attributes.friendly_name) || "";
 }
 
 function chip(text, kind = "") {
@@ -910,6 +1006,8 @@ class Eq3MaxPanel extends HTMLElement {
     this._toast = null;
     this._narrow = false;
     this._wpDrafts = {}; // serial -> {days, points, targets}
+    this._creating = null; // {entry_id, kind, name, source}: Formular „Virtuelles Gerät anlegen“
+    this._sourceEdit = null; // {serial, value}: Quelle eines virtuellen Geräts, die gerade geändert wird
   }
 
   set hass(hass) {
@@ -1119,7 +1217,7 @@ class Eq3MaxPanel extends HTMLElement {
   /** Is the user typing in a form field of the drawer? Then pushes wait. */
   _editing() {
     const el = this.shadowRoot.activeElement;
-    return !!(el && (el.tagName === "INPUT" || el.tagName === "SELECT") && el.closest(".drawer, .radio"));
+    return !!(el && (el.tagName === "INPUT" || el.tagName === "SELECT") && el.closest(".drawer, .radio, .vform"));
   }
 
   /** Render for background changes (push, toast): not while typing, then shortly after. */
@@ -1409,6 +1507,7 @@ class Eq3MaxPanel extends HTMLElement {
     const busy = this._busy.has(`pair:${entry.entry_id}`);
     const radios = hub.radios && hub.radios.length ? hub.radios : [{ ...hub, name: t("Funkmodul"), id: "" }];
     const n = entry.devices.length;
+    const creating = !!(this._creating && this._creating.entry_id === entry.entry_id);
     return h("div", { class: "hub" },
       h("div", { class: "hub-head" },
         h("div", {},
@@ -1431,7 +1530,22 @@ class Eq3MaxPanel extends HTMLElement {
             if (multi && choice !== "*") message.radio = choice;
             this._call(`pair:${entry.entry_id}`, message, t("Anlernen 60 s geöffnet – jetzt am Gerät die Anlerntaste drücken."));
           },
-        }, left > 0 ? t("Anlernen läuft … {n} s", { n: left }) : t("Anlernen (60 s)"))),
+        }, left > 0 ? t("Anlernen läuft … {n} s", { n: left }) : t("Anlernen (60 s)")),
+        h("button", {
+          class: "action",
+          "aria-expanded": creating ? "true" : "false",
+          onclick: () => {
+            if (creating) {
+              this._creating = null;
+            } else {
+              this._creating = { entry_id: entry.entry_id, kind: "window", name: "", source: "" };
+            }
+            this._render();
+            const input = creating ? null : this.shadowRoot.querySelector(".vform input[type=text]");
+            if (input) input.focus();
+          },
+        }, t("Virtuelles Gerät anlegen"))),
+      creating ? this._renderCreate(entry) : null,
       // Still paired to another central: never answered, the device needs a factory reset.
       (hub.pairing_foreign || []).length ? h("div", { class: "notice", style: "margin-top:12px" },
         hub.pairing_foreign.map((f) => h("div", {},
@@ -1458,8 +1572,8 @@ class Eq3MaxPanel extends HTMLElement {
     const climates = devs.filter((d) => d.type === "heating_thermostat" || d.type === "wall_thermostat").length;
     const heating = devs.filter((d) => cardTone(d) === "heat").length;
     const open = devs.filter((d) => d.type === "shutter_contact" && d.state.window_open).length;
-    const battery = devs.filter((d) => d.state.battery_low).length;
-    const attention = devs.filter((d) => d.pending || d.state.command_failed || d.state.config_failed.length || d.state.rf_error).length;
+    const battery = devs.filter((d) => !d.virtual && d.state.battery_low).length;
+    const attention = devs.filter((d) => d.pending || d.state.command_failed || d.state.config_failed.length || (!d.virtual && d.state.rf_error)).length;
     const tile = (cls, tone, ic, value, label) => h("div", { class: `stat ${value ? cls : ""}` },
       h("span", { class: "ic", style: value && tone ? `--tone:${tone}` : "" }, icon(ic)),
       h("div", {}, h("div", { class: "v" }, String(value)), h("div", { class: "l" }, label)));
@@ -1471,13 +1585,126 @@ class Eq3MaxPanel extends HTMLElement {
       tile("alert", "var(--e3-error)", "mdi:clock-alert-outline", attention, t("auffällig")));
   }
 
+  /** Entity ids of this entry's virtual devices: no source for another virtual device. */
+  _virtualEntities(entry) {
+    return new Set(entry.devices.filter((d) => d.virtual && d.entity_id).map((d) => d.entity_id));
+  }
+
+  /** Text field with a list of suitable entities (no ha-entity-picker: it is loaded lazily
+   * by Home Assistant and may not exist on this page). `state.value` holds the input;
+   * `changed()` runs on every keystroke without a re-render, so the list stays open. */
+  _sourcePicker(options, state, focusKey, changed) {
+    const listId = `list-${focusKey.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    const known = new Map(options.map((o) => [o.id, o.name]));
+    const input = h("input", {
+      type: "text", class: "source-input", id: `${listId}-in`, list: listId, autocomplete: "off", spellcheck: "false",
+      placeholder: t("Entität suchen …"), "aria-label": t("Quelle"), "data-focus": focusKey,
+    });
+    input.value = state.value || "";
+    const hint = h("div", { class: "source-hint sub" });
+    const refresh = () => {
+      const value = input.value.trim();
+      hint.textContent = !options.length ? t("Keine passende Entität gefunden.")
+        : known.has(value) ? known.get(value)
+          : value ? t("Bitte eine Entität aus der Liste wählen.") : "";
+    };
+    input.addEventListener("input", () => {
+      state.value = input.value;
+      refresh();
+      changed(known.has(input.value.trim()));
+    });
+    refresh();
+    return {
+      nodes: [input, h("datalist", { id: listId }, options.map((o) => h("option", { value: o.id, label: o.name }, o.name))), hint],
+      id: input.id,
+      valid: () => known.has(input.value.trim()),
+    };
+  }
+
+  _renderCreate(entry) {
+    const form = this._creating;
+    const busyKey = `virtual:${entry.entry_id}`;
+    const busy = this._busy.has(busyKey);
+    const options = sourceOptions(this._hass, form.kind, this._virtualEntities(entry));
+
+    const kinds = [["window", t("Fensterkontakt")], ["wall", t("Wandthermostat")]].map(([value, label]) => {
+      const box = h("input", { type: "radio", name: `vkind-${entry.entry_id}`, value, "data-focus": `vkind:${entry.entry_id}:${value}` });
+      box.checked = form.kind === value;
+      box.addEventListener("change", () => {
+        if (!box.checked) return;
+        form.kind = value;
+        form.source = ""; // another domain: the old pick no longer fits
+        this._render();
+      });
+      return h("label", { class: "wp-check" }, box, label);
+    });
+
+    const nameId = `vname-${entry.entry_id}`;
+    const name = h("input", {
+      type: "text", id: nameId, maxlength: "60", autocomplete: "off", "data-focus": `vname:${entry.entry_id}`,
+    });
+    name.value = form.name;
+
+    const submit = h("button", { class: "action primary" }, t("Anlegen"));
+    const update = () => {
+      submit.disabled = busy || !form.name.trim() || !picker.valid();
+    };
+    name.addEventListener("input", () => { form.name = name.value; update(); });
+    const sourceState = {
+      get value() { return form.source; },
+      set value(v) { form.source = v; },
+    };
+    const picker = this._sourcePicker(options, sourceState, `vsource:${entry.entry_id}`, update);
+    const cancel = () => { this._creating = null; this._render(); };
+    const send = async () => {
+      if (submit.disabled) return;
+      const message = {
+        type: "eq3_max/create_virtual", entry_id: entry.entry_id, kind: form.kind,
+        name: form.name.trim(), source: form.source.trim(),
+      };
+      const created = message.name;
+      const result = await this._call(busyKey, message, t("„{name}“ angelegt – die Integration lädt neu.", { name: created }));
+      if (result !== undefined) {
+        this._creating = null;
+        this._render();
+      }
+    };
+    submit.addEventListener("click", send);
+    name.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); send(); }
+      if (ev.key === "Escape") { ev.preventDefault(); cancel(); }
+    });
+    update();
+
+    return h("div", { class: "vform", role: "group", "aria-label": t("Virtuelles Gerät anlegen") },
+      h("div", { class: "vtitle" }, t("Virtuelles Gerät anlegen")),
+      h("div", { class: "sub" },
+        t("Ein virtuelles Gerät tritt gegenüber den Thermostaten wie ein MAX!-Gerät auf und bekommt seine Werte von einer Entität aus Home Assistant.")),
+      h("div", { class: "vfields" },
+        h("div", { class: "vfield", role: "radiogroup", "aria-label": t("Art") }, h("span", { class: "vlabel" }, t("Art")), h("div", { class: "wp-days" }, kinds)),
+        h("div", { class: "vfield" }, h("label", { for: nameId }, t("Name")), name),
+        h("div", { class: "vfield vsource" }, h("label", { for: picker.id }, t("Quelle")), picker.nodes)),
+      h("div", { class: "sub" }, form.kind === "window"
+        ? t("Quelle: ein binärer Sensor; an heißt offen.")
+        : t("Quelle: ein Temperatursensor; sein Wert geht als Ist-Temperatur an die verknüpften Thermostate.")),
+      form.kind === "wall"
+        ? h("div", { class: "notice" },
+          t("Kostet etwa 13 s der 36 s Sendezeit je Stunde; ein Funkmodul reicht für zwei virtuelle Wandthermostate. Läuft Home Assistant nicht, antwortet niemand für das virtuelle Wandthermostat."))
+        : null,
+      h("div", { class: "setfoot" },
+        h("button", { class: "action", onclick: cancel }, t("Abbrechen")),
+        submit));
+  }
+
   _renderCard(entry, dev) {
     const st = dev.state;
     const tone = cardTone(dev);
     const badges = [];
     if (dev.pending) badges.push(chip(t("ausstehend"), "warn"));
     if (st.command_failed || st.config_failed.length) badges.push(chip(t("nicht quittiert"), "error"));
-    if (st.rf_error) badges.push(chip(t("Funkfehler"), "error"));
+    if (st.rf_error && !dev.virtual) badges.push(chip(t("Funkfehler"), "error"));
+    if (dev.virtual && dev.removing) badges.push(chip(t("wird entfernt"), "warn"));
+    if (dev.virtual && dev.source_ok === false) badges.push(chip(t("Quelle nicht verfügbar"), "warn"));
 
     let kind = typeName(dev);
     let body;
@@ -1518,13 +1745,16 @@ class Eq3MaxPanel extends HTMLElement {
         badges.length ? h("div", { class: "badges" }, badges) : null),
       body,
       h("div", { class: "foot" },
-        h("span", { class: st.battery_low ? "low" : "", title: t("Batterie") },
-          icon(st.battery_low ? "mdi:battery-alert-variant-outline" : "mdi:battery-high"),
-          st.battery_low ? t("schwach") : st.battery_low === false ? "ok" : "?"),
-        h("span", { title: t("Empfangsstärke") }, rssiBars(st.rssi), st.rssi === null ? "– dBm" : `${num(st.rssi, 0)} dBm`),
-        h("span", { title: t("zuletzt gemeldet") }, icon("mdi:clock-outline"), h("span", { "data-ago": st.last_seen || 0 }, ago(st.last_seen))),
+        // Virtual: no battery, no reception, nothing it reports by radio (no invented values).
+        dev.virtual ? chip(t("virtuell"), "info") : [
+          h("span", { class: st.battery_low ? "low" : "", title: t("Batterie") },
+            icon(st.battery_low ? "mdi:battery-alert-variant-outline" : "mdi:battery-high"),
+            st.battery_low ? t("schwach") : st.battery_low === false ? "ok" : "?"),
+          h("span", { title: t("Empfangsstärke") }, rssiBars(st.rssi), st.rssi === null ? "– dBm" : `${num(st.rssi, 0)} dBm`),
+          h("span", { title: t("zuletzt gemeldet") }, icon("mdi:clock-outline"), h("span", { "data-ago": st.last_seen || 0 }, ago(st.last_seen))),
+        ],
         h("span", { title: t("Verknüpfungen") }, icon("mdi:link-variant"), String(linkCount)),
-        isMulti(entry) ? h("span", { title: t("Funkmodul") }, icon("mdi:radio-tower"), radioName(entry, dev.radio)) : null,
+        isMulti(entry) && !dev.virtual ? h("span", { title: t("Funkmodul") }, icon("mdi:radio-tower"), radioName(entry, dev.radio)) : null,
       ),
     );
   }
@@ -1533,6 +1763,7 @@ class Eq3MaxPanel extends HTMLElement {
     this._selected = { entryId, serial };
     this._tab = "links";
     this._confirm = null;
+    this._sourceEdit = null;
     this._render();
     // Escape closes from anywhere while the drawer is open.
     this._removeEscape();
@@ -1636,7 +1867,8 @@ class Eq3MaxPanel extends HTMLElement {
     const available = [["links", t("Verknüpfungen")]];
     if (dev.config.length > 0) available.push(["config", t("Konfiguration")]);
     if (dev.type === "heating_thermostat" || dev.type === "wall_thermostat") available.push(["week", t("Wochenprogramm")]);
-    if (isMulti(entry)) available.push(["radio", t("Funkmodul")]);
+    // A virtual device is heard by no module: no reception per module to show.
+    if (isMulti(entry) && !dev.virtual) available.push(["radio", t("Funkmodul")]);
     if (!available.some(([key]) => key === this._tab)) this._tab = "links";
     this._tabKeys = available.map(([key]) => key);
     const tabs = available.length > 1
@@ -1658,8 +1890,8 @@ class Eq3MaxPanel extends HTMLElement {
           h("span", { class: "ic", style: `--tone:${TONE_COLORS[cardTone(dev)]}` }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
           h("div", { class: "t" },
             h("div", { class: "n" }, dev.name),
-            h("div", { class: "tags" }, chip(typeName(dev)), this._areaSelect(dev),
-              isMulti(entry) ? chip(t("Funkmodul {name}", { name: radioName(entry, dev.radio) }), "info") : null),
+            h("div", { class: "tags" }, chip(typeName(dev)), dev.virtual ? chip(t("virtuell"), "info") : null, this._areaSelect(dev),
+              isMulti(entry) && !dev.virtual ? chip(t("Funkmodul {name}", { name: radioName(entry, dev.radio) }), "info") : null),
             h("div", { class: "meta" }, t("Seriennummer {serial} · Adresse {address}", { serial: dev.serial, address: dev.address })
               + (dev.firmware ? t(" · Firmware {firmware}", { firmware: dev.firmware }) : ""))),
           h("button", { class: "close", title: t("Schließen"), "aria-label": t("Schließen"), onclick: () => this._close() }, "✕")),
@@ -1668,7 +1900,7 @@ class Eq3MaxPanel extends HTMLElement {
           this._tab === "config" ? this._renderConfig(dev)
             : this._tab === "week" ? this._renderWeekProfile(entry, dev)
               : this._tab === "radio" ? this._renderRadio(entry, dev)
-              : this._renderLinks(dev)),
+              : this._renderLinks(entry, dev)),
       ),
     ];
   }
@@ -1866,8 +2098,9 @@ class Eq3MaxPanel extends HTMLElement {
     const others = entry.devices.filter((d) => d.serial !== dev.serial && (d.type === "heating_thermostat" || d.type === "wall_thermostat"));
     const hasStored = Object.keys(stored).length > 0;
     // Grouped by area (#9): devices of the same name are told apart by their room, and a
-    // whole area is one tick. Several devices of one linked room are no problem: a room
-    // that already gets the same program joins that job.
+    // whole area is one tick. Several devices of one linked room are no problem: the
+    // integration writes each room once (a target that is a room mate of an earlier one
+    // gets the program as such) and does not write the source again.
     const byArea = new Map();
     for (const d of others) {
       const areaKey = d.area_id || "";
@@ -1986,7 +2219,8 @@ class Eq3MaxPanel extends HTMLElement {
           h("span", { class: "sub" }, t("Je Tag ein bis zwei Telegramme. Geschrieben wird im Hintergrund, auch wenn die Seite geschlossen wird.")),
           write)),
       erase,
-      h("fieldset", {},
+      // A virtual wall thermostat switches by Home Assistant's clock: nothing to set.
+      dev.virtual ? null : h("fieldset", {},
         h("legend", {}, t("Uhr des Geräts")),
         h("div", { class: "row" },
           h("span", { class: "grow" }, t("Uhr stellen"), h("span", { class: "hint" },
@@ -2058,7 +2292,169 @@ class Eq3MaxPanel extends HTMLElement {
     }, label);
   }
 
-  _renderLinks(dev) {
+  // --- Virtuelle Geräte ---
+
+  /** Source, changing it, and removing: only for a virtual device (top of the links tab). */
+  _renderVirtual(entry, dev) {
+    const sourceKey = `vsource:${dev.serial}`;
+    const removeKey = `vremove:${dev.serial}`;
+    const busy = this._busy.has(sourceKey) || this._busy.has(removeKey) || !dev.device_id;
+    const editing = this._sourceEdit && this._sourceEdit.serial === dev.serial;
+    const kind = dev.type === "wall_thermostat" ? "wall" : "window";
+
+    let sourceRow;
+    if (editing) {
+      const options = sourceOptions(this._hass, kind, this._virtualEntities(entry));
+      const save = h("button", { class: "action primary" }, t("Speichern"));
+      const picker = this._sourcePicker(options, this._sourceEdit, `vsrcedit:${dev.serial}`,
+        (valid) => { save.disabled = busy || !valid; });
+      save.disabled = busy || !picker.valid();
+      const cancel = () => { this._sourceEdit = null; this._render(); };
+      save.addEventListener("click", async () => {
+        const source = this._sourceEdit.value.trim();
+        if (source === dev.source) { cancel(); return; }
+        const result = await this._call(sourceKey, { type: "eq3_max/update_virtual", device_id: dev.device_id, source },
+          t("Quelle von {name}: {source}", { name: dev.name, source }));
+        if (result !== undefined) { this._sourceEdit = null; this._render(); }
+      });
+      sourceRow = h("div", { class: "vsrc" },
+        h("span", { class: "source-edit" }, h("label", { for: picker.id, class: "sub" }, t("Quelle von {name}", { name: dev.name })), picker.nodes),
+        h("button", { class: "action", onclick: cancel }, t("Abbrechen")),
+        save);
+    } else {
+      const friendly = entityName(this._hass, dev.source);
+      sourceRow = h("div", { class: "vsrc" },
+        h("span", { class: "grow" }, h("div", { style: "font-weight:500" }, t("Quelle")),
+          h("div", { class: "sub", style: "overflow-wrap:anywhere" }, friendly ? `${friendly} · ${dev.source}` : dev.source || "–")),
+        dev.source_ok === false ? chip(t("Quelle nicht verfügbar"), "warn") : null,
+        h("button", {
+          class: "action", disabled: busy || dev.removing,
+          onclick: () => {
+            this._sourceEdit = { serial: dev.serial, value: dev.source || "" };
+            this._render();
+            const input = this.shadowRoot.querySelector(".drawer .source-input");
+            if (input) { input.focus(); input.select(); }
+          },
+        }, t("Ändern")));
+    }
+
+    const confirmKey = `vremove:${dev.serial}`;
+    const forceKey = `vforce:${dev.serial}`;
+    const remove = async (force) => {
+      this._confirm = null;
+      const message = { type: "eq3_max/remove_virtual", device_id: dev.device_id };
+      if (force) message.force = true;
+      await this._call(removeKey, message, (res) => (res && res.removed
+        ? t("„{name}“ entfernt.", { name: dev.name })
+        : t("Wird entfernt, sobald alle verknüpften Geräte das Lösen quittiert haben.")));
+    };
+    const confirmBox = (text, label, force) => h("div", { class: "confirm" },
+      h("div", {}, text),
+      h("div", { class: "setfoot" },
+        h("button", { class: "action", onclick: () => { this._confirm = null; this._render(); } }, t("Abbrechen")),
+        h("button", { class: "action danger", disabled: busy, onclick: () => remove(force) }, label)));
+
+    const removal = dev.removing
+      ? [
+        h("div", { class: "notice", style: "margin-top:10px" }, t("Wird entfernt, sobald alle verknüpften Geräte das Lösen quittiert haben.")),
+        h("div", { class: "setfoot" },
+          h("button", { class: "action danger", disabled: busy, onclick: () => { this._confirm = forceKey; this._render(); } },
+            t("Trotzdem entfernen"))),
+        this._confirm === forceKey
+          ? confirmBox(t("Ein Thermostat, das die Verknüpfung noch kennt, sendet danach ins Leere und kann bis zu einer Stunde verstummen."),
+            t("Trotzdem entfernen"), true)
+          : null,
+      ]
+      : [
+        h("div", { class: "setfoot" },
+          h("span", { class: "sub", style: "flex:1" },
+            t("Entfernen löst zuerst alle Verknüpfungen; das Gerät verschwindet, sobald die verknüpften Geräte das quittiert haben.")),
+          h("button", { class: "action danger", disabled: busy, onclick: () => { this._confirm = confirmKey; this._render(); } },
+            t("Entfernen"))),
+        this._confirm === confirmKey
+          ? confirmBox(t("„{name}“ entfernen? Die verknüpften Geräte bekommen zuerst den Auftrag, die Verknüpfung zu lösen.", { name: dev.name }),
+            t("Entfernen"), false)
+          : null,
+      ];
+
+    return h("fieldset", {},
+      h("legend", {}, t("Virtuelles Gerät")),
+      sourceRow,
+      dev.source_ok === false && !editing
+        ? h("div", { class: "sub", style: "margin-top:4px" }, t("Die Quelle meldet gerade keinen verwertbaren Wert; das Gerät sendet so lange nichts."))
+        : null,
+      removal);
+  }
+
+  /** Hints at a virtual wall thermostat's room: a window contact linked only with its
+   * thermostats, and a thermostat whose stored week program differs from the room's. */
+  _virtualWallHints(entry, dev) {
+    const bySerial = new Map(entry.devices.map((d) => [d.serial, d]));
+    const mine = new Set(dev.links.partners.map((p) => p.serial));
+    for (const item of dev.links.pending) if (item.op !== "remove") mine.add(item.serial);
+    const thermostats = dev.links.partners.map((p) => bySerial.get(p.serial)).filter((d) => d && d.type === "heating_thermostat");
+    const hints = [];
+    if (dev.program_known === false) {
+      hints.push(h("div", { class: "notice" },
+        t("Für diesen Raum ist noch kein vollständiges Wochenprogramm bekannt. Er läuft deshalb manuell; Automatik ist möglich, sobald hier ein Wochenprogramm geschrieben wurde."),
+        h("div", { class: "setfoot" }, h("button", {
+          class: "action",
+          onclick: () => { this._tab = "week"; this._confirm = null; this._render(); },
+        }, t("Wochenprogramm festlegen")))));
+    }
+    // Addressed room temperature: not while a group id is on its way; across modules
+    // without the button (a group cannot help there).
+    if (dev.room_form === "addressed" && dev.room_form_reason === "modules") {
+      hints.push(h("div", { class: "notice" },
+        t("Die Thermostate dieses Raums sind an verschiedenen Funkmodulen; die Temperatur geht an jedes einzeln (je Thermostat etwa 13 s Sendezeit je Stunde), und zeitweise regeln sie auf den eigenen Fühler. Eine Gruppe hilft hier nicht – dafür müssten alle am selben Funkmodul sein.")));
+    } else if (dev.room_form === "addressed" && dev.room_form_reason !== "pending") {
+      const key = `group:${dev.serial}`;
+      hints.push(h("div", { class: "notice" },
+        thermostats.length > 1
+          ? t("Die Thermostate dieses Raums haben keine gemeinsame Gruppe; die Temperatur geht an jedes einzeln (je Thermostat etwa 13 s Sendezeit je Stunde), und zeitweise regeln sie auf den eigenen Fühler. Eine gemeinsame Gruppe behebt das.")
+          : t("Das Thermostat dieses Raums hat keine Gruppen-ID; die Temperatur wird einzeln an es gesendet. Mit einer Gruppen-ID geht sie an die Gruppe, und später verknüpfte Thermostate kommen dazu."),
+        h("div", { class: "setfoot" }, h("button", {
+          class: "action", disabled: this._busy.has(key) || !dev.device_id,
+          onclick: () => this._call(key, { type: "eq3_max/set_group", device_id: dev.device_id, room: true }, (res) =>
+            t("Raum bekommt Gruppen-ID {group} ({n} Geräte) – wartet auf Quittung.", { group: res.group, n: res.devices.length })),
+        }, t("Für den Raum vergeben")))));
+    }
+    const seen = new Set();
+    for (const thermostat of thermostats) {
+      for (const ref of thermostat.links.partners) {
+        const contact = bySerial.get(ref.serial);
+        if (!contact || contact.type !== "shutter_contact" || mine.has(ref.serial) || seen.has(ref.serial)) continue;
+        seen.add(ref.serial);
+        hints.push(h("div", { class: "notice" },
+          t("{contact} ist mit {thermostat} verknüpft, aber nicht mit diesem Wandthermostat. Damit es bei offenem Fenster die Fenster-auf-Temperatur sendet, den Kontakt auch hier verknüpfen.",
+            { contact: nameWithArea(ref), thermostat: thermostat.name }),
+          h("div", { class: "setfoot" }, this._linkButton("link", dev, ref, t("Verknüpfen")))));
+      }
+    }
+    // Week program: only where both sides have one stored (the devices do not report it).
+    const sig = (profile) => JSON.stringify(WP_DAYS.map((day) =>
+      (profile[day] || []).map((p) => [Number(p.temperature), String(p.until || "")])));
+    const own = dev.week_profile || {};
+    if (Object.keys(own).length) {
+      for (const thermostat of thermostats) {
+        const theirs = thermostat.week_profile || {};
+        if (!Object.keys(theirs).length || sig(theirs) === sig(own)) continue;
+        const key = `wp:${dev.serial}:copy:${thermostat.serial}`;
+        const writing = (thermostat.week_profile_writing || []).length > 0;
+        hints.push(h("div", { class: "notice" },
+          t("Das Wochenprogramm von {name} weicht von dem des Wandthermostats ab.", { name: thermostat.name }),
+          h("div", { class: "setfoot" }, h("button", {
+            class: "action", disabled: this._busy.has(key) || writing || !dev.device_id || !thermostat.device_id,
+            onclick: () => this._call(key,
+              { type: "eq3_max/copy_week_profile", device_id: dev.device_id, target_device_id: [thermostat.device_id] },
+              t("Wochenprogramm des Wandthermostats auf {name} kopiert.", { name: thermostat.name })),
+          }, t("Programm des Wandthermostats übernehmen")))));
+      }
+    }
+    return hints;
+  }
+
+  _renderLinks(entry, dev) {
     const rows = [];
     for (const partner of dev.links.partners) {
       rows.push(h("div", { class: "row" },
@@ -2105,6 +2501,8 @@ class Eq3MaxPanel extends HTMLElement {
     const chosen = dev.candidates.find((c) => c.serial === select.value);
 
     return [
+      dev.virtual ? this._renderVirtual(entry, dev) : null,
+      dev.virtual && dev.type === "wall_thermostat" ? this._virtualWallHints(entry, dev) : null,
       dev.sleeper && SLEEPER_HINTS[dev.type] ? h("div", { class: "notice" }, t(SLEEPER_HINTS[dev.type])) : null,
       h("div", {},
         rows.length ? rows : h("div", { class: "empty" }, t("Keine Verknüpfungen."))),

@@ -60,6 +60,7 @@ class MaxLocked(MaxCulEntity, BinarySensorEntity):
 
 class MaxWindow(MaxCulEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.WINDOW
+    _shows_source = True
 
     def __init__(self, coordinator, device) -> None:
         super().__init__(coordinator, device, "state", "Fenster")

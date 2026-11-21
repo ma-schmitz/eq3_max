@@ -9,11 +9,11 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -31,9 +31,11 @@ from .const import (
     signal_button,
     signal_update,
 )
-from .protocol.devices import CONFIG_ENTRY_KEYS, IDENTITY_KEYS, MaxDevice
+from .protocol.devices import CONFIG_ENTRY_KEYS, IDENTITY_KEYS, VIRTUAL_KEYS, MaxDevice
 from .protocol.hub import MAIN_RADIO, MaxHub, RadioSpec
+from .protocol.messages import DeviceType, FrameError
 from .radios import extra_radios, radio_identifier, radio_items, radio_names
+from .virtual_source import read_temperature, read_window
 
 _LOGGER = logging.getLogger(__name__)
 _SEVERITY = {"port_lost": ir.IssueSeverity.ERROR, "stick_deaf": ir.IssueSeverity.ERROR}
@@ -46,14 +48,15 @@ def issue_id(kind: str, radio: str) -> str:
 
 
 @callback
-def async_forget_device(hass: HomeAssistant, entry: ConfigEntry, serial: str) -> bool:
-    """Drop a device from the entry (no radio); a loaded entry reloads without it."""
+def async_forget_device(hass: HomeAssistant, entry: ConfigEntry, serial: str, *, reload: bool = True) -> bool:
+    """Drop a device from the entry (no radio); a loaded entry reloads without it unless
+    `reload` is False (the hub no longer has it and its device is detached otherwise)."""
     items = entry.data[CONF_DEVICES]
     remaining = [item for item in items if item.get("serial") != serial]
     if len(remaining) == len(items):
         return False
     hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_DEVICES: remaining})
-    if entry.state is ConfigEntryState.LOADED:
+    if reload and entry.state is ConfigEntryState.LOADED:
         hass.config_entries.async_schedule_reload(entry.entry_id)
     return True
 
@@ -73,6 +76,8 @@ class MaxCulCoordinator:
         self._hub_device_id: str | None = None
         # Device registry ids of the radio modules ("" = main).
         self._radio_device_ids: dict[str, str] = {}
+        # Listener on the source entities of the virtual devices.
+        self._unsub_sources: Callable[[], None] | None = None
 
     def identity_devices(self) -> list[MaxDevice]:
         return [MaxDevice.from_dict(d) for d in self.entry.data[CONF_DEVICES]]
@@ -114,6 +119,7 @@ class MaxCulCoordinator:
             on_update=self._on_update,
             on_button=self._on_button,
             on_device_added=self._on_device_added,
+            on_device_removed=self._on_device_removed,
             on_problem=self._on_problem,
             radios=radios,
             brake=self.entry.options.get(CONF_BRAKE, False),
@@ -150,6 +156,11 @@ class MaxCulCoordinator:
             )
             self._radio_device_ids[item["id"]] = radio_device.id
         await self.hub.start()
+        # Virtual devices: the current value of each source, then every change of it.
+        self._watch_sources()
+        for dev in list(self.hub.devices.values()):
+            if dev.virtual:
+                self._push_source(dev)
         # Airtime and queue age without radio traffic; refresh the hub entities.
         self._unsub_refresh = async_track_time_interval(self.hass, self._refresh, HUB_REFRESH)
 
@@ -159,7 +170,12 @@ class MaxCulCoordinator:
         if self._hub_device_id is None:
             return
         dev_reg = dr.async_get(self.hass)
-        radio_of = {item["serial"]: item.get("radio", MAIN_RADIO) for item in self.entry.data[CONF_DEVICES] if item.get("serial")}
+        # A virtual device has no module of its own: it hangs under the hub (a stored module
+        # is ignored).
+        radio_of = {
+            item["serial"]: MAIN_RADIO if item.get("virtual") else item.get("radio", MAIN_RADIO)
+            for item in self.entry.data[CONF_DEVICES] if item.get("serial")
+        }
         # DeviceInfo does not rename existing devices: names from the entry data win
         # unless the user renamed the device.
         names = {
@@ -182,6 +198,12 @@ class MaxCulCoordinator:
 
     @callback
     def _refresh(self, _now: Any) -> None:
+        # A temperature source that stopped reporting changes no state: its age is
+        # looked at here (virtual_source.SOURCE_MAX_AGE_S).
+        if self.hub is not None:
+            for dev in list(self.hub.devices.values()):
+                if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT:
+                    self._push_source(dev)
         async_dispatcher_send(self.hass, signal_update(self.entry.entry_id), None)
         async_dispatcher_send(self.hass, SIGNAL_PANEL_UPDATE)
 
@@ -189,6 +211,9 @@ class MaxCulCoordinator:
         if self._unsub_refresh is not None:
             self._unsub_refresh()
             self._unsub_refresh = None
+        if self._unsub_sources is not None:
+            self._unsub_sources()
+            self._unsub_sources = None
         if self.hub is not None:
             try:
                 await self.hub.stop()
@@ -240,6 +265,13 @@ class MaxCulCoordinator:
             # never write its id back.
             if (device.radio or "radio" in item) and device.radio in radio_names(self.entry.data):
                 updated["radio"] = device.radio
+            # Virtual devices: a changed source, a removal begun (it goes on after a restart).
+            if device.virtual:
+                for key in VIRTUAL_KEYS:
+                    if getattr(device, key):
+                        updated[key] = getattr(device, key)
+                    else:
+                        updated.pop(key, None)
             if updated == item:
                 return
             new_items = [*items[:index], updated, *items[index + 1 :]]
@@ -256,6 +288,66 @@ class MaxCulCoordinator:
         devices = [*self.entry.data[CONF_DEVICES], device.identity_dict()]
         self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, CONF_DEVICES: devices})
         self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+
+    @callback
+    def _on_device_removed(self, device: MaxDevice) -> None:
+        """A virtual device is gone for good (its partners let go of it): out of the entry
+        and the device registry, which takes its entities along; no reload."""
+        async_forget_device(self.hass, self.entry, device.serial, reload=False)
+        dev_reg = dr.async_get(self.hass)
+        device_entry = dev_reg.async_get_device(identifiers={(DOMAIN, device.serial)})
+        if device_entry is not None:
+            dev_reg.async_update_device(device_entry.id, remove_config_entry_id=self.entry.entry_id)
+        self._watch_sources()
+        if self.hub is not None:
+            self._store.async_delay_save(self._data_to_save, 10)
+        async_dispatcher_send(self.hass, SIGNAL_PANEL_UPDATE)
+
+    @callback
+    def async_set_virtual_source(self, address: int, source: str) -> None:
+        """Feed a virtual device from another entity (no radio); kept in the entry."""
+        assert self.hub is not None
+        dev = self.hub.devices.get(address)
+        if dev is None or not dev.virtual:
+            raise FrameError(f"no virtual device at {address:06X}", key="not_virtual")
+        dev.source = source
+        self._watch_sources()
+        self._on_update(dev)
+        self._push_source(dev)
+
+    @callback
+    def _watch_sources(self) -> None:
+        """Listen to the source entities of the virtual devices (again, after a change)."""
+        if self._unsub_sources is not None:
+            self._unsub_sources()
+            self._unsub_sources = None
+        assert self.hub is not None
+        sources = {dev.source for dev in self.hub.devices.values() if dev.virtual and dev.source}
+        if sources:
+            self._unsub_sources = async_track_state_change_event(self.hass, sources, self._source_changed)
+
+    @callback
+    def _source_changed(self, event: Event[EventStateChangedData]) -> None:
+        if self.hub is None:
+            return
+        entity_id = event.data["entity_id"]
+        for dev in list(self.hub.devices.values()):
+            if dev.virtual and dev.source == entity_id:
+                self._push_source(dev)
+
+    @callback
+    def _push_source(self, dev: MaxDevice) -> None:
+        """The source's current value into the hub; a device being removed gets none."""
+        assert self.hub is not None
+        if dev.removing:
+            return
+        try:
+            if dev.device_type is DeviceType.SHUTTER_CONTACT:
+                self.hub.virtual.set_window(dev.address, read_window(self.hass, dev.source))
+            elif dev.device_type is DeviceType.WALL_THERMOSTAT:
+                self.hub.virtual.set_measured(dev.address, read_temperature(self.hass, dev.source))
+        except FrameError as err:
+            _LOGGER.debug("Source %s of %s not passed on: %s", dev.source, dev.serial, err)
 
     @callback
     def async_set_radio(self, address: int, radio: str) -> None:

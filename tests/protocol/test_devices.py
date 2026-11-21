@@ -692,3 +692,33 @@ def test_window_change_time_only_on_a_real_change():
     assert d.window_changed_at == 200.0  # cyclic report, still open
     again = MaxDevice.from_dict(d.to_dict())
     assert again.window_changed_at == 200.0
+
+
+def test_virtual_fields_survive_identity_roundtrip():
+    dev = MaxDevice(0x111111, "VIRT111111", DeviceType.WALL_THERMOSTAT, virtual=True, source="sensor.buero", removing=True)
+    again = MaxDevice.from_dict(dev.identity_dict())
+    assert (again.virtual, again.source, again.removing) == (True, "sensor.buero", True)
+
+
+def test_identity_of_a_virtual_device_leaves_out_what_is_not_set():
+    dev = MaxDevice(0x111111, "VIRT111111", DeviceType.WALL_THERMOSTAT, virtual=True, source="sensor.buero")
+    ident = dev.identity_dict()
+    assert (ident["virtual"], ident["source"]) == (True, "sensor.buero") and "removing" not in ident
+
+
+def test_old_entry_loads_as_real_device():
+    assert MaxDevice.from_dict({"address": 1, "serial": "X", "device_type": 4}).virtual is False
+
+
+def test_virtual_contact_is_no_sleeper():
+    assert MaxDevice(1, "VIRT000001", DeviceType.SHUTTER_CONTACT, virtual=True).is_sleeper is False
+    assert MaxDevice(1, "X", DeviceType.SHUTTER_CONTACT).is_sleeper is True
+
+
+def test_virtual_wall_config_keys():
+    dev = MaxDevice(1, "VIRT000001", DeviceType.WALL_THERMOSTAT, virtual=True)
+    assert dev.config_keys == ("komfort", "eco", "maximal", "minimal", "fenster_temperatur", "fenster_dauer")
+
+
+def test_virtual_contact_has_no_config_keys():
+    assert MaxDevice(1, "VIRT000001", DeviceType.SHUTTER_CONTACT, virtual=True).config_keys == ()

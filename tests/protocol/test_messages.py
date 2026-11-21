@@ -8,7 +8,12 @@ from custom_components.eq3_max.protocol.messages import (
     FrameError,
     Mode,
     MsgType,
+    build_ack,
     build_pair_pong,
+    build_shutter_contact_state,
+    build_wall_thermostat_control,
+    encode_wall_ack,
+    encode_wall_thermostat_control,
     build_set_temperature,
     build_time_information,
     decode_ack,
@@ -691,3 +696,37 @@ def test_wake_up_and_plug_adapter_ping():
     assert encode_frame(build_wake_up(0x01, 0x123456, 0xABCDEF)) == "0B0100F1123456ABCDEF003F"
     ping = decode_pair_ping(bytes.fromhex("100800") + b"PLG1234567")
     assert ping.device_type is DeviceType.PLUG_ADAPTER and ping.serial == "PLG1234567"
+
+
+def test_wall_thermostat_control_payload():
+    assert encode_wall_thermostat_control(21.0, 22.0).hex() == "2adc"
+    assert encode_wall_thermostat_control(21.0, 30.0).hex() == "aa2c"  # 9th bit of the temperature
+    assert decode_wall_thermostat_control(encode_wall_thermostat_control(20.5, 22.5)).measured == 22.5
+
+
+@pytest.mark.parametrize("measured", [-0.1, 51.2])
+def test_wall_thermostat_control_rejects_range(measured):
+    with pytest.raises(FrameError):
+        encode_wall_thermostat_control(21.0, measured)
+
+
+@pytest.mark.parametrize("target", [4.0, 31.0])
+def test_wall_thermostat_control_rejects_target_range(target):
+    with pytest.raises(FrameError):
+        encode_wall_thermostat_control(target, 20.0)
+
+
+def test_wall_thermostat_control_frames():  # capture 2026-11-20
+    assert encode_frame(build_wall_thermostat_control(1, 0x111111, 0xA1B004, 0, 21.0, 22.0)) == "0C010042111111A1B004002ADC"
+    assert encode_frame(build_wall_thermostat_control(9, 0x111111, 0, 5, 20.5, 22.5)) == "0C0904421111110000000529E1"
+
+
+def test_shutter_contact_state_frames():
+    assert encode_frame(build_shutter_contact_state(0x0B, 0x222222, 0xA1B004, True)) == "0B0B0630222222A1B0040012"
+    assert encode_frame(build_shutter_contact_state(0x0C, 0x222222, 0xA1B004, False)) == "0B0C0630222222A1B0040010"
+
+
+def test_wall_ack():
+    assert encode_wall_ack(Mode.MANUAL, 21.0).hex() == "0119042a"
+    assert encode_wall_ack(Mode.AUTO, 17.0).hex() == "01180422"
+    assert encode_frame(build_ack(9, 0x111111, 0xA1B004, encode_wall_ack(Mode.MANUAL, 21.0))) == "0E090202111111A1B004000119042A"

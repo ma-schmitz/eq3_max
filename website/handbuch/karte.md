@@ -52,7 +52,8 @@ room gets warmer or colder than expected.
 ## Operation
 
 - **−/+** changes the target in 0.5 °C steps (4.5–30.5 °C). A target not acknowledged yet
-  counts, so several taps add up.
+  counts, so several taps add up. In Auto the new value holds until the next switch point, in
+  manual mode permanently (see [Operating a thermostat](bedienung.md#changing-the-setpoint)).
 - **Mode buttons:** Manual, Auto (week program), Comfort, Eco, Boost, Off. When the thermostat
   is set to away, "Away until …" shows; a mode button ends it.
 - **Click the current temperature** to open Home Assistant's dialog with its history, **click the

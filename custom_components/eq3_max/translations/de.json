@@ -715,6 +715,39 @@
     },
     "link_op_unknown": {
       "message": "Kein offener Verknüpfungsauftrag mit {serial}"
+    },
+    "virtual_type": {
+      "message": "Ein virtuelles Gerät kann nur ein Fensterkontakt oder ein Wandthermostat sein"
+    },
+    "virtual_network_radio": {
+      "message": "Ein virtuelles Wandthermostat geht vorerst nur mit Thermostaten an einem per USB oder seriell angeschlossenen Funkmodul, nicht an einem Netzwerkmodul"
+    },
+    "virtual_no_button": {
+      "message": "Ein Eco-Taster lässt sich nicht mit einem virtuellen Wandthermostat verknüpfen"
+    },
+    "link_second_wall": {
+      "message": "Dieses Thermostat hat bereits ein Wandthermostat"
+    },
+    "virtual_removing": {
+      "message": "Dieses virtuelle Gerät wird gerade entfernt"
+    },
+    "virtual_no_program": {
+      "message": "Für dieses virtuelle Wandthermostat ist noch kein vollständiges Wochenprogramm bekannt; Automatik ist erst nach dem Schreiben eines Wochenprogramms möglich"
+    },
+    "virtual_no_radio": {
+      "message": "Ein virtuelles Gerät hat kein Funkmodul, daher ist diese Aktion nicht möglich"
+    },
+    "not_virtual": {
+      "message": "Dies ist kein virtuelles Gerät"
+    },
+    "virtual_source_missing": {
+      "message": "Die Entität {entity} gibt es nicht"
+    },
+    "virtual_source_domain": {
+      "message": "Die Entität {entity} kann für dieses Gerät nicht als Quelle dienen"
+    },
+    "virtual_name_missing": {
+      "message": "Bitte einen Namen angeben"
     }
   },
   "selector": {

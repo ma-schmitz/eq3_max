@@ -62,6 +62,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
 
 class MaxClimate(MaxCulEntity, ClimateEntity):
+    _shows_source = True
     # HA 2026.11 reads temperatures from the native_* members and logs a deprecation for
     # classes that only provide the old names (removal in 2027.11). The old names stay as
     # aliases for HA < 2026.11 (hacs.json); with both present, HA 2026.11 keeps quiet.
@@ -133,6 +134,19 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
     target_temperature = native_target_temperature  # HA < 2026.11
 
     @property
+    def hvac_modes(self) -> list[HVACMode]:
+        """A virtual wall thermostat offers automatic mode only with a complete week
+        program (each room temperature telegram sets the thermostats' target)."""
+        dev = self.device
+        if (
+            dev.virtual
+            and dev.device_type is DeviceType.WALL_THERMOSTAT
+            and not self.coordinator.hub.virtual.program_known(dev.address)
+        ):
+            return [HVACMode.HEAT, HVACMode.OFF]
+        return self._attr_hvac_modes
+
+    @property
     def hvac_mode(self) -> HVACMode | None:
         mode = self.device.mode
         if mode is None:
@@ -158,9 +172,14 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         if self.device.mode is Mode.TEMPORARY:
             return PRESET_AWAY
         dev = self.device
-        if dev.mode is Mode.MANUAL and dev.target is not None and dev.target != dev.window_open_temperature:
-            # Manual on the stored comfort/eco value: what the device's own buttons and
-            # FHEM do (SetTemperature MANUAL with that value). An open window wins.
+        if (
+            dev.mode in (Mode.MANUAL, Mode.AUTO)
+            and dev.target is not None
+            and dev.target != dev.window_open_temperature
+        ):
+            # Manual or auto on the stored comfort/eco value: what the device's own buttons
+            # and FHEM do (SetTemperature with that value); a choice made in Auto sticks.
+            # An open window wins.
             if dev.target == dev.config.get("komfort"):
                 return PRESET_COMFORT
             if dev.target == dev.config.get("eco"):
@@ -192,6 +211,19 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
         """Mode a mode/preset change starts from: a queued command beats the report."""
         dev = self.device
         return dev.pending_mode if dev.has_pending else dev.mode
+
+    def _setpoint_mode(self) -> Mode:
+        """Mode a new setpoint goes out with: in automatic mode it holds until the week
+        program's next switch point and the device stays in Auto (as at its handwheel);
+        otherwise it is manual (permanent). Away and boost end in manual, as before. In the
+        room of a virtual wall thermostat without a known week program there is no
+        automatic mode (a member may report AUTO for a moment): manual."""
+        if self._base_mode() is not Mode.AUTO:
+            return Mode.MANUAL
+        virtual = self.coordinator.hub.virtual
+        if virtual.in_room(self._address) and not virtual.program_known(self._address):
+            return Mode.MANUAL
+        return Mode.AUTO
 
     def _comfort(self) -> float:
         """Comfort temperature to return to: the last manual one (HA or device), else the
@@ -234,12 +266,17 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temperature = kwargs.get(ATTR_TEMPERATURE)
         hvac_mode = kwargs.get(ATTR_HVAC_MODE)
+        if hvac_mode == HVACMode.AUTO and temperature is not None:
+            # Back to the program; the temperature holds until its next switch point.
+            self._send(float(temperature), Mode.AUTO)
+            return
         if hvac_mode in (HVACMode.OFF, HVACMode.AUTO) or (hvac_mode is not None and temperature is None):
             await self.async_set_hvac_mode(hvac_mode)
             return
         if temperature is None:
             return
-        self._send(float(temperature), Mode.MANUAL)
+        # hvac_mode heat asks for a permanent value; without one the device's mode decides.
+        self._send(float(temperature), Mode.MANUAL if hvac_mode == HVACMode.HEAT else self._setpoint_mode())
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
@@ -260,14 +297,18 @@ class MaxClimate(MaxCulEntity, ClimateEntity):
             self._send(self._away_temperature(), Mode.TEMPORARY, _away_end(_local_now() + timedelta(hours=hours)))
             return
         if preset_mode == PRESET_COMFORT:
-            self._send(self._configured("komfort"), Mode.MANUAL)
+            self._send(self._configured("komfort"), self._setpoint_mode())
             return
         if preset_mode == PRESET_ECO:
             # Eco is a setback, no comfort value to return to after away/boost.
-            self._send(self._configured("eco"), Mode.MANUAL, comfort=False)
+            self._send(self._configured("eco"), self._setpoint_mode(), comfort=False)
             return
         if preset_mode != PRESET_BOOST and self._base_mode() in (Mode.TEMPORARY, Mode.BOOST):
             self._send(self._comfort(), Mode.MANUAL)
+            return
+        if preset_mode == PRESET_NONE and self._setpoint_mode() is Mode.AUTO:
+            # "None" in Auto drops a setpoint changed meanwhile: back to the week program.
+            self._send(None, Mode.AUTO)
             return
         current = self._base_target()
         target = current if current is not None else self._comfort()

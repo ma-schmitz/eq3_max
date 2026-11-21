@@ -11,8 +11,10 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.eq3_max.const import DOMAIN
+from custom_components.eq3_max.protocol.messages import DeviceType
 
-from .conftest import FK, HT, PB, WT
+from .conftest import FK, HT, PB, WT, FakeHub
+from .test_virtual import make_entry
 
 SERIALS = {HT: "MEQ9000007", FK: "NEQ9000010", PB: "KEQ9000001", WT: "NEQ9000011"}
 
@@ -49,6 +51,9 @@ def by_serial(section):
         {"type": "eq3_max/set_config", "device_id": "x", "kind": "temp", "values": {"komfort": 21}},
         {"type": "eq3_max/set_week_profile", "device_id": "x", "weekday": ["Montag"], "profile": [{"temperature": 21}]},
         {"type": "eq3_max/copy_week_profile", "device_id": "x", "target_device_id": ["y"]},
+        {"type": "eq3_max/create_virtual", "entry_id": "x", "kind": "window", "name": "n", "source": "binary_sensor.x"},
+        {"type": "eq3_max/update_virtual", "device_id": "x", "source": "binary_sensor.x"},
+        {"type": "eq3_max/remove_virtual", "device_id": "x"},
     ],
 )
 async def test_commands_require_admin(hass, setup_entry, fake_hub, hass_ws_client, hass_read_only_access_token, msg):
@@ -647,3 +652,203 @@ async def test_overview_lists_the_queue_of_a_radio_module(hass, setup_entry, fak
         {"address": f"{FK:06X}", "kind": "link", "attempts": 0, "on_air": False, "partner": f"{HT:06X}"},
         {"address": f"{FK:06X}", "kind": "reset", "attempts": 0, "on_air": False},
     ]
+
+
+# --- virtual devices ---
+
+
+@pytest.fixture
+def virtual_entry():
+    return make_entry()
+
+
+async def _setup_virtual(hass, virtual_entry):
+    virtual_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(virtual_entry.entry_id)
+    await hass.async_block_till_done()
+
+
+def _virtual_id(hass, serial):
+    return dr.async_get(hass).async_get_device(identifiers={(DOMAIN, serial)}).id
+
+
+async def test_create_virtual_window(hass, setup_entry, fake_hub, hass_ws_client):
+    hass.states.async_set("binary_sensor.kueche", "off")
+    client = await hass_ws_client(hass)
+    hub = FakeHub.last  # the entry reloads after the device was added: a new hub follows
+    res = await call(
+        client, type="eq3_max/create_virtual", entry_id=setup_entry.entry_id, kind="window", name=" Küche ",
+        source="binary_sensor.kueche",
+    )
+    assert res["success"] and res["result"]["serial"].startswith("VIRT")
+    assert ("create_virtual", DeviceType.SHUTTER_CONTACT, "Küche", "binary_sensor.kueche", "") in hub.commands
+    await hass.async_block_till_done()                                        # the reload after creating
+
+
+async def test_create_virtual_wall(hass, setup_entry, fake_hub, hass_ws_client):
+    hass.states.async_set("sensor.buero", "21", {"unit_of_measurement": "°C"})
+    hub = FakeHub.last
+    res = await call(
+        await hass_ws_client(hass), type="eq3_max/create_virtual", entry_id=setup_entry.entry_id, kind="wall",
+        name="Büro", source="sensor.buero",
+    )
+    assert res["success"]
+    assert ("create_virtual", DeviceType.WALL_THERMOSTAT, "Büro", "sensor.buero", "") in hub.commands
+    await hass.async_block_till_done()                                        # the reload after creating
+
+
+@pytest.mark.parametrize(
+    "kind, source, name, key",
+    [
+        ("window", "sensor.buero", "x", "virtual_source_domain"),
+        ("wall", "binary_sensor.kueche", "x", "virtual_source_domain"),
+        ("wall", "sensor.gibtsnicht", "x", "virtual_source_missing"),
+        ("wall", "sensor.buero", "  ", "virtual_name_missing"),
+    ],
+)
+async def test_create_virtual_checks_the_input(hass, setup_entry, fake_hub, hass_ws_client, kind, source, name, key):
+    hass.states.async_set("sensor.buero", "21", {"unit_of_measurement": "°C"})
+    hass.states.async_set("binary_sensor.kueche", "off")
+    res = await call(
+        await hass_ws_client(hass), type="eq3_max/create_virtual", entry_id=setup_entry.entry_id, kind=kind,
+        name=name, source=source,
+    )
+    assert not res["success"] and res["error"]["translation_key"] == key
+    assert not any(c[0] == "create_virtual" for c in FakeHub.last.commands)
+
+
+async def test_create_virtual_rejects_unknown_entry_and_kind(hass, setup_entry, fake_hub, hass_ws_client):
+    hass.states.async_set("sensor.buero", "21", {"unit_of_measurement": "°C"})
+    client = await hass_ws_client(hass)
+    base = {"type": "eq3_max/create_virtual", "kind": "wall", "name": "x", "source": "sensor.buero"}
+    res = await call(client, entry_id="nope", **base)
+    assert not res["success"] and res["error"]["translation_key"] == "hub_not_loaded"
+    res = await call(client, entry_id=setup_entry.entry_id, radio="gibtsnicht", **base)
+    assert res["success"]                                                     # radio: accepted, ignored
+    await hass.async_block_till_done()                                        # the reload after creating
+    res = await call(client, entry_id=setup_entry.entry_id, **{**base, "kind": "plug"})
+    assert not res["success"] and res["error"]["code"] == "invalid_format"
+
+
+async def test_overview_marks_virtual_devices(hass, hass_ws_client, virtual_entry, fake_hub):
+    hass.states.async_set("sensor.buero", "21")
+    await _setup_virtual(hass, virtual_entry)
+    devs = by_serial((await overview(await hass_ws_client(hass)))["entries"][0])
+    v = devs["VIRT111111"]
+    assert v["virtual"] is True and v["source"] == "sensor.buero" and v["removing"] is False
+    assert v["source_ok"] is True and v["state"]["rssi"] is None and v["sleeper"] is False
+    assert devs["VIRT222222"]["sleeper"] is False and devs["VIRT222222"]["virtual"] is True
+    real = devs["MEQ9000007"]
+    assert real["virtual"] is False and real["source"] == "" and real["removing"] is False
+
+
+async def test_overview_tells_how_the_room_temperature_goes(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    hub = FakeHub.last
+    wall, ht = hub.devices[0x111111], hub.devices[0xA1B005]
+    client = await hass_ws_client(hass)
+    form = lambda devs: by_serial(devs["entries"][0])["VIRT111111"]["room_form"]
+    assert form(await overview(client)) is None                               # no thermostat yet
+    wall.links.append(ht.serial); ht.links.append(wall.serial)
+    assert form(await overview(client)) == "addressed"                        # no group
+    ht.group = 4
+    assert form(await overview(client)) == "group"
+    devs = by_serial((await overview(client))["entries"][0])
+    assert devs["VIRT222222"]["room_form"] is None and devs["MEQ9000007"]["room_form"] is None
+
+
+async def test_wall_source_must_be_a_temperature(hass, setup_entry, fake_hub, hass_ws_client):
+    hass.states.async_set("sensor.feuchte", "55", {"unit_of_measurement": "%", "device_class": "humidity"})
+    hass.states.async_set("sensor.kelvin", "294", {"unit_of_measurement": "K"})
+    client = await hass_ws_client(hass)
+    base = {"type": "eq3_max/create_virtual", "entry_id": setup_entry.entry_id, "kind": "wall", "name": "x"}
+    res = await call(client, source="sensor.feuchte", **base)
+    assert not res["success"] and res["error"]["translation_key"] == "virtual_source_domain"
+    res = await call(client, source="sensor.kelvin", **base)
+    assert res["success"]
+    await hass.async_block_till_done()                                        # the reload after creating
+
+
+async def test_update_virtual_changes_the_source(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    hass.states.async_set("sensor.neu", "20", {"device_class": "temperature"})
+    client = await hass_ws_client(hass)
+    res = await call(client, type="eq3_max/update_virtual", device_id=_virtual_id(hass, "VIRT111111"), source="sensor.neu")
+    assert res["success"]
+    assert FakeHub.last.devices[0x111111].source == "sensor.neu"
+    res = await call(client, type="eq3_max/update_virtual", device_id=_virtual_id(hass, "VIRT111111"), source="binary_sensor.x")
+    assert not res["success"] and res["error"]["translation_key"] in ("virtual_source_domain", "virtual_source_missing")
+    res = await call(client, type="eq3_max/update_virtual", device_id=_virtual_id(hass, "VIRT222222"), source="sensor.neu")
+    assert not res["success"] and res["error"]["translation_key"] == "virtual_source_domain"
+
+
+async def test_update_virtual_refuses_real_devices(hass, virtual_entry, fake_hub, hass_ws_client):
+    await _setup_virtual(hass, virtual_entry)
+    hass.states.async_set("binary_sensor.neu", "off")
+    res = await call(
+        await hass_ws_client(hass), type="eq3_max/update_virtual", device_id=_virtual_id(hass, "MEQ9000007"),
+        source="binary_sensor.neu",
+    )
+    assert not res["success"] and res["error"]["translation_key"] == "not_virtual"
+
+
+async def test_remove_virtual(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    client = await hass_ws_client(hass)
+    res = await call(client, type="eq3_max/remove_virtual", device_id=_virtual_id(hass, "VIRT111111"))
+    assert res["success"] and res["result"] == {"removed": True}
+    assert FakeHub.last.commands[-1] == ("remove_virtual", 0x111111, False)
+    FakeHub.last.virtual.remove_result = False
+    res = await call(client, type="eq3_max/remove_virtual", device_id=_virtual_id(hass, "VIRT222222"), force=True)
+    assert res["success"] and res["result"] == {"removed": True}
+    assert FakeHub.last.commands[-1] == ("remove_virtual", 0x222222, True)
+
+
+async def test_remove_virtual_reports_a_pending_removal(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    FakeHub.last.virtual.remove_result = False
+    res = await call(await hass_ws_client(hass), type="eq3_max/remove_virtual", device_id=_virtual_id(hass, "VIRT111111"))
+    assert res["success"] and res["result"] == {"removed": False}
+    devs = by_serial((await overview(await hass_ws_client(hass)))["entries"][0])
+    assert devs["VIRT111111"]["removing"] is True
+
+
+async def test_remove_virtual_refuses_real_devices(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    res = await call(await hass_ws_client(hass), type="eq3_max/remove_virtual", device_id=_virtual_id(hass, "MEQ9000007"))
+    assert not res["success"] and res["error"]["translation_key"] == "not_virtual"
+    assert not any(c[0] == "remove_virtual" for c in FakeHub.last.commands)
+
+
+async def test_overview_tells_whether_the_program_is_known(hass, hass_ws_client, virtual_entry, fake_hub):
+    from custom_components.eq3_max.protocol.devices import WEEKDAYS
+
+    await _setup_virtual(hass, virtual_entry)
+    hub = FakeHub.last
+    client = await hass_ws_client(hass)
+    devs = by_serial((await overview(client))["entries"][0])
+    assert devs["VIRT111111"]["program_known"] is False
+    assert devs["VIRT222222"]["program_known"] is None and devs["MEQ9000007"]["program_known"] is None
+    hub.devices[0x111111].week_profile = {day: [{"temperature": 19.0, "until": "24:00"}] for day in WEEKDAYS}
+    assert by_serial((await overview(client))["entries"][0])["VIRT111111"]["program_known"] is True
+
+
+async def test_overview_tells_why_the_room_temperature_goes_addressed(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    hub = FakeHub.last
+    wall, ht = hub.devices[0x111111], hub.devices[0xA1B005]
+    client = await hass_ws_client(hass)
+    reason = lambda devs: by_serial(devs["entries"][0])["VIRT111111"]["room_form_reason"]
+    assert reason(await overview(client)) is None
+    wall.links.append(ht.serial); ht.links.append(wall.serial)
+    assert reason(await overview(client)) == "no_group"
+    ht.pending_group = 4
+    assert reason(await overview(client)) == "pending"
+
+
+async def test_set_radio_of_a_virtual_device_is_a_clean_error(hass, hass_ws_client, virtual_entry, fake_hub):
+    await _setup_virtual(hass, virtual_entry)
+    res = await call(
+        await hass_ws_client(hass), type="eq3_max/set_radio", device_id=_virtual_id(hass, "VIRT111111"), radio=""
+    )
+    assert not res["success"] and res["error"]["translation_key"] == "virtual_no_radio"

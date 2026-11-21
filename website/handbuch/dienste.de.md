@@ -76,9 +76,20 @@ data:
 - **Das Programm gilt für den ganzen Raum (ab 0.7.0).** Wandthermostat und Heizkörper
   schalten jeder nach der eigenen Kopie. Schreibt man Tage auf ein Thermostat, das über ein
   Wandthermostat verknüpft ist, schreibt die Integration dieselben Tage auch auf die übrigen
-  Thermostate des Raums. Der Dienst wartet auf das genannte Gerät; die anderen laufen
+  Thermostate des Raums. Der Dienst wartet auf jedes genannte Gerät; die übrigen laufen
   daneben, ihr Stand steht im Reiter „Wochenprogramm“. Bei fünf Geräten sind das für eine
-  ganze Woche bis zu 70 Telegramme.
+  ganze Woche bis zu 70 Telegramme. Ist ein Thermostat des Raums noch mit anderen Tagen
+  beschäftigt, schreibt die Integration ihm die neuen Tage danach (ab 0.10.0; vorher fehlten
+  sie ihm). Ist das [virtuelle Wandthermostat](virtuelle-geraete.md), das selbst nichts
+  funkt, das einzige oder erste genannte Gerät, wartet der Dienst, bis alle Thermostate des
+  Raums das Programm übernommen haben; sonst wartet er nur auf die genannten. Scheitert
+  eines, steht der Grund an diesem Thermostat; der Dienst meldet ihn nur, wenn das
+  Thermostat selbst genannt ist. Bei
+  aufgebrauchtem Funkbudget kann das lange dauern, und eine Automation, die den Dienst
+  aufruft, wartet so lange. Nennt man das Wandthermostat und seine Heizkörper zusammen (oder
+  kopiert in einen Raum), schreibt die Integration jedes Thermostat nur einmal, wartet aber
+  auf jedes genannte und meldet seinen Fehler; die Quelle einer Kopie schreibt sie nicht
+  noch einmal.
 - Auslesen kann die Integration das Programm nicht (die Geräte melden es nicht). Sie merkt
   sich die zuletzt quittierten Tage je Gerät; sie stehen in der Diagnose und in der
   Seite „eQ-3 MAX!“ (Datenbasis `week_profile`).

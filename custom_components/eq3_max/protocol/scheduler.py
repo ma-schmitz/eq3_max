@@ -17,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PRIO_REPLY = 0
 PRIO_COMMAND = 1
+PRIO_BACKGROUND = 2
 PREAMBLE_S = 1.0
 PER_BYTE_S = 0.008
 BUDGET_S = 36.0
@@ -24,6 +25,9 @@ BUDGET_S = 36.0
 # at most 9 s in store, 4.5 s after a reset), so a telegram with preamble needs up to
 # about 110 s; asking again every second only fills the log.
 LOVF_RETRY_S = 10.0
+# A telegram without acknowledgement counts as sent once the stick had this long (s) to
+# refuse it with LOVF (culfw answers at once); a refused one cost no airtime.
+NO_ACK_LOVF_WAIT_S = 0.3
 WINDOW_S = 3600.0
 
 
@@ -69,11 +73,19 @@ class Command:
     # Per-command limits; None uses the scheduler's ack timeout / retries.
     retries: int | None = None
     ack_timeout: float | None = None
+    # Airtime (s) of the hourly budget kept free for others: with reserve > 0 the command
+    # expires instead of going on air when it would eat into that reserve.
+    reserve: float = 0.0
+    # A background telegram that is built anew later: a LOVF ends it (EXPIRED) instead of
+    # holding up the queue until the stick sends again (always so with a reserve).
+    expire_on_lovf: bool = False
     seq: int = field(default=0, compare=False)
     sent: int = field(default=0, compare=False)
     # Scheduler clock time of the first attempt that went to the stick.
     first_sent_at: float | None = field(default=None, compare=False)
     outcome: Outcome | None = field(default=None, compare=False)
+    # A command with reserve the stick refused (LOVF): it expired without going on air.
+    lovf: bool = field(default=False, compare=False)
 
 
 class RadioScheduler:
@@ -92,6 +104,7 @@ class RadioScheduler:
         on_finished: Callable[[Command], None] | None = None,
         next_counter: Callable[[], int] | None = None,
         air_lock: asyncio.Lock | None = None,
+        lovf_wait: float | None = None,
     ) -> None:
         self._send_line = send_line
         self._ack_timeout = ack_timeout
@@ -120,6 +133,9 @@ class RadioScheduler:
         self._ack_event = asyncio.Event()
         self._acked: bool | None = None
         self._lovf = False
+        # A telegram without acknowledgement just went to the stick: a LOVF still counts.
+        self._lovf_watch = False
+        self._lovf_wait = NO_ACK_LOVF_WAIT_S if lovf_wait is None else lovf_wait
         self._waiting_budget = False
         # Event loop time until which the stick is busy with the telegram handed to it
         # last (real time, not the injectable clock: it is about the hardware).
@@ -252,7 +268,7 @@ class RadioScheduler:
         return True
 
     def on_lovf(self) -> None:
-        if self._inflight is not None:
+        if self._inflight is not None or self._lovf_watch:
             self._lovf = True
             self._ack_event.set()
 
@@ -310,6 +326,10 @@ class RadioScheduler:
                     _LOGGER.debug("command for %06X expired before sending", cmd.dst)
                     cmd.outcome = Outcome.EXPIRED
                     return False
+                if cmd.reserve > 0 and self.airtime_last_hour + cost > BUDGET_S - cmd.reserve:
+                    _LOGGER.debug("command for %06X dropped: airtime reserve", cmd.dst)
+                    cmd.outcome = Outcome.EXPIRED
+                    return False
                 if cmd.fresh and cmd.sent:
                     try:
                         frame = cmd.build(self._counter)
@@ -347,27 +367,37 @@ class RadioScheduler:
                     self._busy_until = asyncio.get_running_loop().time() + min(cost + 0.05, ack_timeout)
                     self._changed()
                     if not cmd.expects_ack:
-                        cmd.outcome = Outcome.SENT
-                        return True
-                    try:
-                        await asyncio.wait_for(self._ack_event.wait(), ack_timeout)
-                    except TimeoutError:
+                        # Nothing answers it: only a LOVF says it did not go out.
+                        self._lovf_watch = True
+                        try:
+                            await asyncio.wait_for(self._ack_event.wait(), self._lovf_wait)
+                        except TimeoutError:
+                            pass
+                        finally:
+                            self._lovf_watch = False
+                        if not self._lovf:
+                            cmd.outcome = Outcome.SENT
+                            return True
+                    else:
+                        try:
+                            await asyncio.wait_for(self._ack_event.wait(), ack_timeout)
+                        except TimeoutError:
+                            if self._acked is not None:
+                                return self._ack_result(cmd)
+                            if self._abandoned:
+                                cmd.outcome = Outcome.ABANDONED
+                                return False
+                            attempts += 1
+                            if attempts > retries:
+                                _LOGGER.warning("no ack from %06X for counter %02X", frame.dst, frame.counter)
+                                cmd.outcome = Outcome.NO_ACK
+                                return False
+                            continue
                         if self._acked is not None:
                             return self._ack_result(cmd)
                         if self._abandoned:
                             cmd.outcome = Outcome.ABANDONED
                             return False
-                        attempts += 1
-                        if attempts > retries:
-                            _LOGGER.warning("no ack from %06X for counter %02X", frame.dst, frame.counter)
-                            cmd.outcome = Outcome.NO_ACK
-                            return False
-                        continue
-                    if self._acked is not None:
-                        return self._ack_result(cmd)
-                    if self._abandoned:
-                        cmd.outcome = Outcome.ABANDONED
-                        return False
                 finally:
                     if self._air_lock is not None:
                         self._air_lock.release()
@@ -379,6 +409,14 @@ class RadioScheduler:
                 cmd.sent -= 1
                 if first_attempt:
                     cmd.first_sent_at = None
+                if cmd.reserve > 0 or cmd.expire_on_lovf:
+                    # A background telegram does not wait for the stick's budget: it would
+                    # hold up everything behind it until its deadline. Built anew later
+                    # (its owner logs the back-off).
+                    _LOGGER.debug("culfw refused to send to %06X (LOVF): dropped, built anew later", cmd.dst)
+                    cmd.lovf = True
+                    cmd.outcome = Outcome.EXPIRED
+                    return False
                 if not lovf_reported:
                     lovf_reported = True
                     _LOGGER.warning(

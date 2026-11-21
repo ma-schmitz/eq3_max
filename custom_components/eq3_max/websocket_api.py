@@ -89,6 +89,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     for command in (
         ws_overview, ws_subscribe, ws_link, ws_unlink, ws_cancel_link, ws_pair, ws_set_config, ws_set_group, ws_set_poll, ws_set_radio,
         ws_set_week_profile, ws_copy_week_profile, ws_set_time, ws_rename_radio,
+        ws_create_virtual, ws_update_virtual, ws_remove_virtual,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -266,11 +267,34 @@ def _device(ctx: _Context, dev: MaxDevice) -> dict[str, Any]:
         "type": TYPE_KEYS.get(dev.device_type, "unknown"),
         "type_name": TYPE_NAMES.get(dev.device_type, "Unbekannt"),
         "firmware": dev.firmware,
-        "radio": dev.radio if dev.radio in ctx.radio_names else "",
+        # A virtual device has no module of its own (a stored one is ignored).
+        "radio": dev.radio if dev.radio in ctx.radio_names and not dev.virtual else "",
         "area_id": area_id,
         "area_name": None if area is None else area.name,
         "entity_id": entity_id,
         "sleeper": dev.is_sleeper,
+        "virtual": dev.virtual,
+        "source": dev.source if dev.virtual else "",
+        "source_ok": dev.source_ok if dev.virtual else True,
+        "removing": dev.removing,
+        # Virtual wall thermostat: how the room temperature reaches its thermostats
+        # ("group", "addressed", None without a thermostat).
+        "room_form": (
+            ctx.hub.virtual.room_form(dev)
+            if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT else None
+        ),
+        # Why it goes addressed: "no_group", "pending" (a group id on its way), "modules"
+        # (different radio modules: a group cannot help); None otherwise.
+        "room_form_reason": (
+            ctx.hub.virtual.room_form_reason(dev)
+            if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT else None
+        ),
+        # Virtual wall thermostat: whether a complete week program is known (automatic
+        # mode needs it); None for every other device.
+        "program_known": (
+            ctx.hub.virtual.program_known(dev.address)
+            if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT else None
+        ),
         "pending": bool(
             dev.has_pending or dev.pending_config or dev.pending_links or dev.pending_group is not None
             or dev.week_profile_writing
@@ -744,3 +768,106 @@ async def ws_set_time(hass: HomeAssistant, connection: websocket_api.ActiveConne
         _failure(connection, msg, err)
         return
     connection.send_result(msg["id"])
+
+
+# --- virtual devices ---
+
+# Source domain per virtual device type: window contact from a binary sensor, wall
+# thermostat from a (temperature) sensor.
+_VIRTUAL_KINDS = {"window": DeviceType.SHUTTER_CONTACT, "wall": DeviceType.WALL_THERMOSTAT}
+_VIRTUAL_DOMAINS = {DeviceType.SHUTTER_CONTACT: "binary_sensor", DeviceType.WALL_THERMOSTAT: "sensor"}
+
+
+# Units a wall thermostat's source may report its temperature in (as the page's picker).
+_TEMPERATURE_UNITS = ("°C", "°F", "K")
+
+
+def _check_source(hass: HomeAssistant, device_type: DeviceType, source: str) -> None:
+    """The source entity must exist and be of the domain the device type is fed from; a
+    wall thermostat's must be a temperature (device class or unit)."""
+    state = hass.states.get(source)
+    if state is None:
+        raise invalid("virtual_source_missing", entity=source)
+    if source.partition(".")[0] != _VIRTUAL_DOMAINS[device_type]:
+        raise invalid("virtual_source_domain", entity=source)
+    if device_type is DeviceType.WALL_THERMOSTAT and not (
+        state.attributes.get("device_class") == "temperature"
+        or state.attributes.get("unit_of_measurement") in _TEMPERATURE_UNITS
+    ):
+        raise invalid("virtual_source_domain", entity=source)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eq3_max/create_virtual",
+        vol.Required("entry_id"): str,
+        vol.Required("kind"): vol.In(list(_VIRTUAL_KINDS)),
+        vol.Required("name"): str,
+        vol.Required("source"): cv.entity_id,
+        vol.Optional("radio"): str,
+    }
+)
+@callback
+def ws_create_virtual(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Create a virtual window contact or wall thermostat fed by `source`. The hub
+    reports it as added; the entry data and the reload follow from that."""
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
+    if entry is None or entry.domain != DOMAIN or entry.state is not ConfigEntryState.LOADED:
+        _error(connection, msg, invalid("hub_not_loaded"))
+        return
+    # `radio` is still accepted from older pages but means nothing: a virtual device
+    # sends through its partners' modules and answers through the one that heard first.
+    device_type = _VIRTUAL_KINDS[msg["kind"]]
+    name = msg["name"].strip()
+    try:
+        if not name:
+            raise invalid("virtual_name_missing")
+        _check_source(hass, device_type, msg["source"])
+        dev = entry.runtime_data.hub.virtual.create(device_type, name, msg["source"])
+    except (FrameError, HomeAssistantError) as err:
+        _error(connection, msg, err)
+        return
+    connection.send_result(msg["id"], {"serial": dev.serial})
+    async_dispatcher_send(hass, SIGNAL_PANEL_UPDATE)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): "eq3_max/update_virtual", vol.Required("device_id"): str, vol.Required("source"): cv.entity_id}
+)
+@callback
+def ws_update_virtual(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Point a virtual device at another source entity."""
+    try:
+        entry, dev = resolve_max_device(hass, msg["device_id"])
+        if not dev.virtual:
+            raise FrameError(f"{dev.serial} is not virtual", key="not_virtual")
+        _check_source(hass, dev.device_type, msg["source"])
+        entry.runtime_data.async_set_virtual_source(dev.address, msg["source"])
+    except (FrameError, HomeAssistantError) as err:
+        _error(connection, msg, err)
+        return
+    connection.send_result(msg["id"])
+    async_dispatcher_send(hass, SIGNAL_PANEL_UPDATE)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): "eq3_max/remove_virtual", vol.Required("device_id"): str, vol.Optional("force"): bool}
+)
+@callback
+def ws_remove_virtual(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Remove a virtual device: it first has to be unlinked on the real partners.
+    `removed` False = that is still running (`removing` in the overview); `force` drops it
+    without waiting for the partners."""
+    try:
+        entry, dev = resolve_max_device(hass, msg["device_id"])
+        if not dev.virtual:
+            raise FrameError(f"{dev.serial} is not virtual", key="not_virtual")
+        removed = entry.runtime_data.hub.virtual.remove(dev.address, force=bool(msg.get("force")))
+    except (FrameError, HomeAssistantError) as err:
+        _error(connection, msg, err)
+        return
+    connection.send_result(msg["id"], {"removed": removed})
+    async_dispatcher_send(hass, SIGNAL_PANEL_UPDATE)

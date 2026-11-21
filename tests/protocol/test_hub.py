@@ -9,65 +9,7 @@ from custom_components.eq3_max.protocol.hub import MaxHub, ResetResult
 from custom_components.eq3_max.protocol.messages import DeviceType, FrameError, Mode, MsgType
 
 from .fakes import FakeCul, line, until
-
-CENTRAL = 0xC0FFEE
-LOCAL_NOW = datetime(2026, 10, 9, 12, 0)
-
-
-class LocalClock:
-    """Naive local wall clock for the hub (HA time in production)."""
-
-    def __init__(self, t: datetime = LOCAL_NOW) -> None:
-        self.t = t
-
-    def __call__(self) -> datetime:
-        return self.t
-HT = 0xA1B005
-FK = 0xA1B00B
-PB = 0xA1B001
-WT = 0x1590B4
-
-
-def devices():
-    return [
-        MaxDevice(HT, "MEQ9000007", DeviceType.HEATING_THERMOSTAT, name="ht-bad-unten"),
-        MaxDevice(FK, "NEQ9000010", DeviceType.SHUTTER_CONTACT, name="fk-schlafzimmer"),
-        MaxDevice(PB, "KEQ9000001", DeviceType.PUSH_BUTTON, name="taster"),
-        MaxDevice(WT, "NEQ9000011", DeviceType.WALL_THERMOSTAT, name="wt-wohnzimmer"),
-    ]
-
-
-class Recorder:
-    def __init__(self):
-        self.updates = []
-        self.buttons = []
-        self.added = []
-        self.problems = []
-
-
-@pytest.fixture
-async def hub():
-    cul = FakeCul()
-    rec = Recorder()
-    h = MaxHub(
-        "/dev/serial/by-path/x", CENTRAL, devices(),
-        on_update=rec.updates.append,
-        on_button=lambda d, t: rec.buttons.append((d.address, t)),
-        on_device_added=rec.added.append,
-        on_problem=rec.problems.append,
-        open_connection=cul.open,
-        ack_timeout=0.05,
-        now=lambda: 1_700_000_000.0,
-        local_now=LocalClock(),
-    )
-    await h.start()
-    await until(lambda: h.connected)
-    yield h, cul, rec
-    await h.stop()
-
-
-def sent(cul):
-    return [l for l in cul.written if l.startswith("Zs")]
+from .hubkit import CENTRAL, FK, HT, PB, WT, LocalClock, Recorder, devices, sent
 
 
 async def heard_other_after_first_send(cul):
@@ -3210,3 +3152,402 @@ async def test_start_keeps_a_waiting_removal_towards_a_deleted_device():
         assert [(op["partner"], op["op"]) for op in fk.pending_links] == [(GONE_SERIAL, LINK_REMOVE)]
     finally:
         await h.stop()
+
+
+# --- setpoint in automatic mode: holds until the next switch point (as at the handwheel) ---
+
+
+async def test_set_temperature_auto_with_target_goes_out_as_auto(hub):
+    h, cul, rec = hub
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    d = h.devices[HT]
+    assert d.pending_mode is Mode.AUTO and d.pending_target == 22.0
+    await until(lambda: len(sent(cul)) == 1)
+    # Mode bits 0 (auto), 22.0 -> 0x2C; no group flag/byte, as for manual.
+    assert sent(cul)[0] == "Zs0B010040C0FFEEA1B005002C"
+    cul.feed(line(1, 0x02, MsgType.ACK, HT, CENTRAL, 0, "0118302C"))
+    await until(lambda: not d.has_pending)
+    assert d.mode is Mode.AUTO and d.target == 22.0
+
+
+async def test_auto_with_target_pending_clears_on_matching_report(hub):
+    """The device reports the override before the acknowledgement arrives."""
+    h, cul, rec = hub
+    d = h.devices[HT]
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "18302C00BE"))
+    await until(lambda: not d.has_pending)
+    assert d.mode is Mode.AUTO and d.target == 22.0
+
+
+async def test_auto_with_target_pending_clears_on_ack_after_switch_point(hub):
+    """The device passed a switch point before it answered: the acknowledgement carries
+    AUTO with the program's value; the command is done, nothing stays pending."""
+    h, cul, rec = hub
+    d = h.devices[HT]
+    h.set_temperature(HT, 21.0, Mode.AUTO)
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0].endswith("002A")
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01183022"))
+    await until(lambda: not d.has_pending)
+    assert d.mode is Mode.AUTO and d.target == 17.0 and not d.command_failed
+    await asyncio.sleep(0.1)
+    assert len(sent(cul)) == 1  # not sent again
+
+
+def _program(h):
+    from custom_components.eq3_max.protocol.devices import WEEKDAYS
+
+    h.devices[HT].week_profile = {
+        day: [{"temperature": 17.0, "until": "12:10"}, {"temperature": 20.0, "until": "24:00"}] for day in WEEKDAYS
+    }
+
+
+async def _poke_auto(h, cul, target, measured_status, state_at=None):
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.AUTO, target, None
+    dev.state_at = h._local_now() if state_at is None else state_at  # last reported now
+    h.set_poll(HT, 15)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0][-2:-1] in "4567"  # the poke itself is manual
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01192B2D"))
+    measured_status()
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2D00C8"))
+    await until(lambda: len(sent(cul)) == 2)
+    return dev
+
+
+async def test_poll_keeps_an_auto_override(hub):
+    """A setpoint changed in automatic mode (here or at the handwheel) is no program value:
+    after the poke the device gets it back as auto with that value, not the program's."""
+    h, cul, rec = hub
+    _program(h)
+    dev = await _poke_auto(h, cul, 22.0, lambda: None)
+    assert sent(cul)[1].endswith("002C") and dev.mode is Mode.AUTO and dev.target == 22.0
+
+
+async def test_poll_auto_on_program_value_returns_to_plain_auto(hub):
+    h, cul, rec = hub
+    _program(h)
+    await _poke_auto(h, cul, 17.0, lambda: None)
+    assert sent(cul)[1].endswith("0000")
+
+
+async def test_poll_auto_override_dropped_after_switch_point(hub):
+    """A switch point passed while the poke ran: the override has ended at the device,
+    the poke must not bring it back for a whole program period."""
+    h, cul, rec = hub
+    _program(h)
+    clock = LocalClock(datetime(2026, 10, 9, 12, 5))
+    h._local_now = clock
+
+    def past_switch_point():
+        clock.t = datetime(2026, 10, 9, 12, 11)
+
+    await _poke_auto(h, cul, 22.0, past_switch_point)
+    assert sent(cul)[1].endswith("0000")
+
+
+async def test_poll_auto_with_open_window_returns_to_plain_auto(hub):
+    h, cul, rec = hub
+    _program(h)
+    h.devices[HT].config["fenster_temperatur"] = 12.0
+    await _poke_auto(h, cul, 12.0, lambda: None)
+    assert sent(cul)[1].endswith("0000")
+
+
+async def test_poll_does_not_bring_back_a_target_reported_before_a_switch_point(hub):
+    """The last report (22.0) came before the 12:10 switch point and none since: 22.0 is
+    the old period's value, not an override; the poke gives back plain AUTO."""
+    h, cul, rec = hub
+    _program(h)
+    h._local_now = LocalClock(datetime(2026, 10, 9, 12, 15))
+    await _poke_auto(h, cul, 22.0, lambda: None, state_at=datetime(2026, 10, 9, 12, 5))
+    assert sent(cul)[1].endswith("0000")
+
+
+async def test_set_temperature_auto_with_group(hub):
+    h, cul, rec = hub
+    h.devices[HT].group = 5
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    await until(lambda: len(sent(cul)) == 1)
+    assert sent(cul)[0] == "Zs0B010440C0FFEEA1B005052C"
+
+
+# --- an unacknowledged override that went stale becomes plain AUTO ---
+
+
+def _setpoints(cul):
+    return [l for l in sent(cul) if l[8:10] == "40" and l[16:22] == f"{HT:06X}"]
+
+
+async def _failed_override(h, cul, clock, mode=Mode.AUTO):
+    h._local_now = clock
+    h.devices[HT].mode = mode
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    await heard_other_after_first_send(cul)
+    await until(lambda: h.devices[HT].command_failed, timeout=1.0)
+    assert len(sent(cul)) == 4
+    return h.devices[HT]
+
+
+async def test_stale_override_after_switch_point_becomes_plain_auto(hub, caplog):
+    h, cul, rec = hub
+    _program(h)  # switch point at 12:10
+    clock = LocalClock(datetime(2026, 10, 9, 12, 5))
+    dev = await _failed_override(h, cul, clock)
+    clock.t = datetime(2026, 10, 9, 12, 11)
+    with caplog.at_level(logging.INFO):
+        cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "18302800BE"))
+        await until(lambda: len(sent(cul)) == 5)
+    assert sent(cul)[4].endswith("0000")
+    assert dev.pending_mode is Mode.AUTO and dev.pending_target is None
+    assert sum("override" in r.getMessage() and r.levelno == logging.INFO for r in caplog.records) == 1
+    cul.feed(line(_counter(sent(cul)[4]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01183028"))
+    await until(lambda: not dev.has_pending)
+
+
+async def test_stale_override_on_manual_device_without_program_becomes_plain_auto(hub):
+    """hvac_mode auto with a temperature on a manual device, never acknowledged: after 15
+    minutes the device still gets what was asked for, the program (plain AUTO)."""
+    h, cul, rec = hub
+    clock = LocalClock(datetime(2026, 10, 9, 12, 0))
+    dev = await _failed_override(h, cul, clock, mode=Mode.MANUAL)
+    clock.t = datetime(2026, 10, 9, 12, 16)
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "19302800BE"))
+    await until(lambda: len(sent(cul)) == 5)
+    assert sent(cul)[4].endswith("0000") and dev.pending_target is None and dev.pending_mode is Mode.AUTO
+
+
+async def test_stale_poke_restore_becomes_plain_auto(hub):
+    """The poke's restore (AUTO with the override) is never acknowledged and the switch
+    point passes: the device must not stay on the poke's manual value."""
+    h, cul, rec = hub
+    _program(h)
+    clock = LocalClock(datetime(2026, 10, 9, 12, 5))
+    h._local_now = clock
+    dev = await _poke_auto(h, cul, 22.0, lambda: None)
+    assert sent(cul)[1].endswith("002C")
+    cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: dev.command_failed, timeout=1.0)
+    n = len(sent(cul))
+    clock.t = datetime(2026, 10, 9, 12, 11)
+    cul.feed(line(10, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2D00C8"))  # still the poke's 22.5
+    await until(lambda: len(sent(cul)) == n + 1)
+    assert sent(cul)[-1].endswith("0000") and dev.pending_target is None
+
+
+async def test_stale_setpoint_given_during_a_poke_becomes_plain_auto(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    local = LocalClock(datetime(2026, 10, 9, 12, 0))
+    h._local_now = local
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.AUTO, 17.0, None
+    h.set_poll(HT, 15)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01192B23"))  # poke on: manual 17.5
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    assert HT not in h._pokes
+    await until(lambda: len(sent(cul)) == 2)
+    cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: dev.command_failed, timeout=1.0)
+    n = len(sent(cul))
+    local.t = datetime(2026, 10, 9, 12, 16)
+    cul.feed(line(10, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2300C8"))
+    await until(lambda: len(sent(cul)) == n + 1)
+    assert sent(cul)[-1].endswith("0000")
+
+
+async def test_fresh_override_is_resent(hub):
+    h, cul, rec = hub
+    _program(h)  # switch point at 12:10
+    clock = LocalClock(datetime(2026, 10, 9, 11, 50))
+    dev = await _failed_override(h, cul, clock)
+    clock.t = datetime(2026, 10, 9, 12, 5)  # 15 min later, still before the switch point
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "18302800BE"))
+    await until(lambda: len(sent(cul)) == 5)
+    assert sent(cul)[4].endswith("002C") and dev.pending_target == 22.0
+
+
+async def test_fresh_override_without_program_is_resent_and_others_never_replaced(hub):
+    h, cul, rec = hub
+    clock = LocalClock(datetime(2026, 10, 9, 12, 0))
+    dev = await _failed_override(h, cul, clock)
+    clock.t = datetime(2026, 10, 9, 12, 14)
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "18302800BE"))
+    await until(lambda: len(sent(cul)) == 5)
+    assert sent(cul)[4].endswith("002C")
+    # A manual command is resent however old it is.
+    dev.set_pending(21.0, Mode.MANUAL, queued=datetime(2026, 10, 1, 12, 0))
+    dev.command_failed = True
+    cul.feed(line(10, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "18302800BE"))
+    await until(lambda: any(l.endswith("006A") for l in sent(cul)))
+
+
+async def test_override_gone_stale_while_waiting_goes_out_as_plain_auto(hub):
+    """Even the first send: a command that waited past the switch point is not sent as
+    an override for the next period."""
+    h, cul, rec = hub
+    _program(h)
+    clock = LocalClock(datetime(2026, 10, 9, 12, 9))
+    h._local_now = clock
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    clock.t = datetime(2026, 10, 9, 12, 11)  # before the scheduler got to it
+    await until(lambda: len(sent(cul)) >= 1)
+    assert not any(l.endswith("2C") for l in _setpoints(cul))
+    assert _setpoints(cul)[0].endswith("0000") and h.devices[HT].pending_target is None
+
+
+async def test_stale_override_from_the_store_goes_out_as_plain_auto_at_start():
+    cul = FakeCul()
+    devs = devices()
+    devs[0].mode, devs[0].target = Mode.AUTO, 17.0
+    stored = MaxDevice.from_dict(devs[0].to_dict() | {
+        "pending_target": 22.0, "pending_mode": int(Mode.AUTO),
+        "pending_queued": datetime(2026, 10, 9, 11, 0).isoformat(),
+    })
+    assert stored.pending_queued == datetime(2026, 10, 9, 11, 0)
+    devs[0] = stored
+    h = MaxHub(
+        "/dev/x", CENTRAL, devs, on_update=lambda d: None, on_button=lambda d, t: None,
+        on_device_added=lambda d: None, on_problem=lambda p: None, open_connection=cul.open,
+        ack_timeout=0.05, now=lambda: 1_700_000_000.0, local_now=LocalClock(),  # 12:00
+    )
+    await h.start()
+    try:
+        await until(lambda: len(sent(cul)) >= 1)
+        assert sent(cul)[0].endswith("0000") and not any(l.endswith("2C") for l in sent(cul))
+    finally:
+        await h.stop()
+
+
+async def test_stale_rule_of_a_room_member_uses_the_room_program(hub):
+    from custom_components.eq3_max.protocol.devices import WEEKDAYS
+
+    from .hubkit import room
+
+    h, cul, rec = hub
+    vw = room(h)
+    vw.week_profile = {day: [{"temperature": 17.0, "until": "12:10"}, {"temperature": 20.0, "until": "24:00"}] for day in WEEKDAYS}
+    dev = h.devices[HT]
+    assert not dev.week_profile
+    clock = LocalClock(datetime(2026, 10, 9, 12, 11))
+    h._local_now = clock
+    dev.set_pending(22.0, Mode.AUTO, queued=datetime(2026, 10, 9, 12, 5))
+    assert h._stale_override(dev)  # the room's switch point at 12:10 passed (6 min only)
+
+
+async def test_restore_turns_a_pending_override_into_plain_auto(hub):
+    h, cul, rec = hub
+    dev = h.devices[HT]
+    dev.mode, dev.target = Mode.MANUAL, 21.0
+    dev.set_pending(22.0, Mode.AUTO, queued=datetime(2026, 10, 9, 12, 0))
+    h._restore(dev)
+    assert dev.pending_mode is Mode.AUTO and dev.pending_target is None
+    await until(lambda: len(_setpoints(cul)) >= 1, timeout=2.0)
+    assert _setpoints(cul)[0].endswith("0000")
+    assert not any(l.endswith("6C") or l.endswith("2C") for l in _setpoints(cul))
+
+
+# --- polling pauses while an override from Home Assistant is active ---
+
+
+async def _ha_override(h, cul):
+    h.set_temperature(HT, 22.0, Mode.AUTO)
+    await until(lambda: len(sent(cul)) == 1)
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "0118302C"))
+    dev = h.devices[HT]
+    await until(lambda: dev.ha_override_target == 22.0)
+    return dev
+
+
+async def test_poll_pauses_during_an_override_from_ha_and_resumes_after(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = await _ha_override(h, cul)
+    dev.measured_at = None
+    h.set_poll(HT, 15)
+    h._poll_check()
+    await asyncio.sleep(0.05)
+    assert len(sent(cul)) == 1 and HT not in h._pokes
+    # The device reports another target: the override is over, polling goes on.
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "18302200BE"))
+    await until(lambda: dev.ha_override_target is None)
+    dev.measured_at = None
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 2)
+    assert HT in h._pokes
+
+
+async def test_ha_override_ends_at_the_switch_point_or_with_a_new_command(hub):
+    h, cul, rec = hub
+    _program(h)  # switch point at 12:10
+    clock = LocalClock(datetime(2026, 10, 9, 12, 0))
+    h._local_now = clock
+    dev = await _ha_override(h, cul)
+    assert h._override_active(dev)
+    clock.t = datetime(2026, 10, 9, 12, 10)
+    assert not h._override_active(dev) and dev.ha_override_target is None
+    clock.t = datetime(2026, 10, 9, 12, 0)
+    dev.ha_override_target, dev.ha_override_at = 22.0, clock.t
+    h.set_temperature(HT, None, Mode.AUTO)
+    assert dev.ha_override_target is None
+
+
+async def test_lost_poke_restore_stays_pending_and_is_resent(hub):
+    """The restore right after the poke is no longer taken as reached by the poke's own
+    status (the device still sits on the poke's value): unacknowledged, it is resent."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.MANUAL, 21.0, None
+    h.set_poll(HT, 15)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    cul.feed(line(_counter(sent(cul)[0]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "01192B2B"))
+    cul.feed(line(9, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2B00D6"))
+    await until(lambda: len(sent(cul)) == 2)
+    assert sent(cul)[1].endswith("6A") and dev.pending_target == 21.0
+    cul.feed(line(7, 0x06, MsgType.SHUTTER_CONTACT_STATE, FK, CENTRAL, 0, "10"))
+    await until(lambda: dev.command_failed, timeout=1.0)
+    n = len(sent(cul))
+    cul.feed(line(10, 0x04, MsgType.THERMOSTAT_STATE, HT, CENTRAL, 0, "192B2B00D6"))
+    await until(lambda: len(sent(cul)) == n + 1)
+    assert sent(cul)[-1].endswith("6A")
+
+
+async def test_poke_restore_of_an_override_does_not_pause_polling(hub):
+    h, cul, rec = hub
+    _program(h)
+    dev = await _poke_auto(h, cul, 22.0, lambda: None)
+    cul.feed(line(_counter(sent(cul)[1]), 0x02, MsgType.ACK, HT, CENTRAL, 0, "0118302C"))
+    await until(lambda: not dev.has_pending)
+    await asyncio.sleep(0.05)
+    assert dev.ha_override_target is None
+
+
+async def test_poll_pause_ends_after_12_hours_without_known_program(hub):
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    local = LocalClock(datetime(2026, 10, 9, 12, 0))
+    h._local_now = local
+    dev = await _ha_override(h, cul)
+    h.set_poll(HT, 15)
+    dev.measured_at = None
+    local.t = datetime(2026, 10, 9, 23, 59)
+    h._poll_check()
+    await asyncio.sleep(0.05)
+    assert len(sent(cul)) == 1 and HT not in h._pokes
+    local.t = datetime(2026, 10, 10, 0, 0)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 2)
+    assert HT in h._pokes and dev.ha_override_target is None

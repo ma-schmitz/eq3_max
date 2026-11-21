@@ -7,6 +7,109 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.10.0] – 2026-11-21
+
+### Hinzugefügt
+- **Virtueller Fensterkontakt.** Auf der Seite „eQ-3 MAX!“ legt „Virtuelles Gerät anlegen“ einen
+  Fensterkontakt an, der nur in Home Assistant existiert. Quelle ist ein beliebiger
+  `binary_sensor` (z. B. ein Zigbee-Kontakt); „offen“ und „geschlossen“ gehen mit Quittung (das Thermostat bestätigt den Empfang) an
+  jedes verknüpfte Heizkörperthermostat. Quittiert eines nicht, wird der Zustand alle 5 Minuten
+  wiederholt, nach drei Fehlschlägen in Folge alle 15 Minuten, und einmal, wenn das Funkmodul
+  wieder da ist; zwei Zustandswechsel an dasselbe Thermostat liegen mindestens eine Minute
+  auseinander, und je Thermostat gehen höchstens 12 Telegramme je Stunde hinaus. Periodisch
+  wird nichts gesendet. Nach einem Neustart wird nur gesendet, wenn der Zustand vom zuletzt
+  zugestellten abweicht. Funktioniert mit jedem Funkmodul. Beim Anlegen wählt man kein
+  Funkmodul: Ein virtuelles Gerät sendet über das Modul des jeweiligen Thermostats.
+- **Virtuelles Wandthermostat.** Quelle ist ein Temperatur-`sensor` (°F und K werden
+  umgerechnet). Die Thermostate eines Raums regeln nach dieser Temperatur statt nach ihrem
+  eigenen Fühler. Eine Quelle, die sich 3 Stunden lang nicht gemeldet hat, gilt als nicht
+  verfügbar; Sensoren, die nur bei einer Änderung neu schreiben (Template- oder
+  Hilfssensoren), können deshalb zeitweise ausfallen; besser ein Gerätesensor, der
+  regelmäßig meldet.
+- **Virtuelles Wandthermostat: Temperatur.** Die Temperatur geht fest alle 5 Minuten raus,
+  pünktlich. Ein Thermostat wartet knapp 10 Minuten auf sein Wandthermostat und regelt danach
+  nach seinem eigenen Fühler (mit Funkfehler), bis das nächste Telegramm kommt. Ein
+  Fensterwechsel geht sofort hinaus (höchstens einmal je Minute). Ein Telegramm
+  (eine Funknachricht) genügt für den ganzen Raum, wenn alle seine Thermostate Gruppe und
+  Funkmodul teilen (die Gruppe vergibt die Integration beim Verknüpfen), sonst geht sie an
+  jedes Thermostat einzeln (etwa 13 s je Stunde und Thermostat; bei mehr als einem Thermostat
+  regeln sie zeitweise nach ihrem eigenen Fühler; die Seite zeigt dann einen Hinweis und
+  bietet „Für den Raum vergeben“ an). Ein Thermostat, das den virtuellen Raum
+  verlässt, verliert seine Gruppen-ID. Eine fallende Temperatur wird in Schritten von
+  höchstens 1,0 °C je Telegramm weitergegeben, damit die eingebaute Fenster-auf-Erkennung
+  der Thermostate nicht anspringt.
+- **Virtuelles Wandthermostat: Sollwert und Boost.** Sollwerte gleichen sich im Raum ab: Eine
+  Änderung am Handrad erreicht nach wenigen Sekunden alle Thermostate des Raums, ebenso ein in
+  Home Assistant gesetzter Sollwert. Automatik gibt es nur mit einem vollständigen, über
+  eq3_max geschriebenen Wochenprogramm (jedes Temperaturtelegramm gibt den Thermostaten auch
+  den Sollwert vor); ohne eines läuft der Raum manuell, und die Seite sagt das. In Automatik
+  folgt der Raum dem Wochenprogramm; eine Änderung am Handrad oder in Home Assistant gilt bis
+  zum nächsten Schaltpunkt. Eine Abwesenheit endet von selbst zur eingestellten Zeit; danach
+  gilt wieder, was vorher galt. Boost bleibt beim Thermostat, an dem
+  er ausgelöst wurde (das Wandthermostat zeigt weiter den Modus des Raums); ein Boost am
+  virtuellen Wandthermostat gilt für den ganzen Raum und endet mit der Boost-Dauer der
+  Thermostate, spätestens nach einer Stunde.
+- **Virtuelles Wandthermostat: erstes Verknüpfen.** Das erste verknüpfte Thermostat gibt Sollwert,
+  Modus, Wochenprogramm und Komfort-/Eco-/Fenster-Einstellungen an ein virtuelles
+  Wandthermostat ab, das noch keinen eigenen Sollwert hat; was dort schon eingetragen ist,
+  bleibt, und eine Fenster-auf-Temperatur oder ein Boost wird nicht zum Sollwert des Raums;
+  später verknüpfte bekommen Sollwert und Modus des Raums. Ihr Wochenprogramm wird nicht
+  ungefragt überschrieben (die Seite zeigt einen Hinweis und bietet an, das Raumprogramm zu
+  kopieren).
+- **Virtuelle Geräte: Gut zu wissen.** Ein virtuelles Wandthermostat kostet etwa 13 s
+  Sendezeit je Stunde (von 36 s je Funkmodul); ein Funkmodul reicht für zwei. Mit der Option
+  „Sendezeit auf 36 s begrenzen“ bleiben 10 s je Stunde für Befehle frei; ohne sie entscheidet
+  das Funkmodul selbst. Die mit einem virtuellen Wandthermostat verknüpften Thermostate müssen
+  an einem per USB oder seriell angeschlossenen Funkmodul hängen, nicht an einem
+  Netzwerkmodul; einen Eco-Taster gibt es nicht. Ein langer Auftrag kann einen Raum bis zu
+  etwa einer Stunde ohne Temperatur lassen. Läuft Home Assistant nicht, antwortet niemand für das Wandthermostat: Die
+  Thermostate heizen weiter mit ihrem eigenen Fühler, eine Sollwertänderung am Handrad kann
+  sie aber bis zu einer Stunde stumm machen; eine technische Abhilfe gibt es nicht. Dasselbe
+  gilt, solange die Integration nicht geladen ist (Funkmodul fehlt, Integration deaktiviert
+  oder wird neu geladen). Vor dem Wechsel auf eine Version vor 0.10.0 alle virtuellen Geräte
+  entfernen: Eine ältere Version hält sie für echte Geräte an einer Adresse, unter der
+  niemand antwortet.
+  „Entfernen“ löst zuerst die Verknüpfungen. „Trotzdem entfernen“ löscht sofort; ein
+  Thermostat, das die Verknüpfung noch kennt, kann dann bis zu einer Stunde verstummen.
+  Einzelheiten im Handbuch unter „Virtuelle Geräte“.
+
+### Geändert
+- **Geändertes Verhalten: Ein Sollwert in Automatik gilt bis zum nächsten Schaltpunkt.** Wer in
+  Home Assistant (oder auf der Thermostat-Karte) die Temperatur eines Thermostats ändert, das
+  in Automatik läuft, bekommt jetzt dasselbe wie am Handrad: Der Wert gilt bis zum nächsten
+  Schaltpunkt des Wochenprogramms, das Thermostat bleibt in Automatik und folgt danach wieder
+  seinem Programm. Bisher schaltete jede Änderung aus Home Assistant dauerhaft auf manuell.
+  Das gilt auch für die Presets „Komfort“ und „Eco“. Wer einen Wert dauerhaft halten will,
+  schaltet zuerst auf „Heizen“ (manuell) oder schickt `hvac_mode: heat` mit der Temperatur.
+  `hvac_mode: auto` mit einer Temperatur kehrt zum Programm zurück und hält diese Temperatur
+  bis zum nächsten Schaltpunkt (bisher wurde die Temperatur dabei übergangen). Das Preset
+  „keins“ beendet in Automatik eine solche Änderung und kehrt zum Programm zurück; „Komfort“
+  und „Eco“ bleiben in Automatik angezeigt, solange der Wert gilt. Kommt der Befehl beim
+  Thermostat nicht rechtzeitig an – bis zum nächsten Schaltpunkt oder, wenn eq3_max das
+  Wochenprogramm nicht kennt, innerhalb von 15 Minuten –, wird er nicht mehr wiederholt;
+  stattdessen geht das Thermostat zurück in die reine Automatik (sein Programm). Solange eine
+  solche Änderung aus Home Assistant gilt, pausiert die Abfrage der Ist-Temperatur für dieses
+  Thermostat (höchstens 12 Stunden). Im manuellen Betrieb und bei „Abwesend“ oder „Boost“ ändert sich nichts. Im Raum
+  eines virtuellen Wandthermostats ohne Wochenprogramm bleibt jeder Sollwert manuell.
+- **Installation über die HACS-Suche.** eq3_max steht seit dem 19.11.2026 im Standardkatalog
+  von HACS. README und Website beschreiben deshalb zuerst die Suche nach „eQ-3 MAX!“ in HACS;
+  der Umweg über „Benutzerdefinierte Repositories“ entfällt.
+
+### Behoben
+
+- **Wochenprogramm tageweise für einen Raum: kein Thermostat des Raums bleibt mehr mit
+  fehlenden Tagen zurück.** Wurden kurz nacheinander Tage für einen Raum geschrieben (etwa
+  erst Montag bis Freitag, dann das Wochenende), bekam ein Thermostat des Raums, das noch mit
+  den ersten Tagen beschäftigt war, die weiteren nicht – nur eine Warnung im Log. Jetzt
+  schreibt die Integration sie ihm im Anschluss; der Reiter „Wochenprogramm“ zeigt sie bis
+  dahin als offen. Beim virtuellen Wandthermostat wartet der Aufruf, bis die Thermostate des
+  Raums fertig sind; scheitert eines, steht der Grund an diesem Thermostat.
+- **Wochenprogramm für einen ganzen Raum: jedes Thermostat wird nur einmal beschrieben.**
+  Waren Wandthermostat und Heizkörper zusammen ausgewählt (etwa per Bereich im Reiter
+  „Wochenprogramm“ oder beim Kopieren), bekamen die Heizkörper das Programm doppelt – einmal
+  als Raummitglied, einmal als eigenes Ziel; das kostete Funkzeit. Die Quelle einer Kopie
+  innerhalb eines Raums wird nicht mehr neu beschrieben.
+
 ## [0.9.3] – 2026-11-19
 
 ### Hinzugefügt

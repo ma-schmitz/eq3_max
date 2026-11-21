@@ -715,6 +715,39 @@
     },
     "link_op_unknown": {
       "message": "No open link request with {serial}"
+    },
+    "virtual_type": {
+      "message": "A virtual device can only be a window contact or a wall thermostat"
+    },
+    "virtual_network_radio": {
+      "message": "A virtual wall thermostat only works with thermostats on a radio module connected by USB or serial for now, not on a network module"
+    },
+    "virtual_no_button": {
+      "message": "An eco button cannot be linked with a virtual wall thermostat"
+    },
+    "link_second_wall": {
+      "message": "This thermostat already has a wall thermostat"
+    },
+    "virtual_removing": {
+      "message": "This virtual device is being removed"
+    },
+    "virtual_no_program": {
+      "message": "No complete week program is known for this virtual wall thermostat yet; Auto is only possible after a week program has been written"
+    },
+    "virtual_no_radio": {
+      "message": "A virtual device has no radio, so this action is not possible"
+    },
+    "not_virtual": {
+      "message": "This is not a virtual device"
+    },
+    "virtual_source_missing": {
+      "message": "The entity {entity} does not exist"
+    },
+    "virtual_source_domain": {
+      "message": "The entity {entity} cannot be used as a source for this device"
+    },
+    "virtual_name_missing": {
+      "message": "Please enter a name"
     }
   },
   "selector": {

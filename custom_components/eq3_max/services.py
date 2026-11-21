@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import voluptuous as vol
@@ -61,7 +62,9 @@ POINT_SCHEMA = vol.Schema({vol.Required(ATTR_TEMPERATURE): vol.Coerce(float), vo
 SET_WEEK_PROFILE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
-        vol.Required(ATTR_WEEKDAY): vol.All(cv.ensure_list, [vol.In((*WEEKDAYS, ALL_DAYS))]),
+        # Any case, German or English, "alle"/"all": the selector offers lower-case keys
+        # (translation keys), stored days are capitalised; _days_from_names checks them.
+        vol.Required(ATTR_WEEKDAY): vol.All(cv.ensure_list, [cv.string]),
         vol.Required(ATTR_PROFILE): vol.All(cv.ensure_list, [POINT_SCHEMA]),
     }
 )
@@ -253,19 +256,58 @@ def _thermostat_for_profile(hass: HomeAssistant, device_id: str):
 
 
 async def write_week_profile(
-    hub: MaxHub, device: MaxDevice, plan: dict[int, list[ProfilePoint]], language: str | None = None
-) -> None:
+    hub: MaxHub,
+    device: MaxDevice,
+    plan: dict[int, list[ProfilePoint]],
+    language: str | None = None,
+    exclude: Iterable[int] = (),
+) -> set[int]:
     """Send the days to the device and wait for the acknowledgements; HomeAssistantError
     (translated, weekday in `language`) when the stick is away, the device refuses or stays silent. No deadline:
     up to 14 telegrams per device, and with an empty airtime budget (brake, or culfw
-    answering LOVF) each one waits minutes. The hub keeps writing if the caller goes away."""
-    name = device.name or device.serial
-    if not hub.reachable(device.address):
-        raise failed("device_not_connected", name=name)
+    answering LOVF) each one waits minutes. The hub keeps writing if the caller goes away.
+    The room's other thermostats get the days as well, but those in `exclude`. Returns
+    the addresses the write reached (see MaxHub.set_week_profile)."""
+    _check_reachable(hub, device)
     try:
-        await hub.set_week_profile(device.address, plan)
+        return await hub.set_week_profile(device.address, plan, exclude=tuple(exclude))
     except FrameError as err:
         raise translated(err, language=language) from err
+
+
+def _check_reachable(hub: MaxHub, device: MaxDevice) -> None:
+    if not hub.reachable(device.address):
+        raise failed("device_not_connected", name=device.name or device.serial)
+
+
+async def _write_targets(
+    targets: list[tuple[Any, MaxDevice]],
+    plan: dict[int, list[ProfilePoint]],
+    language: str | None,
+    exclude: Iterable[int] = (),
+) -> None:
+    """Write the plan to the targets one after the other, each room once: a target the
+    write of an earlier one reached as a room mate is not written again. It is still
+    checked like the others and waited for, and its failure fails the call as a direct
+    write would (the first failing target wins)."""
+    reached: set[tuple[str, int]] = set()
+    covered: list[tuple[MaxHub, MaxDevice]] = []
+    for entry, device in targets:
+        hub = entry.runtime_data.hub
+        if (entry.entry_id, device.address) in reached:
+            _check_reachable(hub, device)
+            if not device.virtual:  # a virtual one holds the days at once
+                covered.append((hub, device))
+            continue
+        addresses = await write_week_profile(hub, device, plan, language, exclude)
+        reached |= {(entry.entry_id, address) for address in addresses}
+    days = {WEEKDAYS[day] for day in plan}
+    for hub, device in covered:
+        await hub.wait_week_profile(device.address)
+        error = device.week_profile_error
+        if error is not None and days & set(error.get("missing", ())):
+            err = FrameError(error["message"], key=error.get("key"), **error.get("placeholders", {}))
+            raise translated(err, language=language)
 
 
 # Weekdays in the service: German (as stored) or English, any case; "alle"/"all".
@@ -320,8 +362,7 @@ async def _async_write_plan(
     if not plan:
         raise invalid("weekday_missing")
     targets = [_thermostat_for_profile(hass, device_id) for device_id in device_ids]
-    for entry, device in targets:
-        await write_week_profile(entry.runtime_data.hub, device, plan, hass.config.language)
+    await _write_targets(targets, plan, hass.config.language)
     return [device for _, device in targets]
 
 
@@ -344,8 +385,8 @@ async def async_copy_week_profile(hass: HomeAssistant, device_id: str, target_id
         targets.append((target_entry, target))
     if not targets:
         raise invalid("copy_no_target")
-    for target_entry, target in targets:
-        await write_week_profile(target_entry.runtime_data.hub, target, plan, hass.config.language)
+    # One write per room, and the source keeps its program (not written again as a room mate).
+    await _write_targets(targets, plan, hass.config.language, exclude=(source.address,))
     return [target for _, target in targets]
 
 

@@ -76,6 +76,14 @@ def _config_specs(keys: tuple[str, ...]) -> list[EntitySpec]:
 
 
 def specs_for(device: MaxDevice) -> list[EntitySpec]:
+    if device.virtual:
+        # No battery, signal, radio error, lock or last report: nothing to invent them from.
+        links = EntitySpec("sensor", "verknuepfungen", None)
+        if device.device_type is DeviceType.SHUTTER_CONTACT:
+            return [EntitySpec("binary_sensor", "state", "_STATE"), links]
+        if device.device_type is DeviceType.WALL_THERMOSTAT:
+            return [EntitySpec("climate", "climate", ""), links, *_config_specs(device.config_keys)]
+        return []
     if device.is_heating_thermostat:
         return [
             EntitySpec("climate", "climate", ""), EntitySpec("sensor", "ventil", None), *_DIAG, *_CLIMATE_DIAG,

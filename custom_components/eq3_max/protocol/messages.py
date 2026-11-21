@@ -407,6 +407,42 @@ def build_time_information(counter: int, src: int, dst: int, now: datetime) -> F
     return Frame(counter & 0xFF, 0x04, MsgType.TIME_INFORMATION, src, dst, 0, payload)
 
 
+def encode_wall_thermostat_control(target: float, measured: float) -> bytes:
+    """Payload of a 0x42 telegram: target in half degrees, measured in tenths (9th bit in byte 0)."""
+    target_steps = _half_steps(target, 4.5, 30.5, "target")
+    tenths = round(measured * 10)
+    if not 0 <= tenths <= 511:
+        raise FrameError(f"measured must be 0.0..51.1, got {measured}")
+    return bytes([target_steps | ((tenths >> 1) & 0x80), tenths & 0xFF])
+
+
+def build_wall_thermostat_control(
+    counter: int, src: int, dst: int, group: int, target: float, measured: float
+) -> Frame:
+    return Frame(
+        counter=counter & 0xFF,
+        flags=0x04 if group else 0x00,
+        msg_type=MsgType.WALL_THERMOSTAT_CONTROL,
+        src=src,
+        dst=dst,
+        group=group,
+        payload=encode_wall_thermostat_control(target, measured),
+    )
+
+
+def build_shutter_contact_state(counter: int, src: int, dst: int, is_open: bool) -> Frame:
+    return Frame(counter & 0xFF, 0x06, MsgType.SHUTTER_CONTACT_STATE, src, dst, 0, b"\x12" if is_open else b"\x10")
+
+
+def encode_wall_ack(mode: Mode, target: float) -> bytes:
+    """Ack payload of a wall thermostat: ok marker, status bits with mode, 0x04, target in half degrees."""
+    return bytes([0x01, 0x18 | int(mode), 0x04, round(target * 2)])
+
+
+def build_ack(counter: int, src: int, dst: int, payload: bytes) -> Frame:
+    return Frame(counter & 0xFF, 0x02, MsgType.ACK, src, dst, 0, payload)
+
+
 # --- Device configuration (FHEM 10_MAX.pm: ConfigTemperatures 0x11, ConfigValve 0x12) ---
 
 OFFSET_LIMIT = 3.5

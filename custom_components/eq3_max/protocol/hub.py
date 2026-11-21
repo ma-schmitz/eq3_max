@@ -39,6 +39,7 @@ from .messages import (
     MsgType,
     ProfilePoint,
     WEEK_PROFILE_DAYS,
+    build_ack,
     build_add_link_partner,
     build_config_temperatures,
     build_config_valve,
@@ -71,6 +72,7 @@ from .messages import (
     normalize_temperature,
     parse_until,
 )
+from .program import next_switch, override_over, program_target
 from .scheduler import (
     LOVF_RETRY_S,
     PREAMBLE_S,
@@ -82,6 +84,7 @@ from .scheduler import (
     airtime,
 )
 from .transport import TRACE, CulTransport
+from .virtual import Virtuals
 
 _LOGGER = logging.getLogger(__name__)
 # A push button repeats a press it got no acknowledgement for, with the same counter: up
@@ -104,6 +107,12 @@ SLEEPER_LINK_ROUNDS = 5
 SLEEPER_ROUND_GAP_S = 3.0
 POLL_TICK_S = 60.0
 POKE_TIMEOUT_S = 300.0
+# An unacknowledged setpoint in automatic mode holds only until the program's next switch
+# point; without a known program it is not resent after this long.
+AUTO_OVERRIDE_STALE_S = 900.0
+# Polling pauses during a setpoint in automatic mode from Home Assistant at most this long
+# (a missed report, or a switch point to the same value, would otherwise keep it going).
+HA_OVERRIDE_PAUSE_MAX_S = 12 * 3600
 RESET_MARGIN_S = 5.0
 # Sleepers: send to them only while they listen after their telegram to us.
 SLEEPER_DEBOUNCE_S = 0.08
@@ -137,6 +146,16 @@ class LinkStatus:
 
     partners: list[str] = field(default_factory=list)  # serials, both directions acknowledged
     pending: list[tuple[str, str]] = field(default_factory=list)  # (partner serial, state)
+
+
+@dataclass
+class _ProfileFollowUp:
+    """Days a room mate writes after its running week program: calls for the room that
+    came while it was busy, merged per weekday (the latest wins)."""
+
+    encoded: dict[int, list[bytes]] = field(default_factory=dict)
+    days: dict[int, Sequence[ProfilePoint]] = field(default_factory=dict)
+    task: asyncio.Task[None] | None = None
 
 
 def _devices_by_serial(devices: dict[int, MaxDevice] | Iterable[MaxDevice]) -> dict[str, MaxDevice]:
@@ -204,6 +223,37 @@ def link_status(devices: dict[int, MaxDevice] | Iterable[MaxDevice], dev: MaxDev
     return LinkStatus(partners, pending)
 
 
+def _check_virtual_link(devices: dict[int, MaxDevice], dev_a: MaxDevice, dev_b: MaxDevice) -> None:
+    """Additions a virtual device cannot take part in: one being removed takes no new
+    partner, a virtual wall thermostat does not carry the eco button's function, and a
+    thermostat follows one wall thermostat only.
+    Pairs of real devices stay as they always were."""
+    for dev in (dev_a, dev_b):
+        if dev.virtual and dev.removing:
+            raise FrameError(f"{dev.name or dev.serial} is being removed", key="virtual_removing")
+    for wall, other in ((dev_a, dev_b), (dev_b, dev_a)):
+        if wall.device_type is not DeviceType.WALL_THERMOSTAT:
+            continue
+        if wall.virtual and other.device_type is DeviceType.PUSH_BUTTON:
+            raise FrameError("a virtual wall thermostat cannot be linked with an eco button", key="virtual_no_button")
+        if not other.is_heating_thermostat:
+            continue
+        by_serial = _devices_by_serial(devices)
+        # Its wall thermostats: acknowledged links and additions still on their way.
+        serials = [*other.links, *(o["partner"] for o in other.pending_links if o["op"] == LINK_ADD)]
+        for serial in serials:
+            known = by_serial.get(serial)
+            if (
+                known is not None
+                and known is not wall
+                and known.device_type is DeviceType.WALL_THERMOSTAT
+                and (known.virtual or wall.virtual)
+            ):
+                raise FrameError(
+                    "the thermostat is already linked with another wall thermostat", key="link_second_wall"
+                )
+
+
 def plan_link(
     devices: dict[int, MaxDevice], a: int, b: int, op: str
 ) -> list[tuple[MaxDevice, MaxDevice]]:
@@ -219,6 +269,8 @@ def plan_link(
         raise FrameError(
             f"{dev_a.device_type.name} and {dev_b.device_type.name} cannot be linked", key="link_not_allowed"
         )
+    if op == LINK_ADD:
+        _check_virtual_link(devices, dev_a, dev_b)
     directions = []
     queued = False
     for target, partner in ((dev_a, dev_b), (dev_b, dev_a)):
@@ -256,6 +308,17 @@ CROSS_RADIO_WINDOW_S = 1.0
 WEEKDAYS_EN = ("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
 
 
+def _no_radio(dev: MaxDevice) -> None:
+    """A virtual device is the hub itself: never addressed by radio."""
+    if dev.virtual:
+        raise FrameError(f"{dev.name or dev.serial} is virtual, nothing to send", key="virtual_no_radio")
+
+
+def _profile_day(points: Sequence[ProfilePoint]) -> list[dict[str, Any]]:
+    """One day of the week profile as stored."""
+    return [{"temperature": point.temperature, "until": format_until(point.until)} for point in points]
+
+
 def _day(day: int) -> dict[str, str]:
     """Weekday placeholders of a translated error: one per language."""
     return {"day": WEEKDAYS_EN[day], "day_en": WEEKDAYS_EN[day], "day_de": WEEKDAYS[day]}
@@ -284,9 +347,11 @@ class RadioSpec:
 
 
 class _Radio:
-    def __init__(self, radio_id: str, port: str) -> None:
+    def __init__(self, radio_id: str, port: str, network: bool = False) -> None:
         self.id = radio_id
         self.port = port
+        # A network module (TCP): its lines arrive 80-160 ms late.
+        self.network = network
         self.transport: CulTransport
         self.scheduler: RadioScheduler
         self.task: asyncio.Task | None = None
@@ -303,6 +368,7 @@ class MaxHub:
         on_button: Callable[[MaxDevice, str], None],
         on_device_added: Callable[[MaxDevice], None],
         on_problem: Callable[[str], None],
+        on_device_removed: Callable[[MaxDevice], None] = lambda dev: None,
         open_connection: Callable[..., Any] | None = None,
         radios: Iterable[RadioSpec] = (),
         brake: bool = False,
@@ -316,6 +382,7 @@ class MaxHub:
         sleeper_round_gap: float = SLEEPER_ROUND_GAP_S,
         lovf_delay: float = LOVF_RETRY_S,
         poll_tick: float = POLL_TICK_S,
+        lovf_wait: float | None = None,
     ) -> None:
         self.address = address
         self.devices: dict[int, MaxDevice] = {d.address: d for d in devices}
@@ -324,6 +391,8 @@ class MaxHub:
         self._on_update = on_update
         self._on_button = on_button
         self._on_device_added = on_device_added
+        self._on_device_removed = on_device_removed
+        self.virtual = Virtuals(self)
         self._now = now
         # Naive local wall clock: MAX! end times and the time reply use it.
         self._local_now = local_now
@@ -341,6 +410,7 @@ class MaxHub:
         self._on_problem = on_problem
         self._brake = brake
         self._lovf_delay = lovf_delay
+        self._lovf_wait = lovf_wait
         self._poll_tick = poll_tick
         self._poll_task: asyncio.Task | None = None
         # Running pokes by address: the real target/mode, the poke's deadline.
@@ -349,6 +419,8 @@ class MaxHub:
         self._profile_jobs: dict[int, asyncio.Task[None]] = {}
         # What each running write is writing: the same days asked for again join it.
         self._profile_plans: dict[int, dict[int, list[bytes]]] = {}
+        # Room mates busy with other days: what they write once their running write ends.
+        self._profile_followups: dict[int, _ProfileFollowUp] = {}
         self._transport_kwargs = dict(transport_kwargs or {})
         self._counter = 0
         # Who acknowledges telegrams to the central. With a USB main module the hub does
@@ -387,7 +459,7 @@ class MaxHub:
         kwargs = dict(self._transport_kwargs)
         if spec.open_connection is not None:
             kwargs["open_connection"] = spec.open_connection
-        radio = _Radio(spec.id, spec.port)
+        radio = _Radio(spec.id, spec.port, bool(getattr(spec.open_connection, "network", False)))
 
         def on_problem(kind: str) -> None:
             # The main module keeps the one-argument call of the single-module hub.
@@ -413,6 +485,7 @@ class MaxHub:
             ack_timeout=self._ack_timeout,
             brake=self._brake,
             lovf_delay=self._lovf_delay,
+            lovf_wait=self._lovf_wait,
             on_change=lambda: self._notify(None),
             wait_ready=radio.transport.wait_connected,
             on_finished=lambda cmd: self._command_finished(cmd, radio),
@@ -475,16 +548,30 @@ class MaxHub:
         ]
 
     def _radio_of(self, dev: MaxDevice | None) -> _Radio:
-        # A device assigned to a module that is gone falls back to the main module.
-        if dev is None:
+        # A device assigned to a module that is gone falls back to the main module; a
+        # virtual device has none of its own (a stored module is ignored).
+        if dev is None or dev.virtual:
             return self._radios[MAIN_RADIO]
         return self._radios.get(dev.radio) or self._radios[MAIN_RADIO]
 
     def _scheduler_for(self, address: int) -> RadioScheduler:
         return self._radio_of(self.devices.get(address)).scheduler
 
-    def _submit(self, cmd: Command) -> None:
-        self._scheduler_for(cmd.dst).submit(cmd)
+    def _submit(self, cmd: Command, radio: str | None = None) -> None:
+        """Queue on the module of the command's device, or on the given module (for a
+        telegram to nobody in particular, 000000); a module that is gone falls back to
+        the main module, as in _radio_of. A command to a virtual device is never sent: the
+        last line of defence, every caller should have refused it before."""
+        if self.virtual.is_virtual(cmd.dst):
+            _LOGGER.error("MAX! command %s to virtual device %06X dropped, not sent", cmd.key, cmd.dst)
+            cmd.outcome = Outcome.ERROR
+            if cmd.on_done is not None:
+                asyncio.get_running_loop().call_soon(cmd.on_done, False)
+            return
+        if radio is None:
+            self._scheduler_for(cmd.dst).submit(cmd)
+        else:
+            (self._radios.get(radio) or self._radios[MAIN_RADIO]).scheduler.submit(cmd)
 
     def _cancel_key(self, key: str) -> None:
         for radio in self._radios.values():
@@ -494,8 +581,14 @@ class MaxHub:
         """Send to this device through another module from now on. Nothing goes on air:
         all modules share the central address, the device does not notice."""
         dev = self.devices[address]
+        _no_radio(dev)
         if radio_id not in self._radios:
             raise FrameError(f"unknown radio module {radio_id!r}")
+        if any(
+            wall.virtual and wall.device_type is DeviceType.WALL_THERMOSTAT and dev.serial in wall.links
+            for wall in self.devices.values()
+        ):
+            self._check_wall_module(dev, radio_id)
         old = self._radio_of(dev)
         dev.radio = radio_id
         # The RSSI entity follows the module that now sends to the device.
@@ -518,6 +611,11 @@ class MaxHub:
     def radio_is_connected(self, radio_id: str) -> bool:
         radio = self._radios.get(radio_id)
         return radio is not None and radio.transport.connected
+
+    def radio_is_network(self, radio_id: str) -> bool:
+        """The module is reached over the network (its lines arrive late)."""
+        radio = self._radios.get(radio_id)
+        return radio is not None and radio.network
 
     def reachable(self, address: int) -> bool:
         """The module that sends to this device is connected."""
@@ -552,6 +650,7 @@ class MaxHub:
                 dev.group_failed = False
                 self._submit_group(dev)
             self._start_links(dev)
+        self.virtual.resume_removals()
         self._poll_task = asyncio.create_task(self._poll_loop())
 
     async def _poll_loop(self) -> None:
@@ -561,8 +660,13 @@ class MaxHub:
                 self._poll_check()
             except Exception:  # noqa: BLE001 - keep polling
                 _LOGGER.exception("polling the measured temperature failed")
+            try:
+                self.virtual.tick()  # room temperature of virtual wall thermostats
+            except Exception:  # noqa: BLE001 - keep polling
+                _LOGGER.exception("room temperature of virtual wall thermostats failed")
 
     async def stop(self) -> None:
+        self.virtual.stop()
         if self._poll_task is not None:
             self._poll_task.cancel()
             self._poll_task = None
@@ -572,6 +676,14 @@ class MaxHub:
         for future in self._resets.values():
             if not future.done():
                 future.set_result(False)
+        # Queued follow-ups first: they would start once their running write ends.
+        followups = list(self._profile_followups.values())
+        self._profile_followups.clear()
+        for follow in followups:
+            if follow.task is not None:
+                follow.task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, FrameError):
+                    await follow.task
         for job in list(self._profile_jobs.values()):
             job.cancel()
             with contextlib.suppress(asyncio.CancelledError, FrameError):
@@ -588,9 +700,11 @@ class MaxHub:
     def set_temperature(
         self, address: int, temperature: float | None, mode: Mode, until: datetime | None = None
     ) -> None:
-        """Queue a set command; mode TEMPORARY needs `until` (naive local, on :00/:30)."""
+        """Queue a set command; mode TEMPORARY needs `until` (naive local, on :00/:30).
+
+        At a virtual wall thermostat, or a thermostat linked with one, it is a change of
+        the room: the wall thermostat takes it and each of its thermostats gets it."""
         dev = self.devices[address]
-        self._pokes.pop(address, None)  # the user's command wins over a running poke
         # Validate first: a command the builder rejects must not leave pending state behind.
         build_set_temperature(0, self.address, dev.address, dev.group, temperature, mode, until)
         if until is not None and until <= self._local_now():
@@ -598,9 +712,32 @@ class MaxHub:
         if temperature is not None:
             # Pending must hold exactly what goes on air, or it never clears.
             temperature = normalize_temperature(temperature)
-        dev.set_pending(temperature, mode, until)
+        wall = dev if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT else self.virtual.wall_of(dev)
+        if wall is not None and mode is Mode.BOOST and wall is not dev:
+            # A boost at one thermostat stays with it, as at its button: addressed, without
+            # the room's group id (with it every thermostat of the room would boost).
+            self._send_setpoint(dev, temperature, mode, until, group=0)
+            return
+        if wall is not None and mode is Mode.AUTO and not self.virtual.program_known(wall.address):
+            # Every room temperature telegram sets the thermostats' target: automatic
+            # mode needs the program's target at any time.
+            raise FrameError(
+                f"{wall.name or wall.serial}: no complete week program known", key="virtual_no_program"
+            )
+        if wall is not None:
+            self.virtual.set_setpoint(wall, temperature, mode, until)
+            return
+        self._send_setpoint(dev, temperature, mode, until)
+
+    def _send_setpoint(
+        self, dev: MaxDevice, temperature: float | None, mode: Mode, until: datetime | None = None,
+        group: int | None = None,
+    ) -> None:
+        self._pokes.pop(dev.address, None)  # the user's command wins over a running poke
+        dev.ha_override_target = dev.ha_override_at = None  # a new command replaces it
+        dev.set_pending(temperature, mode, until, queued=self._local_now())
         self._notify(dev)
-        self._submit_set(dev, temperature, mode, until)
+        self._submit_set(dev, temperature, mode, until, group)
 
     # --- Measured temperature of radiator thermostats ---
 
@@ -643,6 +780,11 @@ class MaxHub:
                 or (dev.mode is Mode.MANUAL and dev.target == dev.window_open_temperature)
                 or not self.reachable(dev.address)
                 or self._scheduler_for(dev.address).waiting_for_budget
+                # Its measured value is the virtual wall thermostat's own, echoed.
+                or self.virtual.wall_of(dev) is not None
+                # A setpoint from Home Assistant holds in automatic mode: a poke would
+                # only put it at risk.
+                or self._override_active(dev)
             ):
                 continue
             self._poke(dev, now)
@@ -651,7 +793,9 @@ class MaxHub:
         target = dev.target
         assert target is not None
         poke_target = target + 0.5 if target + 0.5 <= MAX_TEMPERATURE else target - 0.5
-        self._pokes[dev.address] = {"target": target, "mode": dev.mode, "deadline": now + POKE_TIMEOUT_S}
+        self._pokes[dev.address] = {
+            "target": target, "mode": dev.mode, "deadline": now + POKE_TIMEOUT_S, **self._auto_override(dev, target),
+        }
         dev.last_poke = now
         _LOGGER.debug("MAX! %s (%s): poke %.1f for the measured temperature", dev.name or dev.serial, dev.serial, poke_target)
         address = dev.address
@@ -665,14 +809,64 @@ class MaxHub:
             )
         )
 
+    def _auto_override(self, dev: MaxDevice, target: float) -> dict[str, Any]:
+        """Whether a device in automatic mode holds a setpoint changed meanwhile (from Home
+        Assistant or at the handwheel; it differs from the stored week program) and until
+        when: the poke has to give that back, not the program's value. An open window's
+        temperature is no setpoint; without a stored program nothing is known. A target
+        reported before a switch point that passed since is the old period's value."""
+        if dev.mode is not Mode.AUTO or target == dev.window_open_temperature or dev.state_at is None:
+            return {}
+        week = self._program_of(dev)
+        now = self._local_now()
+        program = program_target(week, now)
+        if program is None or program == target:
+            return {}
+        since_report = next_switch(week, dev.state_at)
+        if since_report is not None and since_report <= now:
+            return {}
+        return {"override": True, "override_until": next_switch(week, now)}
+
+    def _program_of(self, dev: MaxDevice) -> dict[str, list[dict[str, Any]]]:
+        """The week program a device follows: in a virtual wall thermostat's room the
+        room's (the wall thermostat's), otherwise its own."""
+        wall = self.virtual.wall_of(dev)
+        return (wall if wall is not None else dev).week_profile
+
+    def _override_active(self, dev: MaxDevice) -> bool:
+        """Whether an acknowledged setpoint in automatic mode from Home Assistant still
+        holds: the device reports AUTO with it, (program known) the next switch point has
+        not come, and at most HA_OVERRIDE_PAUSE_MAX_S have passed. Forgotten otherwise."""
+        target, since = dev.ha_override_target, dev.ha_override_at
+        if target is None:
+            return False
+        now = self._local_now()
+        if (
+            since is not None
+            and dev.mode is Mode.AUTO
+            and dev.target == target
+            and (now - since).total_seconds() < HA_OVERRIDE_PAUSE_MAX_S
+        ):
+            week = self._program_of(dev)
+            switch = next_switch(week, since) if program_target(week, since) is not None else None
+            if switch is None or now < switch:
+                return True
+        dev.ha_override_target = dev.ha_override_at = None
+        return False
+
     def _finish_poke(self, dev: MaxDevice) -> None:
         poke = self._pokes.pop(dev.address, None)
         if poke is None:
             return
         dev.target, dev.mode = poke["target"], poke["mode"]
         if poke["mode"] is Mode.AUTO:
-            dev.set_pending(None, Mode.AUTO, None)
-            self._submit_set(dev, None, Mode.AUTO, group=0)
+            # Back to automatic mode; a setpoint changed meanwhile goes back with it (it
+            # holds until the next switch point), unless that switch point passed meanwhile.
+            ends = poke.get("override_until")
+            keep = poke.get("override", False) and (ends is None or self._local_now() < ends)
+            temperature = poke["target"] if keep else None
+            dev.set_pending(temperature, Mode.AUTO, None, queued=self._local_now())
+            self._submit_set(dev, temperature, Mode.AUTO, group=0, from_ha=False)
         else:
             dev.set_pending(poke["target"], Mode.MANUAL, None)
             self._submit_set(dev, poke["target"], Mode.MANUAL, group=0)
@@ -686,9 +880,17 @@ class MaxHub:
         if dev is None:
             raise FrameError(f"unknown device {address:06X}")
         kind = dev.stage_config(key, value)
-        self._notify(dev)
-        self._submit_config(dev, kind, dict(dev.pending_config[kind]), dev.assumed_factory(kind, (key,)))
+        if dev.virtual:
+            self._commit_virtual_config(dev, kind)
+        else:
+            self._notify(dev)
+            self._submit_config(dev, kind, dict(dev.pending_config[kind]), dev.assumed_factory(kind, (key,)))
         self._share_with_room(dev, (key,))
+
+    def _commit_virtual_config(self, dev: MaxDevice, kind: str) -> None:
+        """A virtual device holds its settings itself: staged is taken, nothing on air."""
+        dev.commit_config(kind, dict(dev.pending_config[kind]))
+        self._notify(dev)
 
     def room_of(self, dev: MaxDevice) -> list[MaxDevice]:
         """The other thermostats of the device's room (see room_of)."""
@@ -731,6 +933,9 @@ class MaxHub:
                     "MAX! %s (%s): %s follow %s (same room)", mate.name or mate.serial, mate.serial,
                     ", ".join(changed_keys), dev.name or dev.serial,
                 )
+                if mate.virtual:
+                    self._commit_virtual_config(mate, kind)
+                    continue
                 self._notify(mate)
                 self._submit_config(
                     mate, kind, dict(mate.pending_config[kind]), mate.assumed_factory(kind, changed_keys)
@@ -748,14 +953,26 @@ class MaxHub:
         self._submit(cmd)
         return await done
 
-    async def set_week_profile(self, address: int, days: Mapping[int, Sequence[ProfilePoint]]) -> None:
+    async def set_week_profile(
+        self, address: int, days: Mapping[int, Sequence[ProfilePoint]], *, exclude: Iterable[int] = ()
+    ) -> set[int]:
         """Write whole days of the week profile (0 = Saturday ... 6 = Friday) to a
         thermostat: one telegram per part, acknowledged one after the other. The stored
         profile follows each acknowledged day; `week_profile_writing` lists the days still
         to come. There is no deadline: with an empty airtime budget a week takes a long
         time. The write belongs to the hub and goes on when the caller is cancelled.
         Raises FrameError (German) when the device refuses or stays silent (the remaining
-        days are then not sent, `week_profile_error` keeps the reason) or the hub stops."""
+        days are then not sent, `week_profile_error` keeps the reason) or the hub stops.
+
+        The room's other thermostats get the days too; one still busy with other days
+        writes these after its running write. A virtual wall thermostat holds the days at
+        once and returns when its room mates are through; a mate's failure stays at the
+        mate (`week_profile_error`), it does not fail the call. Room mates in `exclude` are
+        left as they are (a copy within a room does not write its source again).
+
+        Returns the addresses the call reached: the device, and the room mates it wrote,
+        joined or queued. Joining a running write of the same days reaches the device only
+        (that write's own call took care of the room)."""
         dev = self.devices.get(address)
         if dev is None:
             raise FrameError("device not known to the radio module", key="device_unknown")
@@ -771,30 +988,58 @@ class MaxHub:
                 raise FrameError(f"{WEEKDAYS_EN[day]}: {err}", key="week_profile_day_invalid", detail=err, **_day(day)) from err
         name = dev.name or dev.serial
         job = self._profile_jobs.get(address)
-        if job is not None and self._profile_plans.get(address) != encoded:
+        if (job is not None and self._profile_plans.get(address) != encoded) or address in self._profile_followups:
             raise FrameError(f"{name}: a week program is being written", key="week_profile_busy", name=name)
-        if job is None:
+        started = job is None
+        if dev.virtual:
+            self._store_week_profile(dev, encoded, days)
+        elif job is None:
             job = self._start_profile_job(dev, encoded, days)
+        mate_writes: list[asyncio.Task[None]] = []
+        reached = {address}
+        if started:
             # The room shares its program: the wall thermostat and its radiators switch
             # each by their own copy. Mates are written alongside; a mate that is busy
-            # with other days keeps those.
+            # with other days writes these after them.
+            skip = set(exclude)
             for mate in self.room_of(dev):
-                if mate.address not in self._profile_jobs:
+                if mate.address in skip:
+                    continue
+                reached.add(mate.address)
+                if mate.virtual:
+                    self._store_week_profile(mate, encoded, days)
+                    continue
+                running = self._profile_jobs.get(mate.address)
+                queued = self._profile_followups.get(mate.address)
+                if running is None and queued is None:
                     _LOGGER.info(
                         "MAX! %s (%s): week profile follows %s (same room)", mate.name or mate.serial,
                         mate.serial, name,
                     )
                     mate_job = self._start_profile_job(mate, encoded, days)
-                    # Nobody waits for it: it reports its failure itself.
+                    # Nobody but a virtual wall thermostat waits for it: it reports its failure itself.
                     mate_job.add_done_callback(lambda done: done.cancelled() or done.exception())
-                elif self._profile_plans.get(mate.address) != encoded:
-                    _LOGGER.warning(
-                        "MAX! %s (%s): busy with another week profile, does not follow %s",
+                    mate_writes.append(mate_job)
+                elif running is not None and queued is None and self._profile_plans.get(mate.address) == encoded:
+                    mate_writes.append(running)  # the same days are being written already
+                else:
+                    _LOGGER.info(
+                        "MAX! %s (%s): week profile follows %s after the running week program",
                         mate.name or mate.serial, mate.serial, name,
                     )
+                    mate_writes.append(self._queue_week_profile(mate, encoded, days))
+        if dev.virtual:
+            # No radio of its own: the call ends when its room has the days, so calls one
+            # after the other follow one another on the radiators too.
+            if mate_writes:
+                await asyncio.wait(mate_writes)
+            return reached
         # Else: the same days are being written already (as a room mate): wait for that.
+        if job is None:
+            return reached
         try:
             await asyncio.shield(job)
+            return reached
         except asyncio.CancelledError:
             if job.cancelled():
                 raise FrameError(
@@ -804,10 +1049,38 @@ class MaxHub:
             job.add_done_callback(lambda done: done.cancelled() or done.exception())
             raise
 
-    def _start_profile_job(
+    async def wait_week_profile(self, address: int) -> None:
+        """Return once the device has neither a running week program write nor one queued
+        after it (success or failure alike: `week_profile_error` tells)."""
+        while True:
+            follow = self._profile_followups.get(address)
+            pending = [
+                task for task in (self._profile_jobs.get(address), follow.task if follow is not None else None)
+                if task is not None
+            ]
+            if not pending:
+                return
+            await asyncio.wait(pending)
+
+    def _store_week_profile(
         self, dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]]
+    ) -> None:
+        """Nothing to write: a virtual wall thermostat holds the program itself."""
+        for day in sorted(encoded):
+            dev.week_profile[WEEKDAYS[day]] = _profile_day(days[day])
+        if dev.device_type is DeviceType.WALL_THERMOSTAT:
+            self.virtual.program_written(dev)
+        self._notify(dev)
+
+    def _start_profile_job(
+        self,
+        dev: MaxDevice,
+        encoded: dict[int, list[bytes]],
+        days: Mapping[int, Sequence[ProfilePoint]],
+        keep_error: bool = False,
     ) -> asyncio.Task[None]:
-        dev.week_profile_error = None
+        if not keep_error:
+            dev.week_profile_error = None
         dev.week_profile_writing = [WEEKDAYS[day] for day in sorted(encoded)]
         self._notify(dev)
         job = asyncio.create_task(self._write_week_profile(dev, encoded, days))
@@ -815,11 +1088,42 @@ class MaxHub:
         self._profile_plans[dev.address] = encoded
         return job
 
+    def _queue_week_profile(
+        self, dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]]
+    ) -> asyncio.Task[None]:
+        """Days for a room mate busy with others: written after its running write,
+        merged per weekday with what is queued already. Returns the follow-up's task."""
+        follow = self._profile_followups.get(dev.address)
+        if follow is None:
+            follow = self._profile_followups[dev.address] = _ProfileFollowUp()
+            follow.task = asyncio.create_task(
+                self._write_week_profile_after(dev, follow, self._profile_jobs.get(dev.address))
+            )
+            follow.task.add_done_callback(lambda done: done.cancelled() or done.exception())
+        follow.encoded.update(encoded)
+        follow.days.update(days)
+        waiting = {WEEKDAYS.index(day) for day in dev.week_profile_writing} | set(follow.encoded)
+        dev.week_profile_writing = [WEEKDAYS[day] for day in sorted(waiting)]
+        self._notify(dev)
+        assert follow.task is not None
+        return follow.task
+
+    async def _write_week_profile_after(
+        self, dev: MaxDevice, follow: _ProfileFollowUp, running: asyncio.Task[None] | None
+    ) -> None:
+        if running is not None:
+            await asyncio.wait({running})  # its success or failure: the follow-up goes on
+        if self._profile_followups.get(dev.address) is follow:
+            del self._profile_followups[dev.address]
+        # A failure of the running write stays shown until a write brings its days.
+        await self._start_profile_job(dev, follow.encoded, follow.days, keep_error=True)
+
     async def _write_week_profile(
         self, dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]]
     ) -> None:
         address = dev.address
         name = dev.name or dev.serial
+        left = sorted(encoded)  # days of this write not yet acknowledged
         try:
             for day in sorted(encoded):
                 for part, words in enumerate(encoded[day]):
@@ -843,29 +1147,42 @@ class MaxHub:
                             f"{name}: week program {WEEKDAYS_EN[day]} not acknowledged ({outcome.value})",
                             key="week_profile_not_acknowledged", name=name, outcome=outcome.value, **_day(day),
                         )
-                dev.week_profile[WEEKDAYS[day]] = [
-                    {"temperature": point.temperature, "until": format_until(point.until)} for point in days[day]
-                ]
-                dev.week_profile_writing = [d for d in dev.week_profile_writing if d != WEEKDAYS[day]]
+                dev.week_profile[WEEKDAYS[day]] = _profile_day(days[day])
+                left.remove(day)
+                follow = self._profile_followups.get(address)
+                if follow is None or day not in follow.encoded:  # else it comes again
+                    dev.week_profile_writing = [d for d in dev.week_profile_writing if d != WEEKDAYS[day]]
+                error = dev.week_profile_error
+                if error is not None and WEEKDAYS[day] in error["missing"]:
+                    # A follow-up brought a day an earlier write left out.
+                    missing = [d for d in error["missing"] if d != WEEKDAYS[day]]
+                    dev.week_profile_error = {**error, "missing": missing} if missing else None
                 _LOGGER.info("MAX! %s (%s): week profile %s acknowledged", name, dev.serial, WEEKDAYS[day])
                 self._notify(dev)
         except FrameError as err:
             # For the panel: the reason as translation key plus the days not written.
+            # A follow-up after a failed write keeps that write's missing days too (a
+            # fresh start has cleared the error).
+            earlier = dev.week_profile_error["missing"] if dev.week_profile_error is not None else []
+            missing = [
+                WEEKDAYS[day] for day in sorted({WEEKDAYS.index(d) for d in earlier} | set(left))
+            ]
             dev.week_profile_error = {
                 "message": str(err),
                 "key": err.key,
                 "placeholders": dict(err.placeholders),
-                "missing": list(dev.week_profile_writing),
+                "missing": missing,
             }
-            _LOGGER.warning(
-                "MAX! %s (%s): %s; not written: %s", name, dev.serial, err, ", ".join(dev.week_profile_writing)
-            )
+            _LOGGER.warning("MAX! %s (%s): %s; not written: %s", name, dev.serial, err, ", ".join(missing))
             raise
         finally:
             self._profile_jobs.pop(address, None)
             self._profile_plans.pop(address, None)
-            if dev.week_profile_writing:
-                dev.week_profile_writing = []
+            follow = self._profile_followups.get(address)
+            # What is queued is still to come.
+            writing = [WEEKDAYS[day] for day in sorted(follow.encoded)] if follow is not None else []
+            if dev.week_profile_writing != writing:
+                dev.week_profile_writing = writing
                 self._notify(dev)
 
     def set_config_set(self, address: int, kind: str, values: dict[str, Any]) -> list[str]:
@@ -875,8 +1192,12 @@ class MaxHub:
         if dev is None:
             raise FrameError(f"unknown device {address:06X}")
         assumed = dev.stage_config_set(kind, values)
-        self._notify(dev)
-        self._submit_config(dev, kind, dict(dev.pending_config[kind]), assumed)
+        if dev.virtual:
+            self._commit_virtual_config(dev, kind)
+            assumed = []
+        else:
+            self._notify(dev)
+            self._submit_config(dev, kind, dict(dev.pending_config[kind]), assumed)
         self._share_with_room(dev, values)
         return assumed
 
@@ -935,7 +1256,22 @@ class MaxHub:
     def link(self, a: int, b: int) -> None:
         """Link two devices: each gets AddLinkPartner with the other (acknowledged
         separately). Sleeping devices get theirs after their next telegram."""
+        dev_a, dev_b = self.devices.get(a), self.devices.get(b)
+        if dev_a is not None and dev_b is not None:
+            for wall, other in ((dev_a, dev_b), (dev_b, dev_a)):
+                if wall.virtual and wall.device_type is DeviceType.WALL_THERMOSTAT:
+                    self._check_wall_module(other, self._radio_of(other).id)
         self._change_link(a, b, LINK_ADD)
+
+    def _check_wall_module(self, dev: MaxDevice, radio_id: str) -> None:
+        """A thermostat of a virtual wall thermostat stays off network modules: it waits
+        for the wall thermostat's acknowledgement a few tens of milliseconds, a network
+        module's line arrives 80-160 ms late."""
+        if dev.is_heating_thermostat and self.radio_is_network(radio_id):
+            raise FrameError(
+                f"{dev.name or dev.serial} is on network module {radio_id!r}: no virtual wall thermostat there",
+                key="virtual_network_radio",
+            )
 
     def unlink(self, a: int, b: int, *, force: bool = False) -> None:
         """Remove the link in both directions (RemoveLinkPartner).
@@ -960,6 +1296,9 @@ class MaxHub:
         if current is not None and current["op"] == LINK_REMOVE and current["state"] not in (LINK_FAILED, LINK_REJECTED):
             raise FrameError("removal already requested", key="unlink_already_requested")
         self._queue_link(target, partner.serial, partner.address, partner.device_type, LINK_REMOVE)
+        entry = target.link_op(partner.serial)
+        if entry is not None:
+            entry["force"] = True  # a leftover: its acknowledgement changes nothing else
         self._notify(target)
         self._notify(partner)
 
@@ -1000,6 +1339,8 @@ class MaxHub:
                 dev.name or dev.serial, dev.serial, serial,
             )
         self._notify(dev)
+        # A virtual device being removed may be carried by nobody any more.
+        self.virtual.check_removals()
         return dropped
 
     def _forget_unknown_partners(self) -> None:
@@ -1020,6 +1361,7 @@ class MaxHub:
                     "MAX! %s (%s): partner %s is no longer known, link and open operation dropped",
                     dev.name or dev.serial, dev.serial, serial,
                 )
+        self.virtual.check_removals()
 
     def _change_link(self, a: int, b: int, op: str) -> None:
         for target, partner in plan_link(self.devices, a, b, op):
@@ -1039,8 +1381,17 @@ class MaxHub:
         self._notify(self.devices[b])
 
     def _queue_link(self, target: MaxDevice, serial: str, address: int, device_type: DeviceType, op: str) -> None:
-        """Thermostats get the operation now; sleepers after their next telegram."""
-        if target.is_sleeper:
+        """Thermostats get the operation now; sleepers after their next telegram; a virtual
+        device is the hub itself and takes it at once, nothing goes on air for it."""
+        if target.virtual:
+            target.drop_link_op(serial)
+            target.commit_link(serial, op)
+            _LOGGER.info(
+                "MAX! %s (%s): link %s %s taken at once (virtual)",
+                target.name or target.serial, target.serial, op, serial,
+            )
+            self.virtual.link_committed(target, serial, op)
+        elif target.is_sleeper:
             # A command for an older operation must not go out any more.
             self._cancel_key(self._link_key(target, address))
             target.set_link_op(serial, address, device_type, op, LINK_WAITING)
@@ -1081,6 +1432,7 @@ class MaxHub:
         dev = self.devices.get(address)
         if dev is None:
             raise FrameError(f"unknown device {address:06X}")
+        _no_radio(dev)
         if not dev.is_climate:
             raise FrameError(f"{dev.device_type.name} is not woken up")
         name = dev.name or dev.serial
@@ -1111,6 +1463,10 @@ class MaxHub:
             raise FrameError(f"{dev.device_type.name} takes no group id")
         if not 0 <= group <= 255:
             raise FrameError(f"group id must be 0..255, got {group}")
+        if dev.virtual:
+            dev.group, dev.pending_group, dev.group_failed = group, None, False
+            self._notify(dev)
+            return
         dev.pending_group = group
         dev.group_failed = False
         self._notify(dev)
@@ -1302,14 +1658,47 @@ class MaxHub:
             cmd.deadline = self._scheduler_for(dev.address).now() + self._fast_deadline
             cmd.retries = 0
             cmd.ack_timeout = self._fast_ack_timeout
-        cmd.on_done = lambda _ok: self._link_done(dev, partner, op, cmd)
+        cmd.on_done = lambda _ok: self._link_done(dev, partner, op, cmd, partner_address, partner_type)
         self._submit(cmd)
 
-    def _link_done(self, dev: MaxDevice, partner: str, op: str, cmd: Command) -> None:
+    def _link_done(
+        self, dev: MaxDevice, partner: str, op: str, cmd: Command,
+        partner_address: int | None = None, partner_type: DeviceType | None = None,
+    ) -> None:
+        try:
+            if (
+                cmd.outcome is Outcome.ACKED
+                and op == LINK_ADD
+                and partner_address is not None
+                and partner_type is not None
+                and partner in self.virtual.removed_serials
+                and partner not in {d.serial for d in self.devices.values()}
+            ):
+                self._ghost_link(dev, partner, partner_address, partner_type)
+                return
+            self._settle_link(dev, partner, op, cmd)
+        finally:
+            # A virtual device being removed may be carried by nobody any more.
+            self.virtual.check_removals()
+
+    def _ghost_link(self, dev: MaxDevice, partner: str, address: int, device_type: DeviceType) -> None:
+        """The device took a link with a partner that is gone meanwhile (a virtual device
+        removed by force while the addition was on air): it really carries it, so it gets
+        the removal; nothing is committed."""
+        _LOGGER.warning(
+            "MAX! %s (%s): took link with %s, which is gone meanwhile: removing it again",
+            dev.name or dev.serial, dev.serial, partner,
+        )
+        self._queue_link(dev, partner, address, device_type, LINK_REMOVE)
+        self._notify(dev)
+
+    def _settle_link(self, dev: MaxDevice, partner: str, op: str, cmd: Command) -> None:
         name = dev.name or dev.serial
         if cmd.outcome is Outcome.ACKED:
+            forced = bool((dev.link_op(partner) or {}).get("force"))
             dev.commit_link(partner, op)
             _LOGGER.info("MAX! %s (%s): link %s %s acknowledged", name, dev.serial, op, partner)
+            self.virtual.link_committed(dev, partner, op, forced=forced)
             self._notify_pair(dev, partner)
             return
         current = dev.link_op(partner)
@@ -1371,6 +1760,7 @@ class MaxHub:
         dev = self.devices.get(address)
         if dev is None:
             raise FrameError(f"unknown device {address:06X}")
+        _no_radio(dev)
         if address in self._resets:
             raise FrameError("factory reset already running", key="reset_running")
         done: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
@@ -1450,19 +1840,57 @@ class MaxHub:
         dev.clear_pending()
         self._notify(dev)
 
+    def _stale_override(self, dev: MaxDevice) -> bool:
+        """A pending setpoint in automatic mode that is about to go out again holds only
+        until the program's next switch point: once that passed since it was queued (or,
+        without a known program, after AUTO_OVERRIDE_STALE_S) it would bring back a value
+        the device has left behind. Without a queue time (older store) it counts as stale."""
+        if dev.pending_mode is not Mode.AUTO or dev.pending_target is None:
+            return False
+        return self._override_stale(dev, dev.pending_queued)
+
+    def _override_stale(self, dev: MaxDevice, queued: datetime | None) -> bool:
+        if queued is None:
+            return True
+        return override_over(self._program_of(dev), queued, self._local_now(), AUTO_OVERRIDE_STALE_S)
+
     def _submit_pending(self, dev: MaxDevice) -> None:
         if self._expired(dev.pending_mode, dev.pending_until):
             self._drop_expired(dev)
             return
-        self._submit_set(dev, dev.pending_target, dev.pending_mode, dev.pending_until)
+        if self._stale_override(dev):
+            # Never sent silently away: the device may sit on another value (a poke's
+            # manual one, or manual when the program was asked for). The program's.
+            _LOGGER.info(
+                "MAX! %s (%s): setpoint %.1f in automatic mode not acknowledged before its switch point "
+                "(or within %d minutes): override replaced by plain automatic mode",
+                dev.name or dev.serial, dev.serial, dev.pending_target, AUTO_OVERRIDE_STALE_S // 60,
+            )
+            dev.set_pending(None, Mode.AUTO, None, queued=self._local_now())
+            self._notify(dev)
+        # In a virtual wall thermostat's room the setpoint goes to this device only (as
+        # the room sent it), not to whatever group id it still carries.
+        group = 0 if self.virtual.wall_of(dev) is not None else None
+        self._submit_set(dev, dev.pending_target, dev.pending_mode, dev.pending_until, group)
 
     def _submit_set(
         self, dev: MaxDevice, temperature: float | None, mode: Mode | None, until: datetime | None = None,
-        group: int | None = None,
+        group: int | None = None, *, from_ha: bool = True,
     ) -> None:
         if mode is None:
             return
         group = dev.group if group is None else group
+        is_stale: Callable[[], bool] | None = None
+        if mode is Mode.TEMPORARY:
+            is_stale = lambda: self._expired(mode, until)  # noqa: E731
+        elif mode is Mode.AUTO and temperature is not None:
+            # Waiting in the queue (or for airtime) past the switch point: no override any more.
+            queued = (
+                dev.pending_queued
+                if dev.pending_mode is mode and dev.pending_target == temperature
+                else self._local_now()
+            )
+            is_stale = lambda: self._override_stale(dev, queued)  # noqa: E731
 
         def build(counter: int) -> Frame:
             if self._expired(mode, until):
@@ -1474,14 +1902,15 @@ class MaxHub:
                 dst=dev.address,
                 build=build,
                 key=f"set:{dev.address}",
-                on_done=lambda ok: self._command_done(dev, ok, temperature, mode, until),
-                is_stale=(lambda: self._expired(mode, until)) if mode is Mode.TEMPORARY else None,
+                on_done=lambda ok: self._command_done(dev, ok, temperature, mode, until, from_ha),
+                is_stale=is_stale,
                 deaf_probe=True,
             )
         )
 
     def _command_done(
-        self, dev: MaxDevice, ok: bool, temperature: float | None, mode: Mode, until: datetime | None = None
+        self, dev: MaxDevice, ok: bool, temperature: float | None, mode: Mode, until: datetime | None = None,
+        from_ha: bool = True,
     ) -> None:
         current = (
             dev.has_pending
@@ -1489,6 +1918,9 @@ class MaxHub:
             and dev.pending_target == temperature
             and dev.pending_until == until
         )
+        if ok and from_ha and mode is Mode.AUTO and temperature is not None and (current or not dev.has_pending):
+            # A setpoint in automatic mode from Home Assistant holds: polling pauses.
+            dev.ha_override_target, dev.ha_override_at = temperature, self._local_now()
         if ok:
             # Acknowledged: the command is no longer pending, even if a later status
             # shows another target (e.g. changed at the device in between).
@@ -1498,6 +1930,9 @@ class MaxHub:
             return
         if current and self._expired(mode, until):
             self._drop_expired(dev)
+            return
+        if current and self._stale_override(dev):
+            self._submit_pending(dev)  # replaced by plain automatic mode
             return
         if dev.has_pending:
             _LOGGER.warning("MAX! %s (%s): command not acknowledged", dev.name or dev.serial, dev.serial)
@@ -1561,6 +1996,7 @@ class MaxHub:
                 self._resubmit_failed_group(dev)
                 if not dev.is_sleeper:
                     self._resubmit_failed_links(dev)
+            self.virtual.reconnected()  # undelivered window states: one attempt each
         self._notify(None)
 
     def _on_line(self, text: str, radio: str = MAIN_RADIO) -> None:
@@ -1591,17 +2027,25 @@ class MaxHub:
         The hub does this instead of culfw's auto-ack ("Za"): with several modules each
         would answer at the same moment and jam the other, and the wall thermostat does
         not take culfw's form (flags 00). This is the form Homegear sent: flags 02, the
-        telegram's counter, payload 00."""
-        if frame.dst != self.address or frame.src == self.address:
-            return
-        kind = int(frame.msg_type)
-        # A wall thermostat whose clock was set by hand passes its time on to the central
-        # (with payload) and wants that acknowledged like a command; without an answer it
-        # repeats three times and reports a radio error. An empty one is a request.
-        time_told = kind == int(MsgType.TIME_INFORMATION) and bool(frame.payload)
-        if not time_told and (kind not in ACKNOWLEDGED_TYPES or self._firmware_ack):
-            # Not to be answered, or the main module's firmware answers it.
-            return
+        telegram's counter, payload 00.
+
+        A virtual device answers every telegram to it but acknowledgements, whatever the
+        module: the firmware knows only the central's address."""
+        virtual = self.virtual.get(frame.dst)
+        if virtual is not None:
+            if frame.msg_type == MsgType.ACK or frame.src == self.address or self.virtual.is_virtual(frame.src):
+                return
+        else:
+            if frame.dst != self.address or frame.src == self.address:
+                return
+            kind = int(frame.msg_type)
+            # A wall thermostat whose clock was set by hand passes its time on to the central
+            # (with payload) and wants that acknowledged like a command; without an answer it
+            # repeats three times and reports a radio error. An empty one is a request.
+            time_told = kind == int(MsgType.TIME_INFORMATION) and bool(frame.payload)
+            if not time_told and (kind not in ACKNOWLEDGED_TYPES or self._firmware_ack):
+                # Not to be answered, or the main module's firmware answers it.
+                return
         now = time.monotonic()
         self._acknowledged = {k: t for k, t in self._acknowledged.items() if now - t < self._ack_guard}
         key = (frame.src, frame.counter, int(frame.msg_type))
@@ -1611,7 +2055,9 @@ class MaxHub:
         if radio is None or not radio.transport.connected:
             return
         self._acknowledged[key] = now
-        ack = Frame(frame.counter, 0x02, MsgType.ACK, self.address, frame.src, 0, b"\x00")
+        # The answer comes from whom the telegram went to (the central or a virtual device).
+        payload = b"\x00" if virtual is None else self.virtual.ack_payload(virtual, frame)
+        ack = build_ack(frame.counter, frame.dst, frame.src, payload)
         try:
             # Written here and now: processing the telegram (state changes, automations)
             # comes after, or a window contact has stopped listening by then.
@@ -1686,7 +2132,8 @@ class MaxHub:
             dev.rssi = frame.rssi
 
     def _handle(self, frame: Frame, radio: str = MAIN_RADIO) -> None:
-        if frame.src == self.address:
+        # Our own transmissions, heard back through another module (also as a virtual device).
+        if frame.src == self.address or self.virtual.is_virtual(frame.src):
             return
         if frame.msg_type == MsgType.PAIR_PING:
             self._handle_pair(frame, radio)
@@ -1707,7 +2154,7 @@ class MaxHub:
         status = True
         if kind == MsgType.ACK:
             ack = decode_ack(frame.payload)
-            if frame.dst == self.address:
+            if frame.dst == self.address or self.virtual.is_virtual(frame.dst):
                 for module in self._radios.values():
                     module.scheduler.on_ack(frame.src, frame.counter, ack.ok)
             status = bool(ack.state_payload)
@@ -1755,12 +2202,20 @@ class MaxHub:
                 dev.measured_at = self._now()
                 reported = True
         poke = self._pokes.get(dev.address)
+        restoring = False
         if poke is not None:
             # The poke stays invisible: keep the real target and mode.
             dev.target, dev.mode = poke["target"], poke["mode"]
             if reported:
                 self._finish_poke(dev)
-        dev.clear_pending_if_reached()
+                restoring = True
+        if not restoring:
+            # Right after the poke the device still sits on the poke's value: the restore
+            # just queued stays pending until it is acknowledged (or resent).
+            dev.clear_pending_if_reached()
+        if status and dev.is_climate:
+            dev.state_at = self._local_now()
+            self._override_active(dev)  # another target or mode reported: forgotten
         if status and dev.command_failed and dev.has_pending:
             dev.command_failed = False
             self._submit_pending(dev)
@@ -1788,10 +2243,13 @@ class MaxHub:
             self._schedule_flush(dev)
         elif status:
             self._resubmit_failed_links(dev)
+            self.virtual.partner_heard(dev)
         partner = self.devices.get(frame.dst)
         if partner is not None and partner is not dev and partner.is_sleeper:
             # A partner's answer belongs to the sleeper's burst as well.
             self._schedule_flush(partner)
+        if partner is not None and partner.virtual:
+            self.virtual.on_frame(frame)
         self._notify(dev)
 
     @staticmethod
@@ -1829,6 +2287,7 @@ class MaxHub:
         dev = self.devices.get(address)
         if dev is None:
             raise FrameError("device not known to the radio module", key="device_unknown")
+        _no_radio(dev)
         if not dev.is_climate:
             raise FrameError("this device has no clock", key="no_clock")
         outcome = await self._await_command(
@@ -1854,6 +2313,8 @@ class MaxHub:
         """Put back on a factory-reset device what the integration knows of it: its side
         of the links (the partners still carry theirs), both configuration sets, the
         setpoint and the stored week program. Runs once the device took the pong."""
+        if dev.virtual:
+            return  # never paired: nothing on air for it
         name = dev.name or dev.serial
         _LOGGER.warning("MAX! %s (%s): paired again after a factory reset, restoring it", name, dev.serial)
         by_serial = _devices_by_serial(self.devices)
@@ -1876,7 +2337,11 @@ class MaxHub:
             dev.group = 0
             self._submit_group(dev)
         target = dev.pending_target if dev.has_pending and dev.pending_target is not None else dev.target
-        if (
+        if dev.is_climate and dev.has_pending and dev.pending_mode is Mode.AUTO and dev.pending_target is not None:
+            # A setpoint in automatic mode holds only until a switch point: the program.
+            dev.set_pending(None, Mode.AUTO, None, queued=self._local_now())
+            self._submit_set(dev, None, Mode.AUTO, None)
+        elif (
             dev.is_climate
             and dev.mode is Mode.MANUAL
             and target is not None
@@ -1887,7 +2352,12 @@ class MaxHub:
             # After the reset it runs its factory program in automatic mode.
             dev.set_pending(target, Mode.MANUAL, None)
             self._submit_set(dev, target, Mode.MANUAL, None)
-        if dev.is_climate and dev.week_profile and dev.address not in self._profile_jobs:
+        if (
+            dev.is_climate
+            and dev.week_profile
+            and dev.address not in self._profile_jobs
+            and dev.address not in self._profile_followups
+        ):
             days: dict[int, list[ProfilePoint]] = {}
             encoded: dict[int, list[bytes]] = {}
             try:

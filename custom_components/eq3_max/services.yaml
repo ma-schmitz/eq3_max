@@ -67,7 +67,7 @@ set_week_profile:
           multiple: true
     weekday:
       required: true
-      example: "montag"
+      example: "Montag"
       selector:
         select:
           multiple: true

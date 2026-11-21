@@ -27,7 +27,8 @@ class FakeHub:
     last: FakeHub | None = None
 
     def __init__(
-        self, port, address, devices, *, on_update, on_button, on_device_added, on_problem, radios=(), brake=False, **_kw
+        self, port, address, devices, *, on_update, on_button, on_device_added, on_problem,
+        on_device_removed=lambda dev: None, radios=(), brake=False, **_kw
     ):
         self.port = port
         self.address = address
@@ -36,6 +37,7 @@ class FakeHub:
         self.on_button = on_button
         self.on_device_added = on_device_added
         self.on_problem = on_problem
+        self.on_device_removed = on_device_removed
         self.brake = brake
         self.connected = True
         self.version = "V 1.66 nanoCUL868"
@@ -49,6 +51,13 @@ class FakeHub:
         self.raw_history = {}
         self.resets = []
         self.week_profiles = []
+        self.profile_writes = []
+        # Week program as the hub: writes still running by address (plan), mates that
+        # refuse, and a gate wait_week_profile waits for (None = done at once).
+        self.profile_running = {}
+        self.profile_refuse = set()
+        self.profile_gate = None
+        self.profile_waited = []
         self.week_profile_error = None
         self.waiting_budget = False
         self.pending = []
@@ -59,6 +68,7 @@ class FakeHub:
         # Per module: connected (main is "" and follows self.connected).
         self.radio_connected = {r.id: True for r in self.radios}
         self.radio_heard = {}
+        self.virtual = FakeVirtuals(self)
         FakeHub.last = self
 
     async def start(self):
@@ -68,6 +78,15 @@ class FakeHub:
         self.started = False
 
     def set_temperature(self, address, temperature, mode, until=None):
+        from custom_components.eq3_max.protocol.messages import FrameError, Mode
+
+        dev = self.devices[address]
+        in_room = (dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT) or any(
+            w.virtual and w.device_type is DeviceType.WALL_THERMOSTAT and w.serial in dev.links
+            for w in self.devices.values()
+        )
+        if mode is Mode.AUTO and in_room and not self.virtual.program_known(address):
+            raise FrameError("no complete week program known", key="virtual_no_program")
         if temperature is not None:
             temperature = normalize_temperature(temperature)
         self.commands.append((address, temperature, mode) if until is None else (address, temperature, mode, until))
@@ -96,6 +115,7 @@ class FakeHub:
         self.on_update(dev)
 
     async def factory_reset(self, address):
+        _no_radio(self.devices[address])
         self.resets.append(address)
         if self.reset_error is not None:
             raise self.reset_error
@@ -109,13 +129,21 @@ class FakeHub:
     async def set_time(self, address):
         from custom_components.eq3_max.protocol.messages import FrameError
 
+        _no_radio(self.devices[address])
         if not self.devices[address].is_climate:
             raise FrameError("this device has no clock", key="no_clock")
         if getattr(self, "time_error", None):
             raise FrameError(self.time_error)
         self.commands.append(("time", address))
 
-    async def set_week_profile(self, address, days):
+    def room_of(self, dev):
+        from custom_components.eq3_max.protocol.hub import room_of
+
+        return room_of(self.devices, dev)
+
+    async def set_week_profile(self, address, days, *, exclude=()):
+        """As the hub: the room's other thermostats get the days too (but those in
+        `exclude`); `profile_writes` lists every device written by radio."""
         from custom_components.eq3_max.protocol.devices import WEEKDAYS
         from custom_components.eq3_max.protocol.messages import FrameError, format_until
 
@@ -123,11 +151,31 @@ class FakeHub:
             raise FrameError(self.week_profile_error)
         self.week_profiles.append((address, days))
         dev = self.devices[address]
-        for day, points in days.items():
-            dev.week_profile[WEEKDAYS[day]] = [
-                {"temperature": p.temperature, "until": format_until(p.until)} for p in points
-            ]
-        self.on_update(dev)
+        if self.profile_running.get(address) == days:
+            return {address}  # joins the running write: its call took care of the room
+        members = [dev, *(m for m in self.room_of(dev) if m.address not in exclude)]
+        for member in members:
+            if member.address in self.profile_refuse and member is not dev:
+                day = min(days)
+                member.week_profile_error = {
+                    "message": f"{member.name}: week program {day} refused", "key": "week_profile_rejected",
+                    "placeholders": {"name": member.name, "day": str(day), "day_de": WEEKDAYS[day], "day_en": str(day)},
+                    "missing": [WEEKDAYS[d] for d in sorted(days)],
+                }
+                continue
+            if not member.virtual:
+                self.profile_writes.append(member.address)
+            for day, points in days.items():
+                member.week_profile[WEEKDAYS[day]] = [
+                    {"temperature": p.temperature, "until": format_until(p.until)} for p in points
+                ]
+            self.on_update(member)
+        return {m.address for m in members}
+
+    async def wait_week_profile(self, address):
+        if self.profile_gate is not None:
+            await self.profile_gate.wait()
+        self.profile_waited.append(address)
 
     def link(self, a, b):
         self._change_link("link", a, b, "add")
@@ -214,6 +262,7 @@ class FakeHub:
 
         if radio not in self.radio_ids:
             raise FrameError(f"unknown radio module {radio!r}")
+        _no_radio(self.devices[address])
         self.devices[address].radio = radio
         self.commands.append(("radio", address, radio))
         self.on_update(self.devices[address])
@@ -232,6 +281,129 @@ class FakeHub:
     @property
     def pairing_remaining(self):
         return float(self.pairing or 0)
+
+
+def _no_radio(dev):
+    from custom_components.eq3_max.protocol.messages import FrameError
+
+    if dev.virtual:
+        raise FrameError(f"{dev.serial} is virtual, nothing to send", key="virtual_no_radio")
+
+
+class FakeVirtuals:
+    """hub.virtual: records its calls in the hub's `commands`."""
+
+    def __init__(self, hub):
+        self._hub = hub
+        # What remove() answers: True = gone at once, False = being removed.
+        self.remove_result = True
+        self._next = 0x300000
+
+    def create(self, device_type, name, source, radio="", *, address=None):
+        hub = self._hub
+        hub.commands.append(("create_virtual", device_type, name, source, radio))
+        if address is None:
+            self._next += 1
+            address = self._next
+        dev = MaxDevice(
+            address, f"VIRT{address:06X}", device_type, name=name, radio=radio, virtual=True, source=source
+        )
+        dev.ensure_config_defaults()
+        hub.devices[address] = dev
+        hub.on_device_added(dev)
+        return dev
+
+    def get(self, address):
+        dev = self._hub.devices.get(address)
+        return dev if dev is not None and dev.virtual else None
+
+    def is_virtual(self, address):
+        return self.get(address) is not None
+
+    def room_form(self, wall):
+        """As the hub: one confirmed group on one module = "group", else "addressed"."""
+        mates = [
+            d for d in self._hub.devices.values()
+            if d.is_heating_thermostat and not d.virtual and wall.serial in d.links and d.serial in wall.links
+        ]
+        if not mates:
+            return None
+        groups, radios = {d.group for d in mates}, {d.radio for d in mates}
+        return "group" if len(groups) == 1 and 0 not in groups and len(radios) == 1 else "addressed"
+
+    def room_form_reason(self, wall):
+        """As the hub: why the room temperature goes addressed."""
+        if self.room_form(wall) != "addressed":
+            return None
+        mates = [
+            d for d in self._hub.devices.values()
+            if d.is_heating_thermostat and not d.virtual and wall.serial in d.links and d.serial in wall.links
+        ]
+        if len({d.radio for d in mates}) > 1:
+            return "modules"
+        if any(d.pending_group is not None for d in mates):
+            return "pending"
+        return "no_group"
+
+    def in_room(self, address):
+        """As the hub: a virtual wall thermostat or a member of its room."""
+        dev = self._hub.devices.get(address)
+        if dev is None:
+            return False
+        if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT:
+            return True
+        return any(
+            w.virtual and w.device_type is DeviceType.WALL_THERMOSTAT and w.serial in dev.links and dev.serial in w.links
+            for w in self._hub.devices.values()
+        )
+
+    def program_known(self, address):
+        """As the hub: the wall thermostat (or a member's) holds all seven days."""
+        from custom_components.eq3_max.protocol.devices import WEEKDAYS
+
+        dev = self._hub.devices.get(address)
+        if dev is None:
+            return False
+        if not (dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT):
+            dev = next(
+                (
+                    w for w in self._hub.devices.values()
+                    if w.virtual and w.device_type is DeviceType.WALL_THERMOSTAT
+                    and w.serial in dev.links and dev.serial in w.links
+                ),
+                None,
+            )
+        return dev is not None and all(dev.week_profile.get(day) for day in WEEKDAYS)
+
+    def set_window(self, address, is_open):
+        self._hub.commands.append(("set_window", address, is_open))
+        dev = self._hub.devices[address]
+        dev.source_ok = is_open is not None
+        if is_open is not None:
+            dev.window_open = is_open
+        self._hub.on_update(dev)
+
+    def set_measured(self, address, celsius):
+        self._hub.commands.append(("set_measured", address, celsius))
+        dev = self._hub.devices[address]
+        dev.source_ok = celsius is not None
+        dev.measured = celsius
+        self._hub.on_update(dev)
+
+    def remove(self, address, *, force=False):
+        self._hub.commands.append(("remove_virtual", address, force))
+        dev = self._hub.devices[address]
+        dev.removing = True
+        if force or self.remove_result:
+            self.finish_removal(address)
+            return True
+        self._hub.on_update(dev)
+        return False
+
+    def finish_removal(self, address):
+        """The last partner acknowledged the unlink: the device is gone."""
+        dev = self._hub.devices.pop(address)
+        self._hub.on_device_removed(dev)
 
 
 @pytest.fixture

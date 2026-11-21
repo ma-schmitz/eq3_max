@@ -28,6 +28,9 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
 - Takes over existing Homegear pairings without re-pairing; entity IDs after confirmation (repair)
 - Airtime sensor and brake at 1 % (36 s per hour, on for new entries)
 - Presets "Comfort", "Eco" and "Away" (temporary with end time), factory reset and deleting devices
+- A setpoint acts as at the device, depending on the mode: in **Auto** a change holds until the
+  next switch point of the week program (the thermostat stays in Auto), in **Heat** (manual)
+  permanently; **Away** holds a temperature until the end time, a new setpoint ends it
 - Group ids (set per thermostat or for a whole room)
 - Own dashboard card: [eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (valve, battery, radio, window, settings and week program in a pop-up)
 - Permissions: device settings and week programs can be locked for users without admin rights
@@ -35,6 +38,7 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
   wall thermostat display: set or current temperature), every value explained on hover and with ⓘ
 - Poll the current temperature of radiator thermostats at an interval of your choice (for history graphs)
 - Create and remove links between devices (window contact, button, wall and radiator thermostat)
+- Virtual devices: Home Assistant acts as a window contact or a wall thermostat towards your thermostats, fed by any entity
 - CUL via USB or on the network (CUN, flashed Cube), switchable in the options
 - Several radio modules with one central address (e.g. one per floor); assign devices to
   another module without re-pairing
@@ -206,6 +210,70 @@ data:
   partner_device_id: fedcba9876543210fedcba9876543210  # e.g. radiator thermostat
 ```
 
+## Virtual devices
+
+A virtual device exists only in Home Assistant, not as hardware. The integration uses it to
+appear to your real radiator thermostats as a MAX! device, fed by an entity:
+
+- **Virtual window contact:** the source is a `binary_sensor` (for example a Zigbee window
+  contact). The integration sends "open" / "closed" to every linked thermostat.
+- **Virtual wall thermostat:** the source is a temperature `sensor` (°F and K are
+  converted). The thermostats of a room then regulate on that temperature instead of their
+  own sensor, and a setpoint applies to the whole room. The temperature goes out every 5
+  minutes, fixed, and a window change at once. Auto is only available with a complete week
+  program written through eq3_max; without one the room runs manually, and the panel says so.
+  In automatic mode a change at the handwheel or in Home Assistant holds until the next
+  switch point. An away period ends by itself at the set time; then what applied before
+  applies again.
+
+**Create:** "eQ-3 MAX!" panel → "Create virtual device" (admins only): choose kind, name
+and source (you do not choose a radio module; the virtual device sends through the module of
+the thermostat concerned). Then **link** it with the thermostats like a bought device. If
+open-window handling is to work in a room with a virtual wall thermostat, link the window
+contact (real or virtual) with the virtual wall thermostat as well, not only with the
+thermostats; the panel shows a hint if that is missing.
+
+**Good to know:**
+
+- **Airtime.** Every radio message (a "telegram") costs airtime. A virtual wall thermostat
+  costs about 13 s per hour (of 36 s per hour per radio module; with the option "Limit
+  airtime to 36 s" 10 s are kept free for commands, without it the radio module itself
+  decides). Rule of thumb: **two virtual wall thermostats per radio module.** Without a
+  common group on a common radio module the temperature is sent to each thermostat in turn
+  (about 13 s per hour per thermostat; with more than one thermostat they regulate on their
+  own sensor at times); the panel then shows a hint and offers "Assign for the room". A
+  thermostat waits just under 10 minutes for its wall thermostat, then regulates on its own
+  sensor and shows a radio error until the next telegram. A long job can leave a room
+  without temperature for up to about an hour. A thermostat that leaves the
+  virtual room loses its group ID.
+- **Window contact.** An undelivered state is repeated every 5 minutes, after three
+  failures every 15 minutes; two state changes to the same thermostat are at least one
+  minute apart, and at most 12 telegrams per hour go to each thermostat.
+- **Source.** A temperature source that has not reported for 3 hours counts as
+  unavailable. Sensors that only write a new state when the value changes (template or
+  helper sensors) therefore drop out at times; better use a device sensor that reports
+  regularly.
+- **Serial radio modules only.** In 0.10.0 the thermostats linked with a virtual wall
+  thermostat must be on a radio module connected by USB or serial, not on a network module
+  (for example a flashed Cube). The virtual window contact works with any module. There is no
+  eco button at a virtual wall thermostat, and a thermostat can have only one wall
+  thermostat (real or virtual).
+- **Home Assistant not running** (or the integration not loaded: radio module missing,
+  integration disabled or reloading). Nobody answers for the virtual wall thermostat; the
+  thermostats keep heating with their own sensor. If someone changes the setpoint at the
+  handwheel meanwhile, it costs that thermostat airtime: in the worst case it repeats for
+  about 16 minutes and is then silent for up to an hour (it keeps heating). There is no
+  technical remedy.
+- **Removing.** "Remove" first removes the links at the thermostats; the device shows as
+  "being removed" and keeps answering until then. "Remove anyway" deletes it at once – a
+  thermostat that still knows the link then sends into the void and can fall silent for up
+  to an hour.
+- **Going back to an older version.** Remove all virtual devices before going back to a
+  version older than 0.10.0: an older version takes them for real devices at an address
+  nobody answers.
+
+Details: manual page "Virtual devices" (`website/handbuch/virtuelle-geraete.md`).
+
 ## The "eQ-3 MAX!" panel
 
 Entry **"eQ-3 MAX!"** in the sidebar (administrators only, URL `/eq3-max`); the
@@ -287,11 +355,11 @@ data:
 
 Requirement: Home Assistant 2026.8 or newer.
 
-Copy `custom_components/eq3_max` to `/config/custom_components/`, restart Home Assistant,
-add the integration "eQ-3 MAX!".
+Via [HACS](https://hacs.xyz): search for "eQ-3 MAX!" in HACS, download it, restart Home Assistant
+and add the integration "eQ-3 MAX!".
 
-Via HACS: add this repository under HACS → Custom repositories with the
-category "Integration", download "eQ-3 MAX!", restart Home Assistant.
+Manually: copy `custom_components/eq3_max` to `/config/custom_components/`, restart Home Assistant,
+add the integration "eQ-3 MAX!".
 
 Migration from Homegear: see `website/umstieg/`.
 

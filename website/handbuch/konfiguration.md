@@ -64,7 +64,10 @@ thermostat the current temperature therefore often stands still for hours.
 With `select.…_ist_abfragen` eq3_max nudges the device at a fixed interval, but only when
 no report came by itself in that time: target up by 0.5 °C (down at the upper limit), wait
 until the device sends its status with the measured temperature (measured: 20 s to a little
-over 3 min, depending on the device; eq3_max gives up after 5 min), then back. In automatic mode it returns to automatic. Home Assistant keeps showing the real
+over 3 min, depending on the device; eq3_max gives up after 5 min), then back. In automatic mode it returns to automatic; a temperature changed there at the
+handwheel goes back with it while its switch point has not passed. While a temperature set in
+Auto from Home Assistant holds, polling pauses for that thermostat (until the switch point or
+until the device reports something else, at most 12 hours). Home Assistant keeps showing the real
 target during the nudge; a command of your own in that time wins.
 
 - **Cost:** two telegrams per nudge (airtime, battery); the valve motor usually does not

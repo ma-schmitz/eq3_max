@@ -52,7 +52,8 @@ Abweichung erklärt, warum ein Raum wärmer oder kälter wird als erwartet.
 ## Bedienung
 
 - **−/+** ändert den Sollwert in 0,5-°C-Schritten (4,5–30,5 °C). Ein noch nicht quittierter
-  Sollwert zählt mit, mehrmaliges Tippen summiert sich.
+  Sollwert zählt mit, mehrmaliges Tippen summiert sich. In Automatik gilt der neue Wert bis zum
+  nächsten Schaltpunkt, im manuellen Betrieb dauerhaft (siehe [Thermostat bedienen](bedienung.md#sollwert-andern)).
 - **Modus-Knöpfe:** Manuell, Auto (Wochenprogramm), Komfort, Eco, Boost, Aus. Ist das Thermostat
   abwesend geschaltet, steht „Abwesend bis …“ da; ein Modus-Knopf beendet es.
 - **Klick auf die Ist-Temperatur** öffnet den Home-Assistant-Dialog mit dem Verlauf, **Klick auf

@@ -4,8 +4,11 @@ import pytest
 
 from custom_components.eq3_max.protocol.messages import Frame, FrameError, MsgType, encode_frame
 from custom_components.eq3_max.protocol.scheduler import (
+    BUDGET_S,
+    PRIO_BACKGROUND,
     PRIO_REPLY,
     Command,
+    Outcome,
     RadioScheduler,
     airtime,
 )
@@ -600,3 +603,131 @@ async def test_pending_lists_the_command_on_air_first_then_the_waiting_ones_in_s
         {"dst": 0x222222, "key": None, "attempts": 0, "on_air": False},
     ]
     assert sched.queue_length == 3
+
+
+async def test_background_waits_behind_commands(setup):
+    sched, sender, _ = setup
+    sched.submit(Command(dst=DEV, build=lambda c: frame(c, b"\x01"), priority=PRIO_BACKGROUND, expects_ack=False))
+    sched.submit(Command(dst=DEV, build=lambda c: frame(c, b"\x02"), expects_ack=False))
+    await until(lambda: len(sender.lines) == 2)
+    assert sender.lines[0].endswith("02") and sender.lines[1].endswith("01")
+
+
+async def test_reserve_expires_instead_of_sending(setup):
+    sched, sender, _ = setup
+    sched.book_airtime(BUDGET_S - 10.5)  # 10.5 s free, the telegram costs ~1.1 s
+    done = []
+    cmd = Command(
+        dst=DEV, build=lambda c: frame(c), priority=PRIO_BACKGROUND, expects_ack=False, reserve=10.0, on_done=done.append
+    )
+    sched.submit(cmd)
+    await until(lambda: done == [False])
+    assert sender.lines == [] and cmd.outcome is Outcome.EXPIRED
+
+
+async def test_reserve_lets_through_with_room(setup):
+    sched, sender, _ = setup
+    sched.book_airtime(BUDGET_S - 12.0)
+    sched.submit(Command(dst=DEV, build=lambda c: frame(c), expects_ack=False, reserve=10.0))
+    await until(lambda: len(sender.lines) == 1)
+
+
+# --- LOVF for telegrams without acknowledgement and for background telegrams ---
+
+
+class RefusingSender(Sender):
+    """The stick answers LOVF to the first `refuse` telegrams, right after taking them."""
+
+    def __init__(self, refuse=1):
+        super().__init__()
+        self.refuse = refuse
+        self.sched = None
+
+    async def __call__(self, line):
+        await super().__call__(line)
+        if self.refuse:
+            self.refuse -= 1
+            asyncio.get_running_loop().call_soon(self.sched.on_lovf)
+
+
+def refusing(refuse=1, **kwargs):
+    sender = RefusingSender(refuse)
+    sched = RadioScheduler(
+        sender, ack_timeout=0.05, lovf_delay=0.05, clock=FakeClock(), budget_poll=0.01, lovf_wait=0.05, **kwargs
+    )
+    sender.sched = sched
+    return sched, sender
+
+
+async def test_a_telegram_without_ack_refused_by_lovf_is_not_booked_and_sent_again():
+    sched, sender = refusing()
+    task = asyncio.create_task(sched.run())
+    done = []
+    try:
+        cmd = Command(dst=0, build=lambda c: frame(c, dst=0), expects_ack=False, on_done=done.append)
+        sched.submit(cmd)
+        await until(lambda: len(sender.lines) == 1)
+        await until(lambda: sched.waiting_for_budget)
+        assert sched.airtime_last_hour == 0 and cmd.sent == 0 and cmd.first_sent_at is None and done == []
+        await until(lambda: done == [True])
+        assert len(sender.lines) == 2 and cmd.outcome is Outcome.SENT and cmd.sent == 1
+        assert sched.airtime_last_hour == pytest.approx(airtime(frame(1, dst=0)))
+    finally:
+        task.cancel()
+
+
+async def test_a_telegram_without_ack_and_without_lovf_counts_as_sent():
+    sched, sender = refusing(refuse=0)
+    task = asyncio.create_task(sched.run())
+    done = []
+    try:
+        sched.submit(Command(dst=0, build=lambda c: frame(c, dst=0), expects_ack=False, on_done=done.append))
+        await until(lambda: done == [True])
+        assert len(sender.lines) == 1 and sched.airtime_last_hour > 0
+    finally:
+        task.cancel()
+
+
+@pytest.mark.parametrize("expects_ack", [False, True])
+async def test_a_background_telegram_with_reserve_refused_by_lovf_expires(expects_ack):
+    sched, sender = refusing()
+    task = asyncio.create_task(sched.run())
+    done = []
+    try:
+        cmd = Command(
+            dst=DEV, build=frame, priority=PRIO_BACKGROUND, expects_ack=expects_ack, reserve=10.0, on_done=done.append
+        )
+        sched.submit(cmd)
+        sched.submit(Command(
+            dst=DEV, build=lambda c: frame(c, b"\x02"), priority=PRIO_BACKGROUND, expects_ack=False, on_done=done.append
+        ))
+        await until(lambda: len(done) == 2)
+        assert done[0] is False and cmd.outcome is Outcome.EXPIRED
+        assert cmd.sent == 0 and cmd.first_sent_at is None
+        assert len(sender.lines) == 2 and sender.lines[1].endswith("02")   # no retry loop, the next one goes
+        assert sched.airtime_last_hour == pytest.approx(airtime(frame(2, b"\x02")))
+    finally:
+        task.cancel()
+
+
+async def test_brake_together_with_reserve_expires_instead_of_waiting():
+    """The brake holds a command until the hour has room; a background telegram with
+    reserve does not go into the reserve once the brake lets it through."""
+    sender = Sender()
+    clock = FakeClock()
+    sched = RadioScheduler(sender, ack_timeout=0.05, clock=clock, brake=True, budget_poll=0.01, lovf_wait=0.01)
+    sched.book_airtime(BUDGET_S - 5.0)  # room for the telegram, not for the reserve
+    task = asyncio.create_task(sched.run())
+    done = []
+    try:
+        cmd = Command(dst=0, build=lambda c: frame(c, dst=0), expects_ack=False, reserve=10.0, on_done=done.append)
+        sched.submit(cmd)
+        await until(lambda: done == [False])
+        assert sender.lines == [] and cmd.outcome is Outcome.EXPIRED
+        clock.t += 3601
+        cmd2 = Command(dst=0, build=lambda c: frame(c, dst=0), expects_ack=False, reserve=10.0, on_done=done.append)
+        sched.submit(cmd2)
+        await until(lambda: done == [False, True])
+        assert len(sender.lines) == 1
+    finally:
+        task.cancel()

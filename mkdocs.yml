@@ -121,6 +121,7 @@ plugins:
             Operating a thermostat: Thermostat bedienen
             Device configuration: Gerätekonfiguration
             Links: Verknüpfungen
+            Virtual devices: Virtuelle Geräte
             The "eQ-3 MAX!" panel: Seite „eQ-3 MAX!“
             Multiple radio modules: Mehrere Funkmodule
             Pairing devices: Geräte anlernen
@@ -145,6 +146,7 @@ nav:
       - Operating a thermostat: handbuch/bedienung.md
       - Device configuration: handbuch/konfiguration.md
       - Links: handbuch/verknuepfungen.md
+      - Virtual devices: handbuch/virtuelle-geraete.md
       - The "eQ-3 MAX!" panel: handbuch/seite.md
       - Thermostat card: handbuch/karte.md
       - Multiple radio modules: handbuch/funkmodule.md

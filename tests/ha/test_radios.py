@@ -244,6 +244,7 @@ async def test_pairing_and_reset_need_only_the_relevant_module(hass, two_radios,
     fk = _device(hass, two_radios, "NEQ9000010").id
     await hass.services.async_call(DOMAIN, "factory_reset", {"device_id": fk}, blocking=True)
     assert hub.resets == [FK]
+    await hass.async_block_till_done()                              # a reload may still be in flight
 
 
 async def test_deaf_extra_module_stays_reported_while_main_hears_devices(hass, two_radios, fake_hub):
@@ -388,3 +389,32 @@ async def test_ws_rename_a_module_from_the_panel(hass, two_radios, fake_hub, has
     await hass.async_block_till_done()
     assert [item["name"] for item in two_radios.data["radios"]] == ["OG"]
     assert hass.states.get("select.ht_bad_unten_funkmodul").attributes["options"] == ["EG", "OG"]
+
+
+async def test_remove_module_with_a_virtual_device_stored_on_it(hass, fake_hub):
+    """A virtual device has no module of its own; one stored by an older version ("r2")
+    must not stop the removal of that module."""
+    from custom_components.eq3_max.protocol.devices import MaxDevice
+    from custom_components.eq3_max.protocol.messages import DeviceType
+
+    items = _devices_with_og()
+    virtual = MaxDevice(
+        0x222222, "VIRT222222", DeviceType.SHUTTER_CONTACT, name="fenster", virtual=True, source="binary_sensor.f"
+    ).identity_dict()
+    virtual["radio"] = "r2"
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="C0FFEE", title="eQ-3 MAX! C0FFEE",
+        data={CONF_PORT: "/dev/serial/by-path/usb-0:13", CONF_ADDRESS: "C0FFEE", CONF_DEVICES: [*items, virtual], "radios": [OG]},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hub_device = _device(hass, entry, "C0FFEE")
+    assert hub_device is not None and _device(hass, entry, "VIRT222222").via_device_id == hub_device.id
+    r = await _radios_menu(hass, entry)
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"next_step_id": "radio_remove"})
+    r = await hass.config_entries.options.async_configure(r["flow_id"], {"radio": "r2"})
+    await hass.async_block_till_done()
+    assert r["type"] is FlowResultType.CREATE_ENTRY
+    assert next(i for i in entry.data[CONF_DEVICES] if i["address"] == 0x222222)["radio"] == ""
+    assert fake_hub.last.devices[0x222222].radio == ""

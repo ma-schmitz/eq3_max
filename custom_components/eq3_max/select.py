@@ -32,7 +32,10 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
         if spec.domain == "select"
     ]
     if len(radio_names(entry.data)) > 1:
-        entities.extend(MaxRadioSelect(coordinator, device) for device in coordinator.hub.devices.values())
+        # A virtual device has no module of its own (it sends through its partners' modules).
+        entities.extend(
+            MaxRadioSelect(coordinator, device) for device in coordinator.hub.devices.values() if not device.virtual
+        )
     else:
         # Back to a single module: the module selects of before go.
         ent_reg = er.async_get(hass)

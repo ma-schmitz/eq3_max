@@ -28,6 +28,10 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
 - Übernahme bestehender Homegear-Kopplungen ohne Neuanlernen; Entity-IDs nach Bestätigung (Reparatur)
 - Sendezeit-Sensor und Bremse auf 1 % (36 s pro Stunde, bei neuen Einträgen an)
 - Presets „Komfort“, „Eco“ und „Abwesend“ (temporär mit Endzeit), Werksreset und Löschen von Geräten
+- Ein Sollwert wirkt je nach Modus wie am Gerät: in **Automatik** gilt eine Änderung bis zum
+  nächsten Schaltpunkt des Wochenprogramms (das Thermostat bleibt in Automatik), in **Heizen**
+  (manuell) dauerhaft; **Abwesend** hält eine Temperatur bis zur Endzeit, ein neuer Sollwert
+  beendet es
 - Gruppen-IDs (je Thermostat oder für einen ganzen Raum)
 - Eigene Dashboard-Karte: [eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (Ventil, Batterie, Funk, Fenster, Einstellungen und Wochenprogramm im Pop-up)
 - Freigaben: Geräteeinstellungen und Wochenprogramme für Benutzer ohne Admin-Rechte sperrbar
@@ -35,6 +39,7 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
   Anzeige Soll/Ist am Wandthermostat), jeder Wert per Mouseover und ⓘ erklärt
 - Ist-Temperatur der Heizkörper in frei wählbarem Abstand abfragen (für Verlaufskurven)
 - Verknüpfungen zwischen Geräten anlegen und lösen (Fensterkontakt, Taster, Wand- und Heizkörperthermostat)
+- Virtuelle Geräte: Home Assistant spielt gegenüber den Thermostaten einen Fensterkontakt oder ein Wandthermostat, gespeist aus einer beliebigen Entität
 - CUL per USB oder im Netzwerk (CUN, geflashter Cube), Wechsel in den Optionen
 - Mehrere Funkmodule mit einer Zentralen-Adresse (z. B. eins pro Etage); Geräte ohne
   Neuanlernen einem anderen Modul zuordnen
@@ -200,6 +205,71 @@ data:
   partner_device_id: fedcba9876543210fedcba9876543210  # z. B. Heizkörperthermostat
 ```
 
+## Virtuelle Geräte
+
+Ein virtuelles Gerät gibt es nur in Home Assistant, nicht als Hardware. Die Integration
+tritt damit gegenüber den echten Heizkörperthermostaten als MAX!-Gerät auf, gespeist aus
+einer Entität:
+
+- **Virtueller Fensterkontakt:** Quelle ist ein `binary_sensor` (z. B. ein Zigbee-Fensterkontakt).
+  Die Integration meldet „offen“/„geschlossen“ an jedes verknüpfte Thermostat.
+- **Virtuelles Wandthermostat:** Quelle ist ein Temperatur-`sensor` (°F und K werden
+  umgerechnet). Die Thermostate eines Raums regeln dann nach dieser Temperatur statt nach
+  ihrem eigenen Fühler, und ein Sollwert gilt für den ganzen Raum. Die Temperatur geht fest
+  alle 5 Minuten hinaus, ein Fensterwechsel sofort. Automatik gibt es nur mit einem
+  vollständigen, über eq3_max geschriebenen Wochenprogramm; ohne eines läuft der Raum
+  manuell, und die Seite sagt das. In Automatik gilt eine Änderung am Handrad oder in Home
+  Assistant bis zum nächsten Schaltpunkt. Eine Abwesenheit endet von selbst zur eingestellten
+  Zeit; danach gilt wieder, was vorher galt.
+
+**Anlegen:** Seite „eQ-3 MAX!“ → „Virtuelles Gerät anlegen“ (nur für Administratoren): Art,
+Name und Quelle wählen (ein Funkmodul wählt man nicht; das virtuelle Gerät sendet über das
+Modul des jeweiligen Thermostats). Danach wie bei einem gekauften Gerät mit den Thermostaten
+**verknüpfen**. Soll die Fenster-auf-Erkennung in einem Raum mit virtuellem Wandthermostat
+wirken, wird der Fensterkontakt (echt oder virtuell) auch mit dem virtuellen Wandthermostat
+verknüpft, nicht nur mit den Thermostaten; fehlt das, zeigt die Seite einen Hinweis.
+
+**Wichtig zu wissen:**
+
+- **Sendezeit.** Jede Funknachricht (ein „Telegramm“) kostet Sendezeit. Ein virtuelles
+  Wandthermostat braucht etwa 13 s je Stunde (von 36 s je Stunde und Funkmodul; mit der
+  Option „Sendezeit auf 36 s begrenzen“ bleiben 10 s für Befehle frei, ohne sie entscheidet
+  das Funkmodul selbst). Richtwert: **zwei virtuelle Wandthermostate je Funkmodul.** Ohne
+  gemeinsame Gruppe am gemeinsamen Funkmodul geht die Temperatur an jedes Thermostat einzeln
+  (etwa 13 s je Stunde und Thermostat; bei mehr als einem Thermostat regeln sie zeitweise
+  nach ihrem eigenen Fühler); die Seite zeigt dann einen Hinweis und bietet „Für den Raum
+  vergeben“ an. Ein Thermostat wartet knapp 10 Minuten auf sein Wandthermostat, dann regelt
+  es nach dem eigenen Fühler und zeigt einen Funkfehler bis zum nächsten Telegramm. Ein langer
+  Auftrag kann einen Raum bis zu etwa einer Stunde ohne Temperatur lassen. Ein Thermostat, das den
+  virtuellen Raum verlässt, verliert seine Gruppen-ID.
+- **Fensterkontakt.** Ein nicht zugestellter Zustand wird alle 5 Minuten wiederholt, nach
+  drei Fehlschlägen alle 15 Minuten; zwei Zustandswechsel an dasselbe Thermostat liegen
+  mindestens eine Minute auseinander, und je Thermostat gehen höchstens 12 Telegramme je
+  Stunde hinaus.
+- **Quelle.** Eine Temperaturquelle, die sich 3 Stunden lang nicht gemeldet hat, gilt als
+  nicht verfügbar. Sensoren, die nur bei einer Änderung neu schreiben (Template- oder
+  Hilfssensoren), fallen deshalb zeitweise aus; besser ein Gerätesensor, der regelmäßig meldet.
+- **Nur am seriellen Funkmodul.** Die mit einem virtuellen Wandthermostat verknüpften
+  Thermostate müssen in 0.10.0 an einem per USB oder seriell angeschlossenen Funkmodul
+  hängen, nicht an einem Netzwerkmodul (z. B. geflashter Cube). Der virtuelle Fensterkontakt geht mit jedem Modul.
+  Einen Eco-Taster gibt es am virtuellen Wandthermostat nicht, und ein Thermostat kann nur
+  ein Wandthermostat haben (echt oder virtuell).
+- **Home Assistant läuft nicht** (oder die Integration ist nicht geladen: Funkmodul fehlt,
+  Integration deaktiviert oder wird neu geladen). Dann antwortet niemand für das virtuelle Wandthermostat;
+  die Thermostate heizen mit ihrem eigenen Fühler weiter. Ändert jemand in dieser Zeit den
+  Sollwert am Handrad, kostet das das Thermostat Sendezeit: im ungünstigsten Fall wiederholt
+  es etwa 16 Minuten lang und ist danach bis zu einer Stunde stumm (es heizt weiter). Dagegen
+  gibt es keine technische Abhilfe.
+- **Entfernen.** „Entfernen“ löst zuerst die Verknüpfungen an den Thermostaten; das Gerät steht
+  bis dahin als „wird entfernt“ da und antwortet weiter. „Trotzdem entfernen“ löscht sofort –
+  ein Thermostat, das die Verknüpfung noch kennt, sendet dann ins Leere und kann bis zu einer
+  Stunde verstummen.
+- **Zurück auf eine ältere Version.** Vor dem Wechsel auf eine Version vor 0.10.0 alle
+  virtuellen Geräte entfernen: Eine ältere Version hält sie für echte Geräte an einer
+  Adresse, unter der niemand antwortet.
+
+Ausführlich: Handbuch, Seite „Virtuelle Geräte“ (`website/handbuch/virtuelle-geraete.de.md`).
+
 ## Seite „eQ-3 MAX!“
 
 Eintrag **„eQ-3 MAX!“** in der Seitenleiste (nur für Administratoren, URL `/eq3-max`); die
@@ -281,11 +351,11 @@ data:
 
 Voraussetzung: Home Assistant 2026.8 oder neuer.
 
-`custom_components/eq3_max` nach `/config/custom_components/` kopieren, Home Assistant
-neu starten, Integration „eQ-3 MAX!“ hinzufügen.
+Über [HACS](https://hacs.xyz): in HACS nach „eQ-3 MAX!“ suchen, herunterladen, Home Assistant
+neu starten und die Integration „eQ-3 MAX!“ hinzufügen.
 
-Über HACS: dieses Repository unter HACS → Benutzerdefinierte Repositories mit der
-Kategorie „Integration“ hinzufügen, „eQ-3 MAX!“ herunterladen, Home Assistant neu starten.
+Von Hand: `custom_components/eq3_max` nach `/config/custom_components/` kopieren, Home Assistant
+neu starten, Integration „eQ-3 MAX!“ hinzufügen.
 
 Umstieg von Homegear: siehe `website/umstieg/`.
 
