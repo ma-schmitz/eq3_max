@@ -7,7 +7,7 @@ import itertools
 import logging
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -29,6 +29,8 @@ LOVF_RETRY_S = 10.0
 # refuse it with LOVF (culfw answers at once); a refused one cost no airtime.
 NO_ACK_LOVF_WAIT_S = 0.3
 WINDOW_S = 3600.0
+# No single telegram is longer than this (s): a stored entry above it is not one.
+MAX_RESTORED_COST_S = 2.0
 
 
 def airtime(frame: Frame, fast: bool = False) -> float:
@@ -189,6 +191,24 @@ class RadioScheduler:
     def book_airtime(self, cost: float) -> None:
         """Count a transmission that went out past the queue (the hub's acknowledgements)."""
         self._airtime.append((self._clock(), cost))
+        self._changed()
+
+    def airtime_log(self) -> list[tuple[float, float]]:
+        """The transmissions of the last hour as (age in s, airtime in s), oldest first:
+        what a restart must not forget (see restore_airtime)."""
+        now = self._clock()
+        return [(now - at, cost) for at, cost in self._airtime if now - at < WINDOW_S]
+
+    def restore_airtime(self, entries: Iterable[tuple[float, float]]) -> None:
+        """Take over transmissions from before a restart, as (age in s, airtime in s): the
+        hour's budget is the transmitter's, not the program's. Unusable entries are left
+        out."""
+        now = self._clock()
+        restored = [
+            (now - age, cost) for age, cost in entries
+            if 0 <= age < WINDOW_S and 0 < cost <= MAX_RESTORED_COST_S
+        ]
+        self._airtime = deque(sorted([*restored, *self._airtime]))
         self._changed()
 
     def submit(self, cmd: Command) -> None:

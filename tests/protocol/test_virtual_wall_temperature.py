@@ -792,3 +792,100 @@ async def test_after_a_restart_an_addressed_room_reaches_every_thermostat_in_tim
         await until(lambda: not h.virtual._temps)
         clock.t += 10; h.virtual.tick()
     assert reached == {HT, HT2}
+
+
+VW3 = 0x444444
+HT4 = 0x141399
+
+
+def three_rooms(h):
+    room(h, mates=(HT,), group=5)
+    room(h, mates=(HT2,), wall=VW2, group=6)
+    room(h, mates=(HT3,), wall=VW3, group=7)
+
+
+async def test_three_rooms_on_one_module_send_every_450_s(hub, caplog):
+    """Twelve telegrams an hour per room are 13 s of airtime: three rooms would take 40 of
+    a module's 36 s. With more than two rooms every room of the module slows down."""
+    h, cul, _ = hub; clock = use_clock(h)
+    caplog.set_level(logging.INFO)
+    room(h, mates=(HT,), group=5)
+    room(h, mates=(HT2,), wall=VW2, group=6)
+    for wall in (VW, VW2):
+        h.virtual.set_measured(wall, 21.0)
+    await until(lambda: len(temps(cul)) == 2)
+    assert h.virtual.room_interval(h.devices[VW]) == 300.0        # two rooms: the full cadence
+    room(h, mates=(HT3,), wall=VW3, group=7)
+    h.virtual.set_measured(VW3, 21.0)
+    await until(lambda: len(temps(cul)) == 3 and all(h.devices[w].sent_at is not None for w in (VW, VW2, VW3)))
+    assert h.virtual.room_interval(h.devices[VW]) == 450.0
+    assert "3 room temperature telegrams per round, sent every 450 s" in caplog.text
+    clock.t += 449
+    h.virtual.tick()
+    await asyncio.sleep(0.05)
+    assert len(temps(cul)) == 3                                    # nothing after 300 s any more
+    clock.t += 2
+    h.virtual.tick()
+    await until(lambda: len(temps(cul)) == 6)
+
+
+async def test_a_room_without_source_does_not_slow_the_others(hub):
+    h, cul, _ = hub; use_clock(h); three_rooms(h)
+    for wall in (VW, VW2, VW3):
+        h.virtual.set_measured(wall, 21.0)
+    await until(lambda: len(temps(cul)) == 3)
+    assert h.virtual.room_interval(h.devices[VW]) == 450.0
+    h.virtual.set_measured(VW3, None)
+    assert h.virtual.room_interval(h.devices[VW]) == 300.0
+
+
+async def test_the_cadence_stops_slowing_at_eight_minutes(hub, caplog):
+    """A thermostat waits just under 10 min for its wall thermostat: four rooms would
+    need 600 s, they get 480 and a hint in the log."""
+    h, cul, _ = hub; use_clock(h); three_rooms(h)
+    caplog.set_level(logging.INFO)
+    room(h, mates=(HT4,), wall=0x555555, group=8)
+    for wall in (VW, VW2, VW3, 0x555555):
+        h.virtual.set_measured(wall, 21.0)
+    await until(lambda: len(temps(cul)) == 4)
+    assert h.virtual.room_interval(h.devices[VW]) == 480.0
+    assert "use a further radio module" in caplog.text
+
+
+async def test_an_addressed_room_counts_once_per_thermostat(hub):
+    """Without a group each thermostat needs its own telegram: a room of three is as
+    much airtime as three rooms."""
+    h, cul, _ = hub; use_clock(h)
+    room(h, mates=(HT, HT2, HT3), group=0)
+    h.virtual.set_measured(VW, 21.0)
+    await until(lambda: len(temps(cul)) == 1)
+    assert h.virtual.room_interval(h.devices[VW]) == 450.0
+
+
+async def test_a_slower_room_is_starved_later(hub):
+    """Going ahead of waiting commands is for a room that missed its telegram, not for
+    one that is merely on the slower cadence."""
+    h, cul, _ = hub; clock = use_clock(h); three_rooms(h)
+    for wall in (VW, VW2, VW3):
+        h.virtual.set_measured(wall, 21.0)
+    await until(lambda: len(temps(cul)) == 3 and all(h.devices[w].sent_at is not None for w in (VW, VW2, VW3)))
+    clock.t += 451
+    h.virtual.tick()
+    await until(lambda: len(temps(cul)) == 6)
+    assert PRIORITIES and all(priority != 0 for priority in PRIORITIES)
+
+
+PRIORITIES: list[int] = []
+
+
+@pytest.fixture(autouse=True)
+def record_priorities(monkeypatch):
+    PRIORITIES.clear()
+    original = MaxHub._submit
+
+    def submit(self, cmd, radio=None):
+        if cmd.key and cmd.key.startswith("vwt:"):
+            PRIORITIES.append(cmd.priority)
+        return original(self, cmd, radio)
+
+    monkeypatch.setattr(MaxHub, "_submit", submit)

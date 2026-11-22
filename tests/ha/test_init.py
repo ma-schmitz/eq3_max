@@ -707,3 +707,20 @@ def test_link_services_translated():
             assert set(services[service_name]["fields"]) == expected
     de = json.loads((base / "translations/de.json").read_text())["services"]
     assert de["link"]["name"] == "Verkn\u00fcpfen" and de["unlink"]["name"] == "Verkn\u00fcpfung l\u00f6sen"
+
+
+async def test_airtime_is_stored_and_restored(hass, entry, fake_hub, hass_storage):
+    """The hour's airtime budget survives a restart: stored with the devices, handed
+    back to the hub before it starts."""
+    hass_storage[f"{DOMAIN}.devices.{entry.entry_id}"] = {
+        "version": 1, "minor_version": 1, "key": f"{DOMAIN}.devices.{entry.entry_id}",
+        "data": {"devices": {}, "airtime": {"": [[123.0, 1.2]]}},
+    }
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    hub = fake_hub.last
+    assert hub.airtime_restored == {"": [[123.0, 1.2]]}
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass_storage[f"{DOMAIN}.devices.{entry.entry_id}"]["data"]["airtime"] == {"": [[1.0, 1.1]]}

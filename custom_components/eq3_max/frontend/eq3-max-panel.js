@@ -2150,7 +2150,7 @@ class Eq3MaxPanel extends HTMLElement {
       // One request for all days: nothing is left to send from this page afterwards.
       const days = {};
       for (const [weekday, profile] of groups) for (const day of weekday) days[day] = profile;
-      const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, days }, null);
+      const result = await this._call(key, { type: "eq3_max/set_week_profile", device_id: dev.device_id, days, force: true }, null);
       if (result === undefined) return;
       this._showToast(done);
       this._render();

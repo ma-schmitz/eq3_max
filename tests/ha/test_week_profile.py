@@ -337,3 +337,20 @@ async def test_a_target_is_not_skipped_when_the_earlier_one_only_joined_a_runnin
     )
     assert HT3 in hub.profile_writes
     assert hub.devices[HT3].week_profile["Montag"][1] == {"temperature": 21.0, "until": "22:00"}
+
+
+async def test_force_reaches_the_hub_from_the_service_and_the_panel(hass, setup_entry, fake_hub, hass_ws_client):
+    """Days a thermostat holds are not sent again unless asked for: the service's field,
+    and the panel's "write factory program / fixed temperature" (a repair) always."""
+    hub = fake_hub.last
+    data = {"device_id": device_id(hass, HT_S), "weekday": ["Montag"], "profile": PROFILE}
+    await call(hass, "set_week_profile", data)
+    await call(hass, "set_week_profile", {**data, "force": True})
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "eq3_max/set_week_profile", "device_id": device_id(hass, HT_S),
+                            "days": {"Montag": PROFILE}, "force": True})
+    assert (await client.receive_json())["success"]
+    await client.send_json({"id": 2, "type": "eq3_max/set_week_profile", "device_id": device_id(hass, HT_S),
+                            "weekday": ["Montag"], "profile": PROFILE})
+    assert (await client.receive_json())["success"]
+    assert hub.profile_forced == [False, True, True, False]

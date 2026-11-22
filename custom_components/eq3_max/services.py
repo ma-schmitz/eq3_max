@@ -66,6 +66,7 @@ SET_WEEK_PROFILE_SCHEMA = vol.Schema(
         # (translation keys), stored days are capitalised; _days_from_names checks them.
         vol.Required(ATTR_WEEKDAY): vol.All(cv.ensure_list, [cv.string]),
         vol.Required(ATTR_PROFILE): vol.All(cv.ensure_list, [POINT_SCHEMA]),
+        vol.Optional(ATTR_FORCE, default=False): cv.boolean,
     }
 )
 COPY_WEEK_PROFILE_SCHEMA = vol.Schema(
@@ -261,16 +262,18 @@ async def write_week_profile(
     plan: dict[int, list[ProfilePoint]],
     language: str | None = None,
     exclude: Iterable[int] = (),
+    force: bool = False,
 ) -> set[int]:
     """Send the days to the device and wait for the acknowledgements; HomeAssistantError
     (translated, weekday in `language`) when the stick is away, the device refuses or stays silent. No deadline:
     up to 14 telegrams per device, and with an empty airtime budget (brake, or culfw
     answering LOVF) each one waits minutes. The hub keeps writing if the caller goes away.
     The room's other thermostats get the days as well, but those in `exclude`. Returns
-    the addresses the write reached (see MaxHub.set_week_profile)."""
+    the addresses the write reached (see MaxHub.set_week_profile). Days a device holds
+    already are not sent again, unless `force`."""
     _check_reachable(hub, device)
     try:
-        return await hub.set_week_profile(device.address, plan, exclude=tuple(exclude))
+        return await hub.set_week_profile(device.address, plan, exclude=tuple(exclude), force=force)
     except FrameError as err:
         raise translated(err, language=language) from err
 
@@ -285,6 +288,7 @@ async def _write_targets(
     plan: dict[int, list[ProfilePoint]],
     language: str | None,
     exclude: Iterable[int] = (),
+    force: bool = False,
 ) -> None:
     """Write the plan to the targets one after the other, each room once: a target the
     write of an earlier one reached as a room mate is not written again. It is still
@@ -299,7 +303,7 @@ async def _write_targets(
             if not device.virtual:  # a virtual one holds the days at once
                 covered.append((hub, device))
             continue
-        addresses = await write_week_profile(hub, device, plan, language, exclude)
+        addresses = await write_week_profile(hub, device, plan, language, exclude, force)
         reached |= {(entry.entry_id, address) for address in addresses}
     days = {WEEKDAYS[day] for day in plan}
     for hub, device in covered:
@@ -334,17 +338,18 @@ def _days_from_names(names: list[str]) -> list[int]:
 
 
 async def async_set_week_profile(
-    hass: HomeAssistant, device_ids: list[str], weekdays: list[str], profile: list[dict[str, Any]]
+    hass: HomeAssistant, device_ids: list[str], weekdays: list[str], profile: list[dict[str, Any]],
+    force: bool = False,
 ) -> list[MaxDevice]:
     """Write one profile to the given days of the given thermostats (services and the
     panel). Validation errors are ServiceValidationError, radio failures HomeAssistantError;
     returns the devices written."""
     points = parse_profile(profile)
-    return await _async_write_plan(hass, device_ids, {day: points for day in _days_from_names(weekdays)})
+    return await _async_write_plan(hass, device_ids, {day: points for day in _days_from_names(weekdays)}, force)
 
 
 async def async_set_week_profile_days(
-    hass: HomeAssistant, device_ids: list[str], days: dict[str, list[dict[str, Any]]]
+    hass: HomeAssistant, device_ids: list[str], days: dict[str, list[dict[str, Any]]], force: bool = False
 ) -> list[MaxDevice]:
     """Like async_set_week_profile, with a profile of its own per weekday name: one
     write per thermostat (the panel's factory program differs on the weekend)."""
@@ -353,16 +358,16 @@ async def async_set_week_profile_days(
         if str(name).strip().lower() in _ALL_NAMES or _day_index(name) is None:
             raise invalid("weekday_unknown", days=name)
         plan[_day_index(name)] = parse_profile(profile)
-    return await _async_write_plan(hass, device_ids, plan)
+    return await _async_write_plan(hass, device_ids, plan, force)
 
 
 async def _async_write_plan(
-    hass: HomeAssistant, device_ids: list[str], plan: dict[int, list[ProfilePoint]]
+    hass: HomeAssistant, device_ids: list[str], plan: dict[int, list[ProfilePoint]], force: bool = False
 ) -> list[MaxDevice]:
     if not plan:
         raise invalid("weekday_missing")
     targets = [_thermostat_for_profile(hass, device_id) for device_id in device_ids]
-    await _write_targets(targets, plan, hass.config.language)
+    await _write_targets(targets, plan, hass.config.language, force=force)
     return [device for _, device in targets]
 
 
@@ -398,7 +403,10 @@ async def _check_week_profile(call: ServiceCall, device_ids: list[str]) -> None:
 
 async def _async_set_week_profile(call: ServiceCall) -> None:
     await _check_week_profile(call, call.data[ATTR_DEVICE_ID])
-    await async_set_week_profile(call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_WEEKDAY], call.data[ATTR_PROFILE])
+    await async_set_week_profile(
+        call.hass, call.data[ATTR_DEVICE_ID], call.data[ATTR_WEEKDAY], call.data[ATTR_PROFILE],
+        call.data[ATTR_FORCE],
+    )
 
 
 async def async_set_time(hass: HomeAssistant, device_ids: list[str]) -> list[MaxDevice]:

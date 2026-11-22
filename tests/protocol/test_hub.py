@@ -3551,3 +3551,14 @@ async def test_poll_pause_ends_after_12_hours_without_known_program(hub):
     h._poll_check()
     await until(lambda: len(sent(cul)) == 2)
     assert HT in h._pokes and dev.ha_override_target is None
+
+
+async def test_airtime_state_round_trip(hub):
+    """What the hub stores of its airtime comes back with its age after a restart."""
+    h, cul, _rec = hub
+    h._scheduler.book_airtime(1.2)
+    state = h.airtime_state()
+    assert list(state) == [""] and state[""][0][1] == 1.2
+    h._scheduler._airtime.clear()
+    h.restore_airtime({**state, "gone": [[0, 1.0]], "": [*state[""], "junk", [True, 1.0]]})
+    assert h.airtime_last_hour == pytest.approx(1.2)

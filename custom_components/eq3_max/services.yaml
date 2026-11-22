@@ -86,6 +86,11 @@ set_week_profile:
       example: "[{temperature: 17, until: '06:00'}, {temperature: 21, until: '22:00'}, {temperature: 17}]"
       selector:
         object:
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 copy_week_profile:
   fields:

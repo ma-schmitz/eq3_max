@@ -83,7 +83,8 @@ class MaxCulCoordinator:
         return [MaxDevice.from_dict(d) for d in self.entry.data[CONF_DEVICES]]
 
     async def async_start(self) -> None:
-        stored = ((await self._store.async_load()) or {}).get("devices", {})
+        loaded = (await self._store.async_load()) or {}
+        stored = loaded.get("devices", {})
         devices = []
         for item in self.entry.data[CONF_DEVICES]:
             # Entry item = identity + configuration + imported snapshot; stored state is
@@ -127,6 +128,10 @@ class MaxCulCoordinator:
             local_now=lambda: dt_util.now().replace(tzinfo=None),
             **connection_kwargs,
         )
+        airtime = loaded.get("airtime")
+        if isinstance(airtime, dict):
+            # The hour's airtime budget belongs to the transmitter: a restart keeps it.
+            self.hub.restore_airtime(airtime)
         hub_device = dr.async_get(self.hass).async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, self.address_hex)},
@@ -222,7 +227,10 @@ class MaxCulCoordinator:
 
     def _data_to_save(self) -> dict[str, Any]:
         assert self.hub is not None
-        return {"devices": {str(a): d.to_dict() for a, d in self.hub.devices.items()}}
+        return {
+            "devices": {str(a): d.to_dict() for a, d in self.hub.devices.items()},
+            "airtime": self.hub.airtime_state(),
+        }
 
     @callback
     def _on_update(self, device: MaxDevice | None) -> None:
@@ -232,6 +240,8 @@ class MaxCulCoordinator:
             for status in self.hub.radio_status():
                 if status["connected"]:
                     ir.async_delete_issue(self.hass, DOMAIN, issue_id("port_lost", status["id"]))
+            # The airtime changed: stored soon, so an unclean stop forgets little of it.
+            self._store.async_delay_save(self._data_to_save, 30)
         if device is not None:
             # Only a telegram on the deaf module itself clears its issue: the others
             # usually hear the same devices.

@@ -7,6 +7,37 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.10.1] – 2026-11-22
+
+Weniger Sendezeit, und die Sendezeit-Grenze hält auch über einen Neustart.
+
+### Geändert
+- **Virtuelles Wandthermostat: Takt nach Zahl der Räume.** Bis zwei Räume je Funkmodul geht
+  die Raumtemperatur weiter alle 5 Minuten hinaus. Mit mehr Räumen wird der Takt für alle
+  Räume dieses Moduls im gleichen Verhältnis länger (drei Räume: alle 7,5 Minuten), höchstens
+  8 Minuten. Drei Räume brauchen damit rund 27 statt 40 s Sendezeit je Stunde und passen
+  in die 36 s eines Funkmoduls. Ein Raum, der ohne Gruppe einzeln adressiert sendet, zählt
+  je Thermostat. Ein Thermostat wartet knapp 10 Minuten auf sein Wandthermostat: Geht beim
+  längeren Takt ein Telegramm verloren, regelt es bis zum nächsten nach dem eigenen Fühler.
+  Das Protokoll nennt den Takt, sobald er sich ändert.
+- **Wochenprogramm: unveränderte Tage werden nicht noch einmal gesendet.** Hat ein
+  Thermostat einen Tag schon genau so quittiert, bekommt es ihn nicht erneut; das gilt je
+  Gerät, auch für die übrigen Thermostate des Raums. Ein Tag, dessen Telegramme hinausgingen,
+  ohne dass er quittiert wurde (fehlgeschlagenes oder abgebrochenes Schreiben, auch vor
+  einem Neustart), geht immer hinaus. Der Dienst `eq3_max.set_week_profile` hat dafür
+  das neue Feld `force` (auch unveränderte Tage schreiben), etwa wenn das Programm am Gerät
+  geändert wurde. „Werksprogramm schreiben“ und „Feste Temperatur schreiben“ auf der Seite
+  schreiben immer alles.
+
+### Behoben
+- **Die Sendezeit der letzten Stunde übersteht einen Neustart.** Bisher begann die
+  Buchführung nach einem Neustart von Home Assistant oder der Integration bei null; mit
+  „Sendezeit begrenzen“ konnten so innerhalb einer Stunde bis zu 72 s hinausgehen. Die
+  Sendungen der letzten Stunde werden jetzt gespeichert und beim Start wieder angerechnet.
+- **`ZERR…`-Zeilen des Funkmoduls zählen nicht mehr als Empfang.** culfw meldet damit den
+  Zustand seines Senders nach einem Telegramm. Die Zeile galt bisher als empfangenes
+  Telegramm und konnte verdecken, dass ein Funkmodul nichts mehr hört.
+
 ## [0.10.0] – 2026-11-21
 
 ### Hinzugefügt

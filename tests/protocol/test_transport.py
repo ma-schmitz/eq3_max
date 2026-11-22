@@ -312,3 +312,18 @@ async def test_telegrams_are_traced_at_debug_level(caplog):
         await until(lambda: "<- Z0E000460A1B005C0FFEE0019302800BE3F" in caplog.text)
     finally:
         await h.stop()
+
+
+async def test_zerr_is_no_reception():
+    """culfw's "ZERR.." after its own transmission is not a frame and does not count as
+    heard (the deaf-stick detection compares the last reception with the last send)."""
+    cul = FakeCul()
+    t, ev = make(cul)
+    await t.start()
+    await until(lambda: t.connected)
+    cul.feed("ZERR30D")
+    cul.feed("LOVF")
+    await until(lambda: ev["lovf"] == 1)
+    assert ev["frames"] == []
+    assert t.last_frame_rx is None
+    await t.stop()

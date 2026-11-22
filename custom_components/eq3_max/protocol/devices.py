@@ -184,6 +184,10 @@ class MaxDevice:
     # Last acknowledged week profile by weekday name (WEEKDAYS): points as dicts with
     # temperature and until (hh:mm, 24:00 = day end). Devices cannot report it.
     week_profile: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # Weekday names whose telegrams went out without the day being acknowledged since:
+    # the device may hold the old day, the new one or (two telegrams) half of each, so
+    # the stored copy says nothing about them. Stored: a restart must not forget it.
+    week_profile_doubt: list[str] = field(default_factory=list)
     # A write in progress: weekday names not acknowledged yet (not stored).
     week_profile_writing: list[str] = field(default_factory=list)
     # Why the last write stopped early, until the next write (German, not stored).
@@ -524,6 +528,8 @@ class MaxDevice:
         data = asdict(self)
         # State of a running write, gone with the process.
         del data["week_profile_writing"], data["week_profile_error"], data["last_poke"]
+        if not data["week_profile_doubt"]:
+            del data["week_profile_doubt"]  # only when there is something to remember
         data["device_type"] = int(self.device_type)
         data["mode"] = None if self.mode is None else int(self.mode)
         data["pending_mode"] = None if self.pending_mode is None else int(self.pending_mode)

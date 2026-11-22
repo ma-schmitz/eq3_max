@@ -350,6 +350,10 @@
         "profile": {
           "name": "Programm",
           "description": "Liste von Punkten: temperature und until (hh:mm). Beim letzten Punkt darf until fehlen (24:00)."
+        },
+        "force": {
+          "name": "Auch unveränderte Tage schreiben",
+          "description": "Tage, die ein Thermostat schon so hat (zuletzt quittiert), werden nicht noch einmal gesendet. Einschalten, um sie trotzdem zu senden, z. B. nachdem das Programm am Gerät geändert wurde."
         }
       }
     },

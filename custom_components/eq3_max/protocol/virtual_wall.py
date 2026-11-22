@@ -43,6 +43,14 @@ WT_FORWARD_DELAY_S = 3.0
 # just under 10 min for its wall thermostat, then regulates on its own sensor (measured
 # 20.11.2026; a real wall thermostat sends every 3 min).
 WT_INTERVAL_S = 300.0
+# A telegram costs about 1.1 s of airtime, twelve an hour 13 s: two rooms fit into a
+# module's 36 s an hour with room for commands, three do not. Up to WT_FULL_RATE telegrams
+# per WT_INTERVAL_S and module go at that cadence; with more, every room of the module
+# slows in proportion (three rooms: every 450 s), to WT_INTERVAL_MAX_S at most: a
+# thermostat waits just under 10 min, the rest is margin. Beyond that the airtime no
+# longer fits and telegrams are left out (reserve, LOVF) as before.
+WT_FULL_RATE = 2
+WT_INTERVAL_MAX_S = 480.0
 # A change of the room's window state goes out at once, at most once per WT_WINDOW_GAP_S
 # (s); a change within it goes when it is over.
 WT_WINDOW_GAP_S = 60.0
@@ -124,6 +132,8 @@ class WallThermostats:
         self._window_over: set[int] = set()
         # Rooms whose LOVF back-off was logged (once until a telegram goes out again).
         self._lovf_logged: set[int] = set()
+        # Radio module -> the cadence its rooms were last sent at (logged on a change).
+        self._cadences: dict[str, float] = {}
         # Wall thermostat address -> hub time its boost began and the state it returns to.
         self._boosts: dict[int, tuple[float, tuple[Mode | None, float | None, datetime | None]]] = {}
         # Wall thermostats changed while answering (an away period ended): Home Assistant
@@ -386,14 +396,15 @@ class WallThermostats:
             self._arm(address, retry_at - now)
             return
         group, module = self._room_group(mates)
-        # Addressed, each thermostat needs one every WT_INTERVAL_S: the room sends N times
-        # as often, round robin.
-        interval = WT_INTERVAL_S if group else WT_INTERVAL_S / len(mates)
+        cadence = self._cadence(mates)
+        # Addressed, each thermostat needs one every cadence: the room sends N times as
+        # often, round robin.
+        interval = cadence if group else cadence / len(mates)
         attempted_at = self._attempted_at.get(address)
-        if attempted_at is None and wall.sent_at is not None and 0 <= now - wall.sent_at < WT_INTERVAL_S:
+        if attempted_at is None and wall.sent_at is not None and 0 <= now - wall.sent_at < cadence:
             # After a restart: delivered a moment ago, the next is due on the usual cadence
-            # (addressed: after interval = WT_INTERVAL_S / N, so the round robin reaches
-            # every thermostat within WT_INTERVAL_S of that telegram).
+            # (addressed: after interval = cadence / N, so the round robin reaches every
+            # thermostat within the cadence of that telegram).
             attempted_at = self._attempted_at[address] = wall.sent_at
         owed = self._window_owed.get(address)
         if owed and not group:
@@ -411,10 +422,11 @@ class WallThermostats:
             return
         # Goes ahead of waiting commands once: not again while attempts go on air
         # without an answer (sent_at stays, attempted_at moves).
+        starved_after = cadence + (WT_STARVED_S - WT_INTERVAL_S)  # the margin over a slower cadence too
         starved = (
-            (sent_at is not None and now - sent_at >= WT_STARVED_S)
-            or (sent_at is None and now - since > WT_STARVED_S)
-        ) and (attempted_at is None or now - attempted_at >= WT_STARVED_S)
+            (sent_at is not None and now - sent_at >= starved_after)
+            or (sent_at is None and now - since > starved_after)
+        ) and (attempted_at is None or now - attempted_at >= starved_after)
         if group:
             dst, radio = 0, module
             scheduler = self._hub._radio_of(mates[0]).scheduler
@@ -493,6 +505,49 @@ class WallThermostats:
         wall = self.get(address)
         if wall is not None:
             self.window_changed(wall)
+
+    def _module_load(self, module: str) -> int:
+        """Room temperature telegrams per cadence through this module: one per room that
+        goes to its group, one per thermostat of a room that goes addressed. Rooms that
+        cannot send now (no source, being removed) do not count."""
+        load = 0
+        for wall in self._walls():
+            if wall.removing or not wall.source_ok or wall.measured is None:
+                continue
+            mates = self._mates(wall)
+            if not mates:
+                continue
+            group, group_module = self._room_group(mates)
+            if group:
+                load += group_module == module
+            else:
+                load += sum(1 for mate in mates if self._hub._radio_of(mate).id == module)
+        return load
+
+    def _cadence(self, mates: list[MaxDevice]) -> float:
+        """How often (s) each thermostat of this room gets its telegram: WT_INTERVAL_S
+        while its module carries no more than WT_FULL_RATE of them, slower in proportion
+        beyond (the busiest module of the room counts), WT_INTERVAL_MAX_S at most."""
+        cadence = WT_INTERVAL_S
+        for module in {self._hub._radio_of(mate).id for mate in mates}:
+            load = self._module_load(module)
+            module_cadence = min(WT_INTERVAL_MAX_S, WT_INTERVAL_S * max(1.0, load / WT_FULL_RATE))
+            if self._cadences.get(module, WT_INTERVAL_S) != module_cadence:
+                _LOGGER.info(
+                    "MAX! radio module %s: %d room temperature telegrams per round, sent every %.0f s%s",
+                    module or "main", load, module_cadence,
+                    " (more do not fit into the airtime: use a further radio module)"
+                    if WT_INTERVAL_S * load / WT_FULL_RATE > WT_INTERVAL_MAX_S else "",
+                )
+            self._cadences[module] = module_cadence
+            cadence = max(cadence, module_cadence)
+        return cadence
+
+    def room_interval(self, wall: MaxDevice) -> float | None:
+        """Seconds between two room temperature telegrams to each thermostat of the room;
+        None without a confirmed thermostat."""
+        mates = self._mates(wall)
+        return self._cadence(mates) if mates else None
 
     def _room_group(self, mates: list[MaxDevice]) -> tuple[int, str]:
         """One telegram to the group if every thermostat has the same confirmed group and

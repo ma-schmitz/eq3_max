@@ -58,6 +58,9 @@ class FakeHub:
         self.profile_refuse = set()
         self.profile_gate = None
         self.profile_waited = []
+        self.profile_forced = []
+        self.airtime_stored = {"": [[1.0, 1.1]]}
+        self.airtime_restored = None
         self.week_profile_error = None
         self.waiting_budget = False
         self.pending = []
@@ -70,6 +73,12 @@ class FakeHub:
         self.radio_heard = {}
         self.virtual = FakeVirtuals(self)
         FakeHub.last = self
+
+    def airtime_state(self):
+        return self.airtime_stored
+
+    def restore_airtime(self, state):
+        self.airtime_restored = state
 
     async def start(self):
         self.started = True
@@ -141,9 +150,10 @@ class FakeHub:
 
         return room_of(self.devices, dev)
 
-    async def set_week_profile(self, address, days, *, exclude=()):
+    async def set_week_profile(self, address, days, *, exclude=(), force=False):
         """As the hub: the room's other thermostats get the days too (but those in
         `exclude`); `profile_writes` lists every device written by radio."""
+        self.profile_forced.append(force)
         from custom_components.eq3_max.protocol.devices import WEEKDAYS
         from custom_components.eq3_max.protocol.messages import FrameError, format_until
 
@@ -319,6 +329,9 @@ class FakeVirtuals:
 
     def is_virtual(self, address):
         return self.get(address) is not None
+
+    def room_interval(self, wall):
+        return 300.0 if self.room_form(wall) else None
 
     def room_form(self, wall):
         """As the hub: one confirmed group on one module = "group", else "addressed"."""

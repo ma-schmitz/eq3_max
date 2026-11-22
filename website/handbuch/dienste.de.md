@@ -64,6 +64,11 @@ data:
   oder nicht antwortet; die restlichen Tage gehen dann nicht mehr raus. Je Tag sind das ein
   oder zwei Telegramme (ab acht Punkten zwei), eine ganze Woche also 7 bis 14 Telegramme à
   rund 1,2 s Sendezeit.
+- **Unveränderte Tage werden nicht noch einmal gesendet (ab 0.10.1).** Einen Tag, den ein
+  Thermostat genau so schon quittiert hat, lässt die Integration aus, je Gerät, auch bei
+  den übrigen Thermostaten des Raums. Ein Tag, den ein fehlgeschlagenes Schreiben offen
+  ließ, geht immer hinaus. Mit `force: true` gehen alle genannten Tage trotzdem hinaus,
+  etwa nachdem das Programm am Gerät geändert wurde.
 - **Das kann dauern.** Am nanoCUL/CUL braucht eine ganze Woche mehr Sendezeit, als die
   Firmware am Stück zulässt (9 s; beim Cube 36 s, dort passt sie hinein; siehe
   [Hardware](../loslegen/hardware.md)). Nach den ersten Tagen wartet dann jedes weitere

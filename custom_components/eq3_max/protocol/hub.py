@@ -120,6 +120,24 @@ FAST_DEADLINE_S = 0.3
 FAST_ACK_TIMEOUT_S = 0.5
 # How long a device that just took our pong listens for its configuration.
 PAIRED_LISTEN_S = 5.0
+# A series of telegrams to one thermostat (a week program): after a WakeUp (0xF1, payload
+# 3F) the device listens for about 31 s, and telegrams within that time go out without
+# the 1 s wake-up preamble. Counted on for WAKE_AWAKE_S (s, scheduler clock); the first
+# telegram follows WAKE_SETTLE_S after the acknowledgement (FHEM lost the first one
+# without a pause). Worth it from WAKE_MIN_TELEGRAMS on (the WakeUp costs a preamble).
+# Off unless the hub is built with wake_series: on a radiator thermostat the WakeUp was
+# acknowledged, but the telegram without preamble 0.3 s later stayed unanswered
+# (22.11.2026); whether a longer pause helps is not measured yet.
+WAKE_AWAKE_S = 25.0
+WAKE_SETTLE_S = 0.3
+WAKE_MIN_TELEGRAMS = 3
+# A telegram without preamble is answered at once or not at all: one attempt, then the
+# usual way. After this many series in a row with an unanswered one the device gets none
+# any more (until a restart).
+WAKE_FAST_ACK_TIMEOUT_S = 1.0
+WAKE_GIVE_UP = 2
+# Stored airtime this far (s) ahead of the clock still counts (rounding, small clock steps).
+RESTORE_AHEAD_S = 60.0
 
 
 # What a link waiting for a sleeping device shows, by the sleeper's type.
@@ -146,6 +164,20 @@ class LinkStatus:
 
     partners: list[str] = field(default_factory=list)  # serials, both directions acknowledged
     pending: list[tuple[str, str]] = field(default_factory=list)  # (partner serial, state)
+
+
+@dataclass
+class _Series:
+    """Telegrams to one thermostat in a row (see WAKE_AWAKE_S): how many are left, until
+    when (scheduler clock) the device listens, and how it went."""
+
+    left: int
+    enabled: bool
+    awake_until: float = float("-inf")
+    fast: int = 0
+    failed: bool = False
+    # `fast` at the last WakeUp: a WakeUp that brought none is not repeated.
+    fast_at_wake: int = -1
 
 
 @dataclass
@@ -383,6 +415,8 @@ class MaxHub:
         lovf_delay: float = LOVF_RETRY_S,
         poll_tick: float = POLL_TICK_S,
         lovf_wait: float | None = None,
+        wake_series: bool = False,
+        wake_settle: float = WAKE_SETTLE_S,
     ) -> None:
         self.address = address
         self.devices: dict[int, MaxDevice] = {d.address: d for d in devices}
@@ -413,10 +447,17 @@ class MaxHub:
         self._lovf_wait = lovf_wait
         self._poll_tick = poll_tick
         self._poll_task: asyncio.Task | None = None
+        # Series without preamble after a WakeUp (week programs): on at all, the pause
+        # after the WakeUp, and per device the series in a row that had an unanswered one.
+        self._wake_series = wake_series
+        self._wake_settle = wake_settle
+        self._series_failed: dict[int, int] = {}
         # Running pokes by address: the real target/mode, the poke's deadline.
         self._pokes: dict[int, dict[str, Any]] = {}
         # Week profile writes in progress by device address; they outlive their caller.
         self._profile_jobs: dict[int, asyncio.Task[None]] = {}
+        # Running writes that leave no day of their plan out (a forced call may join them).
+        self._profile_full: set[int] = set()
         # What each running write is writing: the same days asked for again join it.
         self._profile_plans: dict[int, dict[int, list[bytes]]] = {}
         # Room mates busy with other days: what they write once their running write ends.
@@ -633,6 +674,32 @@ class MaxHub:
     @property
     def queue_length(self) -> int:
         return sum(radio.scheduler.queue_length for radio in self._radios.values())
+
+    def airtime_state(self) -> dict[str, list[list[float]]]:
+        """Per module the transmissions of the last hour as [wall-clock time, airtime]:
+        stored, so that a restart does not start the hour's budget at zero."""
+        now = time.time()
+        return {
+            radio.id: [[round(now - age, 1), round(cost, 3)] for age, cost in radio.scheduler.airtime_log()]
+            for radio in self._radios.values()
+        }
+
+    def restore_airtime(self, state: Mapping[str, Any]) -> None:
+        """Take over what airtime_state stored before a restart (modules gone since and
+        unreadable entries are left out)."""
+        now = time.time()
+        for radio in self._radios.values():
+            entries = state.get(radio.id)
+            if not isinstance(entries, list):
+                continue
+            usable = [
+                # Stored rounded: an entry of a moment ago may seem to lie ahead.
+                (max(0.0, now - float(entry[0])), float(entry[1])) for entry in entries
+                if isinstance(entry, list | tuple) and len(entry) == 2
+                and all(isinstance(value, int | float) and not isinstance(value, bool) for value in entry)
+                and now - entry[0] > -RESTORE_AHEAD_S  # further ahead: the clock was set back
+            ]
+            radio.scheduler.restore_airtime(usable)
 
     async def start(self) -> None:
         for radio in self._radios.values():
@@ -954,7 +1021,8 @@ class MaxHub:
         return await done
 
     async def set_week_profile(
-        self, address: int, days: Mapping[int, Sequence[ProfilePoint]], *, exclude: Iterable[int] = ()
+        self, address: int, days: Mapping[int, Sequence[ProfilePoint]], *, exclude: Iterable[int] = (),
+        force: bool = False,
     ) -> set[int]:
         """Write whole days of the week profile (0 = Saturday ... 6 = Friday) to a
         thermostat: one telegram per part, acknowledged one after the other. The stored
@@ -969,6 +1037,10 @@ class MaxHub:
         once and returns when its room mates are through; a mate's failure stays at the
         mate (`week_profile_error`), it does not fail the call. Room mates in `exclude` are
         left as they are (a copy within a room does not write its source again).
+
+        A day a device holds already (its acknowledged copy is the same, and no failed
+        write left it in doubt) is not sent to it again, unless `force`: a week costs a
+        telegram per day and device.
 
         Returns the addresses the call reached: the device, and the room mates it wrote,
         joined or queued. Joining a running write of the same days reaches the device only
@@ -988,13 +1060,20 @@ class MaxHub:
                 raise FrameError(f"{WEEKDAYS_EN[day]}: {err}", key="week_profile_day_invalid", detail=err, **_day(day)) from err
         name = dev.name or dev.serial
         job = self._profile_jobs.get(address)
-        if (job is not None and self._profile_plans.get(address) != encoded) or address in self._profile_followups:
+        if (
+            (job is not None and not self._joins(address, encoded, force))
+            or address in self._profile_followups
+        ):
             raise FrameError(f"{name}: a week program is being written", key="week_profile_busy", name=name)
         started = job is None
         if dev.virtual:
             self._store_week_profile(dev, encoded, days)
         elif job is None:
-            job = self._start_profile_job(dev, encoded, days)
+            todo = self._days_to_write(dev, encoded, days, force)
+            if todo:
+                job = self._start_profile_job(dev, todo, days, plan=encoded)
+            else:
+                _LOGGER.info("MAX! %s (%s): week profile unchanged, nothing sent", name, dev.serial)
         mate_writes: list[asyncio.Task[None]] = []
         reached = {address}
         if started:
@@ -1012,15 +1091,18 @@ class MaxHub:
                 running = self._profile_jobs.get(mate.address)
                 queued = self._profile_followups.get(mate.address)
                 if running is None and queued is None:
+                    todo = self._days_to_write(mate, encoded, days, force)
+                    if not todo:
+                        continue  # it holds these days already
                     _LOGGER.info(
                         "MAX! %s (%s): week profile follows %s (same room)", mate.name or mate.serial,
                         mate.serial, name,
                     )
-                    mate_job = self._start_profile_job(mate, encoded, days)
+                    mate_job = self._start_profile_job(mate, todo, days, plan=encoded)
                     # Nobody but a virtual wall thermostat waits for it: it reports its failure itself.
                     mate_job.add_done_callback(lambda done: done.cancelled() or done.exception())
                     mate_writes.append(mate_job)
-                elif running is not None and queued is None and self._profile_plans.get(mate.address) == encoded:
+                elif running is not None and queued is None and self._joins(mate.address, encoded, force):
                     mate_writes.append(running)  # the same days are being written already
                 else:
                     _LOGGER.info(
@@ -1048,6 +1130,29 @@ class MaxHub:
             # Nobody may be left to fetch the outcome; the job reports failures itself.
             job.add_done_callback(lambda done: done.cancelled() or done.exception())
             raise
+
+    def _joins(self, address: int, encoded: dict[int, list[bytes]], force: bool) -> bool:
+        """Whether a call for these days is served by the device's running write: the same
+        plan, and with `force` only if that write leaves no day out."""
+        return self._profile_plans.get(address) == encoded and (not force or address in self._profile_full)
+
+    @staticmethod
+    def _days_to_write(
+        dev: MaxDevice, encoded: dict[int, list[bytes]], days: Mapping[int, Sequence[ProfilePoint]], force: bool
+    ) -> dict[int, list[bytes]]:
+        """The days the device does not hold yet: its stored copy is what it acknowledged.
+        A day whose telegrams went out without its acknowledgement (a failed or aborted
+        write, also before a restart) is in doubt and always goes out, as is one a failed
+        write left open."""
+        if force:
+            return encoded
+        doubt = set(dev.week_profile_doubt)
+        if dev.week_profile_error is not None:
+            doubt |= set(dev.week_profile_error["missing"])
+        return {
+            day: parts for day, parts in encoded.items()
+            if WEEKDAYS[day] in doubt or dev.week_profile.get(WEEKDAYS[day]) != _profile_day(days[day])
+        }
 
     async def wait_week_profile(self, address: int) -> None:
         """Return once the device has neither a running week program write nor one queued
@@ -1078,14 +1183,21 @@ class MaxHub:
         encoded: dict[int, list[bytes]],
         days: Mapping[int, Sequence[ProfilePoint]],
         keep_error: bool = False,
+        plan: dict[int, list[bytes]] | None = None,
     ) -> asyncio.Task[None]:
+        """Write `encoded`; `plan` is what was asked for (more when days were left out as
+        unchanged): the same call again joins this write."""
         if not keep_error:
             dev.week_profile_error = None
         dev.week_profile_writing = [WEEKDAYS[day] for day in sorted(encoded)]
         self._notify(dev)
         job = asyncio.create_task(self._write_week_profile(dev, encoded, days))
         self._profile_jobs[dev.address] = job
-        self._profile_plans[dev.address] = encoded
+        self._profile_plans[dev.address] = encoded if plan is None else plan
+        if plan is None or plan == encoded:
+            self._profile_full.add(dev.address)
+        else:
+            self._profile_full.discard(dev.address)
         return job
 
     def _queue_week_profile(
@@ -1124,19 +1236,36 @@ class MaxHub:
         address = dev.address
         name = dev.name or dev.serial
         left = sorted(encoded)  # days of this write not yet acknowledged
+        total = sum(len(parts) for parts in encoded.values())
+        series = _Series(
+            left=total,
+            enabled=self._wake_series
+            and total >= WAKE_MIN_TELEGRAMS
+            and self._series_failed.get(address, 0) < WAKE_GIVE_UP
+            and address not in self._silent,
+        )
         try:
             for day in sorted(encoded):
+                # From its first telegram until its acknowledgement nobody knows what the
+                # device holds for this day.
+                fresh_doubt = WEEKDAYS[day] not in dev.week_profile_doubt
+                if fresh_doubt:
+                    dev.week_profile_doubt.append(WEEKDAYS[day])
+                    self._notify(dev)
                 for part, words in enumerate(encoded[day]):
-                    outcome = await self._await_command(
-                        Command(
+                    outcome = await self._series_send(
+                        dev, series,
+                        lambda d=day, p=part, w=words, **limits: Command(
                             dst=address,
-                            build=lambda c, d=day, p=part, w=words: build_config_week_profile(
-                                c, self.address, address, day=d, part=p, words=w
-                            ),
-                            key=f"wp:{address}:{day}:{part}",
+                            build=lambda c: build_config_week_profile(c, self.address, address, day=d, part=p, words=w),
+                            key=f"wp:{address}:{d}:{p}",
                             deaf_probe=True,
-                        )
+                            **limits,
+                        ),
                     )
+                    if outcome is Outcome.NAK and part == 0 and fresh_doubt:
+                        # Refused at its first telegram: the device keeps the day it had.
+                        dev.week_profile_doubt = [d for d in dev.week_profile_doubt if d != WEEKDAYS[day]]
                     if outcome is Outcome.NAK:
                         raise FrameError(
                             f"{name}: week program {WEEKDAYS_EN[day]} refused", key="week_profile_rejected",
@@ -1148,6 +1277,7 @@ class MaxHub:
                             key="week_profile_not_acknowledged", name=name, outcome=outcome.value, **_day(day),
                         )
                 dev.week_profile[WEEKDAYS[day]] = _profile_day(days[day])
+                dev.week_profile_doubt = [d for d in dev.week_profile_doubt if d != WEEKDAYS[day]]
                 left.remove(day)
                 follow = self._profile_followups.get(address)
                 if follow is None or day not in follow.encoded:  # else it comes again
@@ -1176,14 +1306,78 @@ class MaxHub:
             _LOGGER.warning("MAX! %s (%s): %s; not written: %s", name, dev.serial, err, ", ".join(missing))
             raise
         finally:
+            self._series_over(dev, series, total)
             self._profile_jobs.pop(address, None)
             self._profile_plans.pop(address, None)
+            self._profile_full.discard(address)
             follow = self._profile_followups.get(address)
             # What is queued is still to come.
             writing = [WEEKDAYS[day] for day in sorted(follow.encoded)] if follow is not None else []
             if dev.week_profile_writing != writing:
                 dev.week_profile_writing = writing
                 self._notify(dev)
+
+    async def _series_send(self, dev: MaxDevice, series: _Series, make: Callable[..., Command]) -> Outcome:
+        """One telegram of a series to a thermostat. While the series is worth it, a WakeUp
+        first (the device then listens for a while), and the telegram without the 1 s
+        wake-up preamble: one attempt, answered at once or not at all. Unanswered, it goes
+        out again the usual way, and the rest of the series does too."""
+        address = dev.address
+        scheduler = self._scheduler_for(address)
+        left, series.left = series.left, series.left - 1
+        if series.enabled and series.fast == series.fast_at_wake:
+            # The last WakeUp brought no telegram out in time (a slow queue, waiting for
+            # airtime): another one would only add its preamble.
+            series.enabled = False
+        if series.enabled and scheduler.now() >= series.awake_until and left >= WAKE_MIN_TELEGRAMS:
+            series.fast_at_wake = series.fast
+            woke = await self._await_command(
+                Command(
+                    dst=address,
+                    build=lambda c: build_wake_up(c, self.address, address),
+                    key=f"wake:{address}:series",  # not wake_up()'s: that one would replace it
+                    retries=1,
+                )
+            )
+            if woke is Outcome.ACKED:
+                series.awake_until = scheduler.now() + WAKE_AWAKE_S
+                await asyncio.sleep(self._wake_settle)
+            else:
+                # The telegram itself tells whether the device is there. Unanswered on
+                # air, the WakeUp counts against the device (not a module that was away).
+                series.enabled = False
+                series.failed = woke is Outcome.NO_ACK
+        if series.enabled and scheduler.now() < series.awake_until:
+            attempt = make(fast=True, retries=0, ack_timeout=WAKE_FAST_ACK_TIMEOUT_S, deadline=series.awake_until)
+            # Unanswered, it says the device slept, not that the module is deaf.
+            attempt.deaf_probe = False
+            outcome = await self._await_command(attempt)
+            if outcome in (Outcome.ACKED, Outcome.NAK):
+                series.fast += 1
+                return outcome
+            # Expired: it waited behind others (or for airtime) until the device slept
+            # again. No further WakeUp then, each would only add its preamble.
+            # Only an attempt on air without an answer counts against the device, not a
+            # module that did not take the line.
+            series.enabled = False
+            series.failed = outcome is Outcome.NO_ACK
+        return await self._await_command(make())
+
+    def _series_over(self, dev: MaxDevice, series: _Series, total: int) -> None:
+        name = dev.name or dev.serial
+        if series.failed:
+            failed = self._series_failed[dev.address] = self._series_failed.get(dev.address, 0) + 1
+            _LOGGER.info(
+                "MAX! %s (%s): the WakeUp or a telegram without wake-up preamble stayed unanswered "
+                "(%d of %d went without preamble)%s",
+                name, dev.serial, series.fast, total,
+                ", it gets none any more" if failed >= WAKE_GIVE_UP else "",
+            )
+        elif series.fast:
+            self._series_failed.pop(dev.address, None)
+            _LOGGER.info(
+                "MAX! %s (%s): %d of %d telegrams went without wake-up preamble", name, dev.serial, series.fast, total
+            )
 
     def set_config_set(self, address: int, kind: str, values: dict[str, Any]) -> list[str]:
         """Change several values of one set: one telegram with the whole set. Returns

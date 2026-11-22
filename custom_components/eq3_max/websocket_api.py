@@ -283,6 +283,12 @@ def _device(ctx: _Context, dev: MaxDevice) -> dict[str, Any]:
             ctx.hub.virtual.room_form(dev)
             if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT else None
         ),
+        # Seconds between two room temperature telegrams to each of its thermostats (slower
+        # with more than two rooms on a module); None without a thermostat.
+        "room_interval": (
+            ctx.hub.virtual.room_interval(dev)
+            if dev.virtual and dev.device_type is DeviceType.WALL_THERMOSTAT else None
+        ),
         # Why it goes addressed: "no_group", "pending" (a group id on its way), "modules"
         # (different radio modules: a group cannot help); None otherwise.
         "room_form_reason": (
@@ -704,6 +710,8 @@ def ws_set_radio(hass: HomeAssistant, connection: websocket_api.ActiveConnection
         vol.Optional("weekday"): vol.All(cv.ensure_list, [str]),
         vol.Optional("profile"): [dict],
         vol.Optional("days"): {str: [dict]},
+        # Also send days the device holds already (its stored copy is the same).
+        vol.Optional("force", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -717,9 +725,11 @@ async def ws_set_week_profile(
         if "days" in msg:
             if "weekday" in msg or "profile" in msg:
                 raise invalid("week_profile_request_invalid")
-            devices = await async_set_week_profile_days(hass, msg["device_id"], msg["days"])
+            devices = await async_set_week_profile_days(hass, msg["device_id"], msg["days"], msg["force"])
         elif "weekday" in msg and "profile" in msg:
-            devices = await async_set_week_profile(hass, msg["device_id"], msg["weekday"], msg["profile"])
+            devices = await async_set_week_profile(
+                hass, msg["device_id"], msg["weekday"], msg["profile"], msg["force"]
+            )
         else:
             raise invalid("week_profile_request_invalid")
     except (ServiceValidationError, ValueError) as err:

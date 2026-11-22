@@ -64,6 +64,10 @@ data:
   or does not answer; the remaining days are then not sent. Each day takes one or two
   telegrams (two from eight points on), so a whole week is 7 to 14 telegrams of about
   1.2 s airtime each.
+- **Unchanged days are not sent again (from 0.10.1).** A day a thermostat acknowledged
+  exactly like this is left out, per device, also for the room's other thermostats. A day
+  a failed write left open always goes out. With `force: true` every named day is sent
+  anyway, e.g. after the program was changed at the device.
 - **This can take a while.** On a nanoCUL/CUL a whole week needs more airtime than the
   firmware allows in one go (9 s; on the Cube 36 s, where it fits; see
   [Hardware](../loslegen/hardware.md)). After the first days every further telegram then

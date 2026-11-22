@@ -72,7 +72,8 @@ mit dem Dienst `eq3_max.link`.
 ## Was das virtuelle Wandthermostat tut
 
 **Temperatur.** Die Temperatur der Quelle geht **alle 5 Minuten** an die Thermostate, fest
-und pünktlich, ob sie sich geändert hat oder nicht. Ein Thermostat wartet knapp
+und pünktlich, ob sie sich geändert hat oder nicht (ab 0.10.1 bei mehr als zwei Räumen je
+Funkmodul seltener, siehe [Sendezeit](#sendezeit-wie-viele-raume-je-funkmodul)). Ein Thermostat wartet knapp
 **10 Minuten** auf sein Wandthermostat; kommt so lange nichts, regelt es nach seinem eigenen
 Fühler und zeigt einen Funkfehler, bis das nächste Telegramm eintrifft.
 
@@ -158,8 +159,23 @@ Stunde und Funkmodul**. Ein virtuelles Wandthermostat braucht mit seinem Telegra
 eingeschaltet, bleiben davon 10 s für Befehle frei, und ein Temperaturtelegramm, das in
 diese Reserve fiele, entfällt; ohne die Option entscheidet das Funkmodul selbst.
 
-**Richtwert: ein Funkmodul genügt für zwei virtuelle Wandthermostate.** Mehr
-Räume verteilen Sie auf mehrere Funkmodule ([Mehrere Funkmodule](funkmodule.md)).
+**Ab 0.10.1 passt eq3_max den Takt an die Zahl der Räume an.** Bis zwei Räume je Funkmodul
+bleibt es bei 5 Minuten. Mit mehr Räumen wird der Takt für alle Räume dieses Moduls im
+gleichen Verhältnis länger, höchstens 8 Minuten:
+
+| Räume je Funkmodul | Takt | Sendezeit je Stunde |
+|---|---|---|
+| 1 | 5 min | rund 13 s |
+| 2 | 5 min | rund 27 s |
+| 3 | 7,5 min | rund 27 s |
+| 4 und mehr | 8 min | 33 s und mehr: passt nicht mehr |
+
+Ein Raum ohne gemeinsame Gruppe (einzeln adressiert) zählt je Thermostat. Der längere Takt
+hat einen Preis: Ein Thermostat wartet knapp 10 Minuten auf sein Wandthermostat. Geht bei
+7,5 Minuten ein Telegramm verloren, regelt es bis zum nächsten nach dem eigenen Fühler.
+
+**Richtwert: ein Funkmodul genügt für drei virtuelle Wandthermostate, bequem für zwei.**
+Mehr Räume verteilen Sie auf mehrere Funkmodule ([Mehrere Funkmodule](funkmodule.md)).
 
 !!! note "Lange Aufträge verdrängen die Temperatur"
 

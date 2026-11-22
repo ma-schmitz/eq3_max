@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.1] – 2026-11-22
+
+Less airtime, and the airtime limit holds across a restart.
+
+### Changed
+- **Virtual wall thermostat: cadence by the number of rooms.** Up to two rooms per radio
+  module the room temperature still goes out every 5 minutes. With more rooms the cadence
+  of all rooms of that module slows in proportion (three rooms: every 7.5 minutes), 8 minutes
+  at most. Three rooms then need about 27 instead of 40 s of airtime per hour and fit into a
+  module's 36 s. A room that sends addressed (no group) counts once per thermostat. A
+  thermostat waits just under 10 minutes for its wall thermostat: if a telegram is lost on
+  the slower cadence, it regulates on its own sensor until the next one. The log names the
+  cadence whenever it changes.
+- **Week program: unchanged days are not sent again.** A day a thermostat acknowledged
+  exactly like this is not sent to it again; this applies per device, also to the room's
+  other thermostats. A day whose telegrams went out without its acknowledgement (a failed or
+  aborted write, also before a restart) always goes out. The service
+  `eq3_max.set_week_profile` has the new field `force` (write unchanged days too), e.g.
+  after the program was changed at the device. "Write factory program" and "Write fixed
+  temperature" on the page always write everything.
+
+### Fixed
+- **The airtime of the last hour survives a restart.** The bookkeeping used to start at zero
+  after a restart of Home Assistant or the integration; with "Limit airtime" up to 72 s could
+  go out within one hour. The transmissions of the last hour are now stored and counted
+  again at start.
+- **`ZERR…` lines of the radio module no longer count as reception.** culfw reports the
+  state of its transmitter after a telegram that way. The line used to count as a received
+  telegram and could hide that a radio module had stopped hearing.
+
 ## [0.10.0] – 2026-11-21
 
 ### Added

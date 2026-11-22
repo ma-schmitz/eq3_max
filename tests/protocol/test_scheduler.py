@@ -731,3 +731,35 @@ async def test_brake_together_with_reserve_expires_instead_of_waiting():
         assert len(sender.lines) == 1
     finally:
         task.cancel()
+
+
+async def test_airtime_survives_a_restart(setup):
+    """The hour's budget is the transmitter's: what went out before a restart still
+    counts, with its age; unusable stored entries are left out."""
+    sched, sender, clock = setup
+    sched.submit(Command(dst=DEV, build=frame, expects_ack=False))
+    await until(lambda: len(sender.lines) == 1)
+    clock.t += 600
+    log = sched.airtime_log()
+    assert log == [(pytest.approx(600), pytest.approx(airtime(frame(1))))]
+    fresh = RadioScheduler(Sender(), clock=FakeClock(5.0))
+    fresh.restore_airtime([*log, (4000.0, 1.1), (-5.0, 1.1), (10.0, 99.0), (10.0, 0.0)])
+    assert fresh.airtime_last_hour == pytest.approx(airtime(frame(1)))
+    fresh._clock.t += 3001
+    assert fresh.airtime_last_hour == 0.0
+
+
+async def test_brake_counts_restored_airtime():
+    sender = Sender()
+    clock = FakeClock()
+    sched = RadioScheduler(sender, ack_timeout=0.05, brake=True, clock=clock, budget_poll=0.01)
+    sched.restore_airtime([(100.0, 1.2)] * 30)  # 36 s used before the restart
+    task = asyncio.create_task(sched.run())
+    try:
+        sched.submit(Command(dst=DEV, build=frame, expects_ack=False))
+        await asyncio.sleep(0.05)
+        assert sender.lines == [] and sched.waiting_for_budget
+        clock.t += 3600
+        await until(lambda: len(sender.lines) == 1)
+    finally:
+        task.cancel()

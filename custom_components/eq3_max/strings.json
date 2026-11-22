@@ -350,6 +350,10 @@
         "profile": {
           "name": "Profile",
           "description": "List of points: temperature and until (hh:mm). The last point may omit until (24:00)."
+        },
+        "force": {
+          "name": "Write unchanged days too",
+          "description": "Days a thermostat already holds (as last acknowledged) are not sent again. Switch on to send them anyway, e.g. after the program was changed at the device."
         }
       }
     },

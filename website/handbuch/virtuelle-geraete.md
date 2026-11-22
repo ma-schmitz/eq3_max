@@ -68,7 +68,8 @@ Then **link** it with the thermostats exactly like a bought device
 ## What the virtual wall thermostat does
 
 **Temperature.** The temperature of the source goes to the thermostats **every 5 minutes**,
-fixed and on time, whether it changed or not. A thermostat waits just under **10 minutes**
+fixed and on time, whether it changed or not (from 0.10.1 less often with more than two
+rooms per radio module, see [Airtime](#airtime-how-many-rooms-per-radio-module)). A thermostat waits just under **10 minutes**
 for its wall thermostat; if nothing arrives by then, it regulates on its own sensor and shows
 a radio error until the next telegram arrives.
 
@@ -147,8 +148,24 @@ thermostat needs about **13 s per hour**. With the option **"Limit airtime to 36
 switched on, 10 s of the hour are kept free for commands, and a temperature telegram that
 would eat into this reserve is skipped; without the option the radio module itself decides.
 
-**Rule of thumb: one radio module is enough for two virtual wall thermostats.**
-Spread more rooms over several radio modules ([Multiple radio modules](funkmodule.md)).
+**From 0.10.1 eq3_max adapts the cadence to the number of rooms.** Up to two rooms per
+radio module it stays at 5 minutes. With more rooms the cadence of all rooms of that module
+slows in proportion, 8 minutes at most:
+
+| Rooms per radio module | Cadence | Airtime per hour |
+|---|---|---|
+| 1 | 5 min | about 13 s |
+| 2 | 5 min | about 27 s |
+| 3 | 7.5 min | about 27 s |
+| 4 and more | 8 min | 33 s and more: no longer fits |
+
+A room without a common group (addressed one by one) counts once per thermostat. The
+slower cadence has a price: a thermostat waits just under 10 minutes for its wall
+thermostat. If a telegram is lost at 7.5 minutes, it regulates on its own sensor until the
+next one.
+
+**Rule of thumb: one radio module is enough for three virtual wall thermostats, comfortably
+for two.** Spread more rooms over several radio modules ([Multiple radio modules](funkmodule.md)).
 
 !!! note "Long jobs push out the temperature"
 

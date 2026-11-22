@@ -29,6 +29,8 @@ async def hub():
         ack_timeout=0.05,
         now=lambda: 1_700_000_000.0,
         local_now=LocalClock(),
+        # The series after a WakeUp has its own tests (test_week_profile_series).
+        wake_series=False,
     )
     await h.start()
     await until(lambda: h.connected)

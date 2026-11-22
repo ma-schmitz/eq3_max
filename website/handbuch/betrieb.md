@@ -16,7 +16,7 @@
 | Stick receives nothing after sending | port is reopened **immediately** (at most once per radio silence); pending commands go out again afterwards |
 | A single device does not answer, but the radio works (other devices are heard) | the device counts as **silent**: no further reopening on its account, log warning "does not answer … check the device"; its command goes out again with its next report |
 | Sending for 10 min but nothing received | a watchdog reopens the port; the second time, repair issue "CUL stick receives nothing" |
-| HA restart | all values back immediately; pending commands are sent again, expired "Away" commands discarded |
+| HA restart | all values back immediately; the airtime of the last hour keeps counting (from 0.10.1); pending commands are sent again, expired "Away" commands discarded |
 
 On an outage, entities do **not** become "unavailable" but keep their last value — so
 automations do not flip.

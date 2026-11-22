@@ -333,7 +333,11 @@ class CulTransport:
                 continue
             self._last_line = self._clock()
             self._line_event.set()
-            if text.startswith("Z"):
+            if text.startswith("ZERR"):
+                # culfw's note on its own transmitter (state after sending), not a
+                # reception: it says nothing about whether the module still hears.
+                TRACE.info("<- %s", text)
+            elif text.startswith("Z"):
                 TRACE.info("<- %s", text)
                 self._last_rx = self._clock()
                 self._last_frame_rx = self._last_rx
