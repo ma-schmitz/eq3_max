@@ -8,7 +8,7 @@ Replaces Homegear and the legacy `homematic` integration.
 
 ![eQ-3 MAX! panel in Home Assistant](website/assets/panel-hero.png)
 
-**New in 0.8.0:** a [thermostat card](https://github.com/ma-schmitz/eq3-max-thermostat-card) of its
+**New in 0.8.0:** a [thermostat card](https://ma-schmitz.github.io/eq3_max/handbuch/karte/) (shipped with the integration since 0.11.0) of its
 own, presets Comfort/Eco, group ids for whole rooms, display set/current on the wall thermostat,
 polling the current temperature, permissions for users without admin rights –
 [what's new](https://ma-schmitz.github.io/eq3_max/neu/).
@@ -32,7 +32,7 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
   next switch point of the week program (the thermostat stays in Auto), in **Heat** (manual)
   permanently; **Away** holds a temperature until the end time, a new setpoint ends it
 - Group ids (set per thermostat or for a whole room)
-- Own dashboard card: [eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (valve, battery, radio, window, settings and week program in a pop-up)
+- Own dashboard card, shipped with the integration: [eq3-max-thermostat-card](https://ma-schmitz.github.io/eq3_max/handbuch/karte/) (valve, battery, radio, window, settings and week program in a pop-up)
 - Permissions: device settings and week programs can be locked for users without admin rights
 - Device configuration (comfort/eco temperature, offset, window, boost, decalcification, valve;
   wall thermostat display: set or current temperature), every value explained on hover and with ⓘ

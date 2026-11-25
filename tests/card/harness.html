@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Testseite eq3-max-thermostat-card</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  body { background: #f5f6f8; font-family: Roboto, sans-serif; margin: 20px; --primary-color: #03a9f4; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; align-items: start; }
+  .wide { grid-column: span 2; }
+</style>
+<script>
+  // Stand-ins for HA's own elements.
+  customElements.define("ha-card", class extends HTMLElement {
+    connectedCallback() { Object.assign(this.style, { background: "var(--card-background-color, #fff)", borderRadius: "14px", boxShadow: "0 1px 2px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.05)" }); }
+  });
+  customElements.define("ha-icon", class extends HTMLElement {
+    static get observedAttributes() { return ["icon"]; }
+    attributeChangedCallback() { this.render(); }
+    set icon(v) { this.setAttribute("icon", v); }
+    render() {
+      const n = (this.getAttribute("icon") || "").replace("mdi:", "");
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css"><i class="mdi mdi-${n}" style="font-size:var(--mdc-icon-size,18px);line-height:1"></i>`;
+    }
+  });
+</script>
+</head>
+<body>
+<div class="grid" id="grid"></div>
+<script type="module">
+  import { weekRows } from "../../custom_components/eq3_max/frontend/eq3-max-thermostat-card.js";
+  const ent = (entity_id, translation_key, device_id) => ({ entity_id, translation_key, device_id, platform: "eq3_max" });
+  const now = new Date(Date.now() - 2 * 60000).toISOString();
+  const hass = {
+    locale: { language: new URLSearchParams(location.search).get("lang") || "de" },
+    user: { is_admin: new URLSearchParams(location.search).get("admin") !== "0" },
+    areas: { wz: { name: "Wohnzimmer" }, ez: { name: "Esszimmer" } },
+    devices: { d1: { area_id: "wz", serial_number: "KEQ0000001", sw_version: "1.0" }, d2: { area_id: "ez" }, d3: { area_id: "wz" } },
+    entities: {
+      "climate.ht_wz": ent("climate.ht_wz", undefined, "d1"),
+      "sensor.ht_wz_ventil": ent("sensor.ht_wz_ventil", "ventil", "d1"),
+      "sensor.ht_wz_rssi": ent("sensor.ht_wz_rssi", "rssi", "d1"),
+      "binary_sensor.ht_wz_lowbat": ent("binary_sensor.ht_wz_lowbat", "lowbat", "d1"),
+      "binary_sensor.ht_wz_funkfehler": ent("binary_sensor.ht_wz_funkfehler", "funkfehler", "d1"),
+      "sensor.ht_wz_zuletzt": ent("sensor.ht_wz_zuletzt", "zuletzt_gemeldet", "d1"),
+      "sensor.ht_wz_verkn": ent("sensor.ht_wz_verkn", "verknuepfungen", "d1"),
+      "number.ht_wz_komfort": ent("number.ht_wz_komfort", "komfort", "d1"),
+      "number.ht_wz_eco": ent("number.ht_wz_eco", "eco", "d1"),
+      "number.ht_wz_fenster_temperatur": ent("number.ht_wz_fenster_temperatur", "fenster_temperatur", "d1"),
+      "number.ht_wz_fenster_dauer": ent("number.ht_wz_fenster_dauer", "fenster_dauer", "d1"),
+      "select.ht_wz_boost_dauer": ent("select.ht_wz_boost_dauer", "boost_dauer", "d1"),
+      "select.ht_wz_entkalkung_tag": ent("select.ht_wz_entkalkung_tag", "entkalkung_tag", "d1"),
+      "climate.ht_ez": ent("climate.ht_ez", undefined, "d2"),
+      "sensor.ht_ez_ventil": ent("sensor.ht_ez_ventil", "ventil", "d2"),
+      "sensor.ht_ez_rssi": ent("sensor.ht_ez_rssi", "rssi", "d2"),
+      "binary_sensor.ht_ez_lowbat": ent("binary_sensor.ht_ez_lowbat", "lowbat", "d2"),
+      "climate.wt": ent("climate.wt", undefined, "d3"),
+      "select.wt_anzeige": ent("select.wt_anzeige", "anzeige", "d3"),
+      "select.wt_boost_dauer": ent("select.wt_boost_dauer", "boost_dauer", "d3"),
+    },
+    states: {
+      "climate.ht_wz": { state: "heat", last_updated: now, attributes: { friendly_name: "Wohnzimmer 1", current_temperature: 21.4, temperature: 21, preset_mode: "comfort", valve: 35, fenster: ["binary_sensor.fk"], raum: ["climate.wt"], wochenprogramm: { Montag: [{ temperature: 17, until: "06:00" }, { temperature: 21, until: "22:00" }, { temperature: 17, until: "24:00" }] }, wochenprogramm_schreibt: [], wochenprogramm_fehler: null, einstellungen_frei: true, wochenprogramm_frei: true, ausstehend: null } },
+      "sensor.ht_wz_ventil": { state: "35", attributes: {} },
+      "sensor.ht_wz_rssi": { state: "-61", attributes: {} },
+      "binary_sensor.ht_wz_lowbat": { state: "off", attributes: {} },
+      "binary_sensor.ht_wz_funkfehler": { state: "off", attributes: {} },
+      "sensor.ht_wz_zuletzt": { state: now, attributes: {} },
+      "sensor.ht_wz_verkn": { state: "1", attributes: { partner: ["wt-wohnzimmer"] } },
+      "number.ht_wz_komfort": { state: "21.0", attributes: { min: 4.5, max: 30.5, step: 0.5, unit_of_measurement: "°C", ausstehend: null } },
+      "number.ht_wz_eco": { state: "17.0", attributes: { min: 4.5, max: 30.5, step: 0.5, unit_of_measurement: "°C" } },
+      "number.ht_wz_fenster_temperatur": { state: "12.0", attributes: { min: 4.5, max: 30.5, step: 0.5, unit_of_measurement: "°C" } },
+      "number.ht_wz_fenster_dauer": { state: "15", attributes: { min: 0, max: 60, step: 5, unit_of_measurement: "min" } },
+      "select.ht_wz_boost_dauer": { state: "5 min", attributes: { options: ["0 min", "5 min", "10 min"] } },
+      "select.ht_wz_entkalkung_tag": { state: "saturday", attributes: { options: ["saturday", "sunday", "monday"], ausstehend: "monday" } },
+      "binary_sensor.fk": { state: "off", attributes: { friendly_name: "Terrassentür" } },
+      "climate.ht_ez": { state: "heat", last_updated: now, attributes: { friendly_name: "Esszimmer 1", current_temperature: 19.2, temperature: 12, preset_mode: "none", valve: 0, fenster: [], wochenprogramm: {}, einstellungen_frei: false, wochenprogramm_frei: false, ausstehend: 21 } },
+      "sensor.ht_ez_ventil": { state: "0", attributes: {} },
+      "sensor.ht_ez_rssi": { state: "-88", attributes: {} },
+      "binary_sensor.ht_ez_lowbat": { state: "on", attributes: {} },
+      "climate.wt": { state: "auto", last_updated: now, attributes: { friendly_name: "wt-wohnzimmer", current_temperature: 21.9, temperature: 21, preset_mode: "none", fenster: [], wochenprogramm: {} } },
+      "select.wt_anzeige": { state: "actual", attributes: { options: ["setpoint", "actual"] } },
+      "select.wt_boost_dauer": { state: "5 min", attributes: { options: ["5 min", "10 min"] } },
+    },
+    calls: [],
+    async callService(domain, service, data) { this.calls.push([domain, service, data]); console.log("callService", domain, service, JSON.stringify(data)); },
+    localize: () => "",
+  };
+  window.hass = hass;
+  // ?shot=1: neutral names and a full week program for screenshots; ?theme=dark.
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("shot")) {
+    const en = !hass.locale.language.startsWith("de");
+    const N = en
+      ? { wz: "Living room", ez: "Kitchen", wt: "Wall thermostat", fk: "Patio door", aw: "Living room", ae: "Kitchen" }
+      : { wz: "Wohnzimmer", ez: "Küche", wt: "Wandthermostat", fk: "Terrassentür", aw: "Wohnzimmer", ae: "Küche" };
+    hass.states["climate.ht_wz"].attributes.friendly_name = N.wz;
+    hass.states["climate.ht_ez"].attributes.friendly_name = N.ez;
+    hass.states["climate.wt"].attributes.friendly_name = N.wt;
+    hass.states["binary_sensor.fk"].attributes.friendly_name = N.fk;
+    hass.states["sensor.ht_wz_verkn"].attributes.partner = [N.wt];
+    hass.areas.wz.name = N.aw; hass.areas.ez.name = N.ae;
+    const work = [{ temperature: 17, until: "06:00" }, { temperature: 21, until: "08:30" }, { temperature: 18, until: "16:30" }, { temperature: 21.5, until: "22:30" }, { temperature: 17, until: "24:00" }];
+    const weekend = [{ temperature: 17, until: "07:30" }, { temperature: 21.5, until: "23:00" }, { temperature: 17, until: "24:00" }];
+    hass.states["climate.ht_wz"].attributes.wochenprogramm = Object.fromEntries(
+      ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"].map((d) => [d, work]).concat([["Samstag", weekend], ["Sonntag", weekend]]));
+  }
+  if (qs.get("theme") === "dark") {
+    const r = document.documentElement.style;
+    r.setProperty("--card-background-color", "#1c1c1c"); r.setProperty("--ha-card-background", "#1c1c1c");
+    r.setProperty("--primary-text-color", "#e1e1e1"); r.setProperty("--secondary-text-color", "#9b9b9b");
+    r.setProperty("--divider-color", "rgba(255,255,255,.12)"); r.setProperty("--primary-background-color", "#111");
+    document.body.style.background = "#111";
+  }
+  const grid = document.getElementById("grid");
+  const add = (config, wide) => {
+    const card = document.createElement("eq3-max-thermostat-card");
+    card.setConfig(config);
+    card.hass = hass;
+    const box = document.createElement("div");
+    if (wide) box.className = "wide";
+    box.append(card);
+    grid.append(box);
+    return card;
+  };
+  // ?shot=1 (or ?sensors=1): the living room shows an external room sensor and humidity (0.1.2).
+  const wz = { entity: "climate.ht_wz" };
+  if (qs.get("shot") || qs.get("sensors")) {
+    hass.states["sensor.raum_temperatur"] = { state: "21.8", attributes: { device_class: "temperature" } };
+    hass.states["sensor.raum_feuchte"] = { state: "52", attributes: { device_class: "humidity" } };
+    Object.assign(wz, { temperature_sensor: "sensor.raum_temperatur", humidity_sensor: "sensor.raum_feuchte" });
+  }
+  window.cards = [
+    add({ ...wz }), add({ entity: "climate.ht_ez" }), add({ entity: "climate.wt" }),
+    add({ ...wz, layout: "ring" }), add({ entity: "climate.ht_ez", layout: "ring" }),
+    add({ ...wz, layout: "kachel" }, true), add({ entity: "climate.ht_ez", layout: "kachel" }, true),
+  ];
+  // ?rects=1: card positions for cutting screenshots (tools/screenshots.py).
+  if (qs.get("rects")) setTimeout(() => {
+    document.body.setAttribute("data-rects", JSON.stringify(window.cards.map((c) => {
+      const r = c.getBoundingClientRect();
+      return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)];
+    })));
+  }, 500);
+  const q = new URLSearchParams(location.search);
+  if (q.get("selftest") === "minors") {
+    setTimeout(async () => {
+      const out = [];
+      // Unavailable thermostat: card says so, no controls.
+      hass.states["climate.ht_ez"] = { ...hass.states["climate.ht_ez"], state: "unavailable", last_updated: new Date().toISOString() };
+      window.cards[1].hass = { ...hass };
+      const root = window.cards[1].shadowRoot;
+      out.push("unavail=" + (!!root.querySelector(".unavail") && !root.querySelector(".stepper")));
+      // Back button closes the pop-up.
+      window.cards[0]._openDialog();
+      const opened = !!document.querySelector("eq3-max-thermostat-dialog");
+      history.back();
+      await new Promise((r) => setTimeout(r, 300));
+      out.push("back=" + (opened && !document.querySelector("eq3-max-thermostat-dialog")));
+      // X closes and leaves no extra history entry behind.
+      const before = history.length;
+      window.cards[0]._openDialog();
+      document.querySelector("eq3-max-thermostat-dialog").close();
+      await new Promise((r) => setTimeout(r, 300));
+      out.push("x=" + (!document.querySelector("eq3-max-thermostat-dialog") && !(history.state || {}).eq3MaxDialog));
+      // Card leaves the view: pop-up goes too.
+      window.cards[0]._openDialog();
+      window.cards[0].remove();
+      await new Promise((r) => setTimeout(r, 300));
+      out.push("detach=" + !document.querySelector("eq3-max-thermostat-dialog"));
+      document.body.setAttribute("data-minors", out.join(","));
+    }, 300);
+  }
+  if (q.get("selftest") === "ring") {
+    // Drag on the ring of card 3 (ring layout) from the top to the right end.
+    setTimeout(() => {
+      const card = window.cards[3];
+      const svg = card.shadowRoot.querySelector(".ring svg");
+      const r = svg.getBoundingClientRect();
+      const at = (deg) => ({ clientX: r.left + r.width / 2 + Math.cos(deg * Math.PI / 180) * r.width * 80 / 190,
+        clientY: r.top + r.height / 2 + Math.sin(deg * Math.PI / 180) * r.height * 80 / 190, pointerId: 1, bubbles: true });
+      svg.setPointerCapture = () => {};
+      svg.dispatchEvent(new PointerEvent("pointerdown", at(270)));
+      const during = card.shadowRoot.querySelector(".ring .big").textContent;
+      svg.dispatchEvent(new PointerEvent("pointermove", at(0)));
+      svg.dispatchEvent(new PointerEvent("pointerup", at(0)));
+      document.body.setAttribute("data-ring", `${during}|${JSON.stringify(hass.calls.at(-1))}`);
+    }, 300);
+  }
+  if (q.get("dialog")) {
+    const card = window.cards[Number(q.get("dialog"))];
+    card._openDialog();
+    const dlg = card._dialog;
+    dlg._tab = q.get("tab") || "temp";
+    if (q.get("day")) dlg._editDay(weekRows(hass.states[card._config.entity].attributes.wochenprogramm).find((r) => r.day === q.get("day")));
+    dlg._drafts = q.get("draft") ? { komfort: 22 } : {};
+    if (q.get("help")) dlg._help = q.get("help");
+    dlg._render();
+    if (q.get("selftest") === "scroll") {
+      setTimeout(() => {
+        const body = () => dlg.shadowRoot.querySelector(".body");
+        body().scrollTop = 150;
+        const before = body().scrollTop;
+        dlg._render();
+        document.body.setAttribute("data-scroll", `${before}->${body().scrollTop}`);
+        // A state update while a time field has the focus must not rebuild the dialog.
+        const input = dlg.shadowRoot.querySelector("input[type=time]");
+        input.focus();
+        hass.states["climate.ht_wz"] = { ...hass.states["climate.ht_wz"], last_updated: new Date().toISOString() };
+        dlg.hass = hass;
+        document.body.setAttribute("data-focus", dlg.shadowRoot.activeElement === input ? "kept" : "lost");
+      }, 300);
+    }
+  }
+</script>
+</body>
+</html>

@@ -246,6 +246,10 @@
     }
   },
   "issues": {
+    "card_installed_separately": {
+      "title": "Thermostat card installed twice",
+      "description": "The thermostat card now ships with the integration. A separately installed copy is still entered as a dashboard resource (`{url}`) and stays in use, so the bundled card is not loaded. Remove the card in HACS (or delete that resource under Settings → Dashboards → Resources) and restart Home Assistant; the integration then enters its own card, and existing dashboards keep working unchanged."
+    },
     "homematic_active": {
       "title": "Homematic integration still active",
       "description": "Remove `homematic:` from configuration.yaml and restart before eQ-3 MAX! can take over the entities."

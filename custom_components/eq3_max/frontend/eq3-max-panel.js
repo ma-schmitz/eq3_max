@@ -84,6 +84,12 @@ const EN = {
   "Hauptmodul": "Main module",
   "Funkmodul": "Radio module",
   "Ohne Bereich": "No area",
+  "Anordnen": "Arrange", "Fertig": "Done",
+  "Reihenfolge der Bereiche und Geräte ändern": "Change the order of areas and devices",
+  "Bereich einklappen": "Collapse area", "Bereich aufklappen": "Expand area",
+  "nach oben": "move up", "nach unten": "move down", "nach vorn": "move forward", "nach hinten": "move back",
+  "Reihenfolge zurücksetzen": "Reset order",
+  "Reihenfolge konnte nicht gespeichert werden: {error}": "The order could not be saved: {error}",
   "Anlernen läuft … {n} s": "Pairing … {n} s",
   "Menü": "Menu",
   "Fehler: {error}": "Error: {error}",
@@ -129,6 +135,12 @@ const EN = {
   "Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.":
     "The airtime is used up (1 % rule); commands go out as soon as time is available again.",
   "wartet auf Sendezeit": "waiting for airtime",
+  "Funkmodul wartet auf Sendezeit": "radio module waiting for airtime",
+  "Das Funkmodul selbst nimmt gerade nichts an: Seine Firmware hält die 1-%-Regel (36 s je Stunde) ein. Die Einstellung „Sendezeit begrenzen“ ändert daran nichts; Befehle gehen hinaus, sobald das Modul wieder sendet.":
+    "The radio module itself is not accepting anything right now: its firmware keeps the 1% rule (36 s per hour). The setting \"Limit airtime\" does not change that; commands go out as soon as the module sends again.",
+  " Das Funkmodul selbst nimmt gerade nichts an (1-%-Regel in seiner Firmware); je Telegramm kann das zwei Minuten dauern, eine ganze Woche eine Viertelstunde und mehr.":
+    " The radio module itself is not accepting anything right now (1% rule in its firmware); that can take two minutes per telegram, a quarter of an hour and more for a whole week.",
+
   "Netzwerk": "Network",
   "USB": "USB",
   "Thermostate": "Thermostats",
@@ -406,6 +418,71 @@ const TYPE_ICONS = {
   plug_adapter: "mdi:power-socket-de",
   cube: "mdi:cube-outline",
 };
+// Contacts by the device class set in Home Assistant: [device, open, closed].
+const CONTACT_ICONS = {
+  door: ["mdi:door", "mdi:door-open", "mdi:door-closed"],
+  garage_door: ["mdi:garage", "mdi:garage-open", "mdi:garage"],
+};
+
+/** Attributes of the device's main entity as Home Assistant has them now. */
+function entityAttrs(hass, dev) {
+  const state = hass && hass.states && dev.entity_id ? hass.states[dev.entity_id] : null;
+  return (state && state.attributes) || {};
+}
+
+/** Symbol of a device: the one chosen for its entity in Home Assistant, a contact else
+ * by its device class (door, garage door), everything else by device type. */
+function deviceIcon(hass, dev) {
+  const attrs = entityAttrs(hass, dev);
+  if (attrs.icon) return attrs.icon;
+  const contact = dev.type === "shutter_contact" && CONTACT_ICONS[attrs.device_class];
+  return contact ? contact[0] : TYPE_ICONS[dev.type] || "mdi:help";
+}
+
+/** Symbol of a contact's state (open/closed), same rule as deviceIcon. */
+function contactIcon(hass, dev, isOpen) {
+  const attrs = entityAttrs(hass, dev);
+  if (attrs.icon) return attrs.icon;
+  const contact = CONTACT_ICONS[attrs.device_class];
+  if (contact) return contact[isOpen ? 1 : 2];
+  return isOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant";
+}
+
+/** What decides the symbols of all devices: a change re-renders the page. */
+function iconSignature(hass, data) {
+  if (!data) return "";
+  return data.entries.map((entry) => entry.devices.map((dev) => {
+    const attrs = entityAttrs(hass, dev);
+    return `${attrs.icon || ""}/${attrs.device_class || ""}`;
+  }).join(",")).join(";");
+}
+
+/** Items in the user's order: those named in `order` first, in that order; the rest
+ * behind them as they came (the default order). Unknown keys in `order` are ignored. */
+export function applyOrder(items, keyOf, order) {
+  if (!order || !order.length) return items;
+  const rank = new Map(order.map((key, index) => [key, index]));
+  const known = items.filter((item) => rank.has(keyOf(item))).sort((a, b) => rank.get(keyOf(a)) - rank.get(keyOf(b)));
+  return [...known, ...items.filter((item) => !rank.has(keyOf(item)))];
+}
+
+/** The keys with `key` moved one place (dir -1 forward, +1 back); unchanged at the ends. */
+export function moveKey(keys, key, dir) {
+  const from = keys.indexOf(key);
+  const to = from + dir;
+  if (from < 0 || to < 0 || to >= keys.length) return keys;
+  const result = [...keys];
+  [result[from], result[to]] = [result[to], result[from]];
+  return result;
+}
+
+const LAYOUT_KEY = "eq3_max_panel";
+const COLLAPSED_KEY = "eq3_max_panel_collapsed";
+
+function waitingLabel(radio) {
+  return radio.waiting_reason === "module" ? "Funkmodul wartet auf Sendezeit" : "wartet auf Sendezeit";
+}
+
 const MODE_LABELS = { auto: "Automatik", manual: "Manuell", temporary: "Temporär", boost: "Boost" };
 const PRESET_LABELS = { away: "Abwesend", boost: "Boost" };
 const HVAC_LABELS = { off: "Aus" };
@@ -599,7 +676,31 @@ const STYLE = `
     font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 7px;
     background: color-mix(in srgb, var(--e3-divider) 70%, transparent); color: var(--e3-muted);
   }
-  h2.area::after { content: ""; flex: 1; height: 1px; background: var(--e3-divider); margin-left: 4px; }
+  h2.area::after { content: ""; flex: 1; height: 1px; background: var(--e3-divider); margin-left: 4px; order: 1; }
+  h2.area .mvs { order: 2; }
+  h2.area .fold {
+    display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 6px 4px 0; margin: -4px 0;
+    font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; border-radius: 8px;
+  }
+  h2.area .fold ha-icon { --mdc-icon-size: 20px; }
+  h2.area .fold:focus-visible, .mv:focus-visible, button.link:focus-visible { outline: 2px solid var(--e3-accent); outline-offset: 2px; }
+  h2.area.closed { margin-bottom: 0; }
+  .arrange { display: flex; justify-content: flex-end; gap: 14px; margin: 14px 2px -18px; }
+  button.link {
+    display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 4px 2px; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--e3-accent);
+  }
+  button.link ha-icon { --mdc-icon-size: 17px; }
+  .mvs { display: inline-flex; gap: 6px; }
+  .mv {
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--e3-divider); background: var(--e3-card);
+    color: var(--e3-accent); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .mv ha-icon { --mdc-icon-size: 18px; }
+  .mv:disabled { opacity: .35; cursor: default; }
+  .arr { position: relative; display: flex; }
+  .arr > .card { flex: 1; pointer-events: none; opacity: .8; }
+  .arr > .mvs { position: absolute; top: 8px; right: 8px; }
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
   .card {
     --tone: var(--e3-muted);
@@ -1008,6 +1109,15 @@ class Eq3MaxPanel extends HTMLElement {
     this._wpDrafts = {}; // serial -> {days, points, targets}
     this._creating = null; // {entry_id, kind, name, source}: Formular „Virtuelles Gerät anlegen“
     this._sourceEdit = null; // {serial, value}: Quelle eines virtuellen Geräts, die gerade geändert wird
+    // Reihenfolge je Benutzer (Home Assistant speichert sie, gilt auf allen Geräten):
+    // {areas: {entry_id: [Bereich]}, devices: {entry_id: {Bereich: [Seriennummer]}}}
+    this._layout = { areas: {}, devices: {} };
+    this._arrange = false;
+    // Eingeklappte Bereiche je Browser ("entry_id|Bereich"): am Handy zu, am Rechner offen.
+    this._collapsed = new Set();
+    try {
+      this._collapsed = new Set(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY) || "[]"));
+    } catch (err) { /* kein Speicher: alles offen */ }
   }
 
   set hass(hass) {
@@ -1027,7 +1137,11 @@ class Eq3MaxPanel extends HTMLElement {
     const menu = this.shadowRoot.querySelector("ha-menu-button");
     if (menu) menu.hass = hass;
     if (first && this.isConnected) this._start();
-    if (langChanged && this.isConnected) this._requestRender();
+    // A symbol or device class changed in Home Assistant shows right away.
+    const iconSig = iconSignature(hass, this._data);
+    const iconsChanged = iconSig !== this._iconSig;
+    this._iconSig = iconSig;
+    if ((langChanged || (iconsChanged && !first)) && this.isConnected) this._requestRender();
   }
 
   // --- Fehlertexte des Servers (translation_key -> Text in der Benutzersprache) ---
@@ -1143,6 +1257,7 @@ class Eq3MaxPanel extends HTMLElement {
       return;
     }
     this._unsub = unsub;
+    this._loadLayout(connection);
     this._onReady = () => this._load();
     this._readyConnection = connection;
     connection.addEventListener("ready", this._onReady);
@@ -1178,6 +1293,7 @@ class Eq3MaxPanel extends HTMLElement {
       this._error = error;
     } else {
       this._data = data;
+      this._iconSig = iconSignature(this._hass, data);
       this._error = null;
       for (const entry of data.entries) {
         if (!entry.hub) continue;
@@ -1408,6 +1524,91 @@ class Eq3MaxPanel extends HTMLElement {
     return this._data.entries.map((entry) => this._renderEntry(entry));
   }
 
+  async _loadLayout(connection) {
+    try {
+      const result = await connection.sendMessagePromise({ type: "frontend/get_user_data", key: LAYOUT_KEY });
+      const value = result && result.value;
+      if (value && typeof value === "object") {
+        this._layout = { areas: value.areas || {}, devices: value.devices || {} };
+        this._requestRender();
+      }
+    } catch (err) { /* ohne gespeicherte Reihenfolge gilt die alphabetische */ }
+  }
+
+  async _saveLayout() {
+    try {
+      await this._hass.connection.sendMessagePromise({ type: "frontend/set_user_data", key: LAYOUT_KEY, value: this._layout });
+    } catch (err) {
+      this._showToast(t("Reihenfolge konnte nicht gespeichert werden: {error}", { error: await this._errorText(err) }), true);
+    }
+  }
+
+  _toggleCollapsed(key) {
+    if (this._collapsed.has(key)) this._collapsed.delete(key); else this._collapsed.add(key);
+    try {
+      window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...this._collapsed]));
+    } catch (err) { /* gilt dann bis zum Neuladen */ }
+    this._render();
+  }
+
+  _moveArea(entry, keys, key, dir) {
+    this._layout.areas[entry.entry_id] = moveKey(keys, key, dir);
+    this._render();
+    this._saveLayout();
+  }
+
+  _moveDevice(entry, areaKey, serials, serial, dir) {
+    const devices = this._layout.devices[entry.entry_id] || (this._layout.devices[entry.entry_id] = {});
+    devices[areaKey] = moveKey(serials, serial, dir);
+    this._render();
+    this._saveLayout();
+  }
+
+  _resetLayout(entry) {
+    delete this._layout.areas[entry.entry_id];
+    delete this._layout.devices[entry.entry_id];
+    this._render();
+    this._saveLayout();
+  }
+
+  _hasLayout(entry) {
+    return !!(this._layout.areas[entry.entry_id] || this._layout.devices[entry.entry_id]);
+  }
+
+  _renderArea(entry, key, group, keys) {
+    const collapseKey = `${entry.entry_id}|${key}`;
+    const collapsed = this._collapsed.has(collapseKey);
+    const arrange = this._arrange;
+    const deviceOrder = (this._layout.devices[entry.entry_id] || {})[key];
+    const devices = applyOrder(group.devices, (dev) => dev.serial, deviceOrder);
+    const serials = devices.map((dev) => dev.serial);
+    const index = keys.indexOf(key);
+    const mover = (label, iconName, disabled, onclick) => h("button", {
+      class: "mv", type: "button", title: t(label), "aria-label": t(label), disabled,
+      onclick: (ev) => { ev.stopPropagation(); onclick(); },
+    }, icon(iconName));
+    return [
+      h("h2", { class: `area ${collapsed ? "closed" : ""}` },
+        h("button", {
+          class: "fold", type: "button", "aria-expanded": collapsed ? "false" : "true",
+          title: t(collapsed ? "Bereich aufklappen" : "Bereich einklappen"),
+          onclick: () => this._toggleCollapsed(collapseKey),
+        }, icon(collapsed ? "mdi:chevron-right" : "mdi:chevron-down"), group.name,
+          h("span", { class: "count" }, String(devices.length))),
+        arrange ? h("span", { class: "mvs" },
+          mover("nach oben", "mdi:arrow-up", index <= 0, () => this._moveArea(entry, keys, key, -1)),
+          mover("nach unten", "mdi:arrow-down", index >= keys.length - 1, () => this._moveArea(entry, keys, key, +1))) : null),
+      collapsed ? null : h("div", { class: "grid" }, devices.map((dev, i) => {
+        const card = this._renderCard(entry, dev);
+        if (!arrange) return card;
+        return h("div", { class: "arr" }, card,
+          h("div", { class: "mvs" },
+            mover("nach vorn", this._narrow ? "mdi:arrow-up" : "mdi:arrow-left", i === 0, () => this._moveDevice(entry, key, serials, dev.serial, -1)),
+            mover("nach hinten", this._narrow ? "mdi:arrow-down" : "mdi:arrow-right", i === devices.length - 1, () => this._moveDevice(entry, key, serials, dev.serial, +1))));
+      })),
+    ];
+  }
+
   _renderEntry(entry) {
     if (!entry.loaded) {
       return h("section", { class: "entry" },
@@ -1419,18 +1620,27 @@ class Eq3MaxPanel extends HTMLElement {
       if (!groups.has(key)) groups.set(key, { name: dev.area_name || t("Ohne Bereich"), devices: [] });
       groups.get(key).devices.push(dev);
     }
-    const ordered = [...groups.entries()].sort(([ka, a], [kb, b]) => {
+    // Default: by name, "no area" last; the user's own order goes first.
+    const sorted = [...groups.entries()].sort(([ka, a], [kb, b]) => {
       if (!ka) return 1;
       if (!kb) return -1;
       return a.name.localeCompare(b.name, LANG);
     });
+    const ordered = applyOrder(sorted, ([key]) => key, this._layout.areas[entry.entry_id]);
+    const keys = ordered.map(([key]) => key);
     return h("section", { class: "entry" },
       this._renderHub(entry),
       entry.devices.length ? null : h("div", { class: "empty" }, t("Noch keine Geräte angelernt.")),
-      ordered.map(([, group]) => [
-        h("h2", { class: "area" }, group.name, h("span", { class: "count" }, String(group.devices.length))),
-        h("div", { class: "grid" }, group.devices.map((dev) => this._renderCard(entry, dev))),
-      ]),
+      entry.devices.length > 1 ? h("div", { class: "arrange" },
+        this._arrange && this._hasLayout(entry)
+          ? h("button", { class: "link", type: "button", onclick: () => this._resetLayout(entry) }, t("Reihenfolge zurücksetzen"))
+          : null,
+        h("button", {
+          class: "link", type: "button", "aria-pressed": this._arrange ? "true" : "false",
+          title: t("Reihenfolge der Bereiche und Geräte ändern"),
+          onclick: () => { this._arrange = !this._arrange; this._render(); },
+        }, icon(this._arrange ? "mdi:check" : "mdi:sort"), " ", t(this._arrange ? "Fertig" : "Anordnen"))) : null,
+      ordered.map(([key, group]) => this._renderArea(entry, key, group, keys)),
     );
   }
 
@@ -1490,7 +1700,7 @@ class Eq3MaxPanel extends HTMLElement {
       for (const cmd of pending) {
         const dev = entry.devices.find((d) => d.address === cmd.address);
         const held = cmd.on_air && radio.waiting_budget;
-        const state = held ? t("wartet auf Sendezeit") : cmd.on_air ? t("wird gesendet") : t("wartet");
+        const state = held ? t(waitingLabel(radio)) : cmd.on_air ? t("wird gesendet") : t("wartet");
         rows.push(h("div", { class: `qrow ${held ? "held" : cmd.on_air ? "air" : ""}` },
           h("span", { class: "who" }, dev ? dev.name : cmd.address),
           h("span", { class: "what" }, this._queueKind(entry, cmd)),
@@ -1556,7 +1766,9 @@ class Eq3MaxPanel extends HTMLElement {
           this._radioName(entry, radio),
           multi ? h("span", { class: "sub" }, this._queueToggle(entry, radio.queue)) : null,
           radio.waiting_budget
-            ? h("span", { class: "pill bad", title: t("Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.") }, t("wartet auf Sendezeit"))
+            ? h("span", { class: "pill bad", title: t(radio.waiting_reason === "module"
+              ? "Das Funkmodul selbst nimmt gerade nichts an: Seine Firmware hält die 1-%-Regel (36 s je Stunde) ein. Die Einstellung „Sendezeit begrenzen“ ändert daran nichts; Befehle gehen hinaus, sobald das Modul wieder sendet."
+              : "Die Sendezeit ist aufgebraucht (1-%-Regel); Befehle gehen hinaus, sobald wieder Zeit frei ist.") }, t(waitingLabel(radio)))
             : null),
         h("div", { class: "conn", title: radio.version || "" },
           icon(radio.connection === "network" ? "mdi:lan" : "mdi:usb"),
@@ -1724,7 +1936,7 @@ class Eq3MaxPanel extends HTMLElement {
     } else if (dev.type === "shutter_contact") {
       const isOpen = st.window_open;
       body = h("div", { class: `wstate ${isOpen ? "open" : ""}` },
-        icon(isOpen ? "mdi:window-open-variant" : "mdi:window-closed-variant"),
+        icon(contactIcon(this._hass, dev, isOpen)),
         isOpen === null ? t("unbekannt") : isOpen ? t("offen") : t("geschlossen"));
     } else {
       body = h("div", { class: "sub" }, t("Taster für Automatik und Eco"));
@@ -1740,7 +1952,7 @@ class Eq3MaxPanel extends HTMLElement {
       onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } },
     },
       h("div", { class: "head" },
-        h("span", { class: "ic" }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
+        h("span", { class: "ic" }, icon(deviceIcon(this._hass, dev))),
         h("div", { class: "who" }, h("div", { class: "name", title: dev.name }, dev.name), h("div", { class: "kind" }, kind)),
         badges.length ? h("div", { class: "badges" }, badges) : null),
       body,
@@ -1887,7 +2099,7 @@ class Eq3MaxPanel extends HTMLElement {
         h("header", { class: `tone-${cardTone(dev)}` },
           h("button", { class: "back", title: t("Zurück"), "aria-label": t("Zurück zur Übersicht"), onclick: () => this._close() },
             icon("mdi:arrow-left")),
-          h("span", { class: "ic", style: `--tone:${TONE_COLORS[cardTone(dev)]}` }, icon(TYPE_ICONS[dev.type] || "mdi:help")),
+          h("span", { class: "ic", style: `--tone:${TONE_COLORS[cardTone(dev)]}` }, icon(deviceIcon(this._hass, dev))),
           h("div", { class: "t" },
             h("div", { class: "n" }, dev.name),
             h("div", { class: "tags" }, chip(typeName(dev)), dev.virtual ? chip(t("virtuell"), "info") : null, this._areaSelect(dev),
@@ -1976,7 +2188,9 @@ class Eq3MaxPanel extends HTMLElement {
       ? h("div", { class: "wp-note" },
         h("b", {}, t("Wird geschrieben – noch offen: {days}.", { days: daysLabel(writing) })),
         waitingBudget
-          ? t(" Das Funkmodul wartet gerade auf Sendezeit (1-%-Regel); je Telegramm kann das zwei Minuten dauern, eine ganze Woche eine Viertelstunde und mehr.")
+          ? t(radio.waiting_reason === "module"
+            ? " Das Funkmodul selbst nimmt gerade nichts an (1-%-Regel in seiner Firmware); je Telegramm kann das zwei Minuten dauern, eine ganze Woche eine Viertelstunde und mehr."
+            : " Das Funkmodul wartet gerade auf Sendezeit (1-%-Regel); je Telegramm kann das zwei Minuten dauern, eine ganze Woche eine Viertelstunde und mehr.")
           : "",
         t(" Die Seite muss dafür nicht offen bleiben."))
       : null;

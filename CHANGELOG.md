@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] – 2026-11-25
+
+The thermostat card is now part of the integration, and both the panel and the card take
+their icons from Home Assistant.
+
+### Added
+- **The thermostat card ships with the integration.** The card `eq3-max-thermostat-card`
+  now lives in the integration, which enters it as a dashboard resource; it is always there
+  in the matching version and no longer needs to be installed separately. Card and
+  integration share one version number from now on. Existing dashboards keep working
+  unchanged (`type: custom:eq3-max-thermostat-card`). Where resources are kept in
+  `configuration.yaml`, the integration loads the card itself. Removing the integration
+  removes the entry again.
+- **Icons from Home Assistant** (discussion #18). The "eQ-3 MAX!" panel and the card show
+  the icon chosen for the entity in Home Assistant, for example one of your own for
+  underfloor heating. A window contact with the device class "Door" or "Garage door" shows
+  as a door or garage door, open and closed; the card then also says "Door open". Both are
+  set as usual in the entity's settings ("Icon" and "Show as").
+- **Collapse and arrange areas** (discussion #18). On the "eQ-3 MAX!" panel a click on an
+  area's heading folds its devices away and back; the browser remembers this, so other
+  areas can be closed on the phone than on the desktop. "Arrange" lets you move areas and
+  the devices within them with arrow buttons. The order is stored per user in Home
+  Assistant and applies on every device; new areas and devices line up behind, and "Reset
+  order" brings back the alphabetical one.
+
+### Changed
+- **"Radio module waiting for airtime"** (#20). The panel now tells who holds a command
+  back: the integration's airtime limit ("waiting for airtime") or the radio module
+  itself, whose firmware keeps the 1% rule and refuses the command with `LOVF` ("radio
+  module waiting for airtime"). The hint on the radio module adds that the setting "Limit
+  airtime" does not change that.
+
+### Fixed
+- **Card, layout "kachel": text ran into the target buttons.** With an external sensor and
+  humidity, the line below the reading ("47 % · Thermostat 20.5 °C") reached into the target
+  buttons on narrow cards such as on a phone. It now sits below the row with reading and
+  buttons and has the full width.
+
+### Moving from the separately installed card
+If you installed the card as its own repository in HACS (or by hand under `/config/www/`),
+you keep it for now: the integration sees the existing entry, does not load its own card on
+top and reports this under Settings → Repairs. Remove the card in HACS and restart Home
+Assistant – the integration then enters its card, and nothing has to change in the
+dashboards.
+
 ## [0.10.1] – 2026-11-22
 
 Less airtime, and the airtime limit holds across a restart.

@@ -12,7 +12,9 @@ sidebar (administrators only). On the device page of the radio module and of eve
 network target (the pencil next to the name renames the module), queue and the airtime of the last hour as a bar (limit 36 s; yellow
 from half, red from 80 %). A click on **"Queue N"** unfolds the list of pending commands
 (from 0.9.3): device, kind of command and state ("being sent", "waiting for airtime",
-"waiting"), in sending order. The number counts the waiting commands; the command on air is
+"waiting"), in sending order. "Radio module waiting for airtime" (from 0.11.0) means that
+not the integration holds the command back but the radio module itself: its firmware keeps
+the 1% rule, and the setting "Limit airtime" does not change that. The number counts the waiting commands; the command on air is
 listed in addition. A bar of key figures counts thermostats, thermostats heating
 right now (valve open), open windows, low batteries and devices needing attention (pending,
 not acknowledged, radio error); anything that is not zero is highlighted in colour.
@@ -25,6 +27,16 @@ not acknowledged, radio error); anything that is not zero is highlighted in colo
 | Wall thermostat | current → target, mode/preset |
 | Window contact | open / closed |
 | Eco button | – |
+
+The cards' icons follow Home Assistant (from 0.11.0): an icon chosen in the entity's
+settings is taken over; a window contact shown there as "Door" or "Garage door" appears as
+a door or garage door here as well.
+
+A click on an area's heading folds it away and back (from 0.11.0); the browser remembers
+this, so other areas can be closed on the phone than on the desktop. **"Arrange"** at the
+right above the areas shows arrow buttons that move areas and the devices within them. The
+order is stored per user in Home Assistant and applies on every device; new items line up
+behind, and "Reset order" brings back the alphabetical one.
 
 **"On"/"Off" instead of 30.5/4.5 °C** (from 0.9.1): under Settings → Devices & services →
 eQ-3 MAX! → Configure → Settings you can have the cards show the two limit targets the way

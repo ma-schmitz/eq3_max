@@ -8,7 +8,7 @@ Ersetzt Homegear und die legacy `homematic`-Integration.
 
 ![Seite „eQ-3 MAX!“ in Home Assistant](website/assets/panel-hero.png)
 
-**Neu in 0.8.0:** eine eigene [Thermostatkarte](https://github.com/ma-schmitz/eq3-max-thermostat-card),
+**Neu in 0.8.0:** eine eigene [Thermostatkarte](https://ma-schmitz.github.io/eq3_max/de/handbuch/karte/) (seit 0.11.0 mitgeliefert),
 Presets Komfort/Eco, Gruppen-IDs für ganze Räume, Anzeige Soll/Ist am Wandthermostat,
 Ist-Temperatur regelmäßig abfragen, Freigaben für Benutzer ohne Admin-Rechte –
 [alles Neue](https://ma-schmitz.github.io/eq3_max/de/neu/).
@@ -33,7 +33,7 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
   (manuell) dauerhaft; **Abwesend** hält eine Temperatur bis zur Endzeit, ein neuer Sollwert
   beendet es
 - Gruppen-IDs (je Thermostat oder für einen ganzen Raum)
-- Eigene Dashboard-Karte: [eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (Ventil, Batterie, Funk, Fenster, Einstellungen und Wochenprogramm im Pop-up)
+- Eigene Dashboard-Karte, wird mitgeliefert: [eq3-max-thermostat-card](https://ma-schmitz.github.io/eq3_max/de/handbuch/karte/) (Ventil, Batterie, Funk, Fenster, Einstellungen und Wochenprogramm im Pop-up)
 - Freigaben: Geräteeinstellungen und Wochenprogramme für Benutzer ohne Admin-Rechte sperrbar
 - Gerätekonfiguration (Komfort-/Eco-Temperatur, Offset, Fenster, Boost, Entkalkung, Ventil;
   Anzeige Soll/Ist am Wandthermostat), jeder Wert per Mouseover und ⓘ erklärt

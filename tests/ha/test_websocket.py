@@ -496,15 +496,18 @@ async def test_overview_shows_a_running_week_profile_write_and_the_budget_wait(h
     dev = next(d for d in result["devices"] if d["serial"] == "MEQ9000007")
     assert dev["week_profile_writing"] == [] and dev["week_profile_error"] is None
     assert result["hub"]["radios"][0]["waiting_budget"] is False
+    assert result["hub"]["radios"][0]["waiting_reason"] is None
 
     hub.devices[HT].week_profile_writing = ["Dienstag", "Mittwoch"]
     hub.devices[HT].week_profile_error = "abgelehnt"
     hub.waiting_budget = True
+    hub.waiting_reason = "module"
     result = (await call(client, type="eq3_max/overview"))["result"]["entries"][0]
     dev = next(d for d in result["devices"] if d["serial"] == "MEQ9000007")
     assert dev["week_profile_writing"] == ["Dienstag", "Mittwoch"] and dev["week_profile_error"] == "abgelehnt"
     assert dev["pending"] is True
     assert result["hub"]["radios"][0]["waiting_budget"] is True
+    assert result["hub"]["radios"][0]["waiting_reason"] == "module"
 
 
 async def test_forced_unlink_over_websocket_and_service(hass, setup_entry, fake_hub, hass_ws_client):

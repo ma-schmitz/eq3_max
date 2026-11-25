@@ -246,6 +246,10 @@
     }
   },
   "issues": {
+    "card_installed_separately": {
+      "title": "Thermostatkarte doppelt installiert",
+      "description": "Die Thermostatkarte wird jetzt mit der Integration ausgeliefert. Eine getrennt installierte Kopie ist noch als Dashboard-Ressource eingetragen (`{url}`) und bleibt in Gebrauch; die mitgelieferte Karte wird deshalb nicht geladen. Karte in HACS entfernen (oder die Ressource unter Einstellungen → Dashboards → Ressourcen löschen) und Home Assistant neu starten: Danach trägt die Integration ihre eigene Karte ein, bestehende Dashboards laufen unverändert weiter."
+    },
     "homematic_active": {
       "title": "Homematic-Integration noch aktiv",
       "description": "Erst `homematic:` aus der configuration.yaml entfernen und neu starten, dann kann eQ-3 MAX! die Entitäten übernehmen."

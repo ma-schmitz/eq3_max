@@ -139,6 +139,8 @@ class RadioScheduler:
         self._lovf_watch = False
         self._lovf_wait = NO_ACK_LOVF_WAIT_S if lovf_wait is None else lovf_wait
         self._waiting_budget = False
+        # Who holds it back: "brake" (ours) or "module" (the stick refused, LOVF).
+        self._waiting_reason: str | None = None
         # Event loop time until which the stick is busy with the telegram handed to it
         # last (real time, not the injectable clock: it is about the hardware).
         self._busy_until = 0.0
@@ -187,6 +189,13 @@ class RadioScheduler:
         """The command in turn waits for airtime: held by the brake or refused by the
         stick (LOVF)."""
         return self._waiting_budget
+
+    @property
+    def waiting_reason(self) -> str | None:
+        """Who holds the command in turn back: "brake" (the integration's own limit),
+        "module" (the stick refused it with LOVF; no setting here lifts that), None
+        while nothing waits."""
+        return self._waiting_reason if self._waiting_budget else None
 
     def book_airtime(self, cost: float) -> None:
         """Count a transmission that went out past the queue (the hub's acknowledgements)."""
@@ -445,6 +454,7 @@ class RadioScheduler:
                         cmd.dst,
                     )
                 self._waiting_budget = True
+                self._waiting_reason = "module"
                 self._changed()
                 try:
                     await asyncio.sleep(self._lovf_delay)
@@ -464,6 +474,7 @@ class RadioScheduler:
         if self.airtime_last_hour + cost <= BUDGET_S:
             return
         self._waiting_budget = True
+        self._waiting_reason = "brake"
         self._changed()
         try:
             while self.airtime_last_hour + cost > BUDGET_S:

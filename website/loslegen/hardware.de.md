@@ -39,7 +39,7 @@ eq3_max braucht ein **Funkmodul mit culfw** (868 MHz, MAX!-Unterstützung). Zwei
     Minuten hinaus. Verloren geht nichts, es dauert nur: Ein ganzes
     [Wochenprogramm](../handbuch/dienste.md) (7 bis 14 Telegramme) passt beim Cube in den
     Vorrat, am nanoCUL braucht es eine Viertelstunde und mehr. Auf der Seite „eQ-3 MAX!“ steht am Funkmodul solange
-    „wartet auf Sendezeit“, im Log einmal je Befehl `culfw refused to send … (LOVF)`.
+    „Funkmodul wartet auf Sendezeit“, im Log einmal je Befehl `culfw refused to send … (LOVF)`.
 
 !!! warning "Empfängt nach dem Senden nichts mehr? Erst den USB-Port wechseln."
     Wirkt der Stick taub – die Firmware antwortet, Senden geht, aber der Empfang bricht

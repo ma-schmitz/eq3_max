@@ -481,10 +481,12 @@ async def test_lovf_frame_was_not_on_air_no_airtime_no_sent_count():
         assert sched.airtime_last_hour == pytest.approx(airtime(frame(1)))
         sched.on_lovf()
         await until(lambda: sched.waiting_for_budget)
+        # The stick refused: no setting of ours lifts that.
+        assert sched.waiting_reason == "module"
         assert sched.airtime_last_hour == 0
         assert cmd.sent == 0 and cmd.first_sent_at is None
         await until(lambda: len(sender.lines) == 2)
-        assert not sched.waiting_for_budget
+        assert not sched.waiting_for_budget and sched.waiting_reason is None
         assert cmd.sent == 1 and sched.airtime_last_hour == pytest.approx(airtime(frame(1)))
     finally:
         task.cancel()
@@ -515,10 +517,11 @@ async def test_waiting_for_budget_while_the_brake_holds(setup):
     sched._airtime.append((clock(), 36.0))
     sched.submit(Command(dst=DEV, build=frame))
     await until(lambda: sched.waiting_for_budget)
+    assert sched.waiting_reason == "brake"
     assert sender.lines == []
     clock.t += 3601
     await until(lambda: len(sender.lines) == 1)
-    assert not sched.waiting_for_budget
+    assert not sched.waiting_for_budget and sched.waiting_reason is None
 
 
 # --- never hand the stick a telegram while it is still transmitting the last one ---

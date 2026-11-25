@@ -7,6 +7,53 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.0] – 2026-11-25
+
+Die Thermostatkarte gehört jetzt zur Integration, und Seite wie Karte übernehmen die
+Symbole aus Home Assistant.
+
+### Hinzugefügt
+- **Thermostatkarte wird mitgeliefert.** Die Karte `eq3-max-thermostat-card` liegt jetzt in
+  der Integration und wird von ihr als Dashboard-Ressource eingetragen; sie ist damit immer
+  in der passenden Version da und muss nicht mehr getrennt installiert werden. Karte und
+  Integration tragen ab jetzt dieselbe Versionsnummer. Bestehende Dashboards laufen
+  unverändert weiter (`type: custom:eq3-max-thermostat-card`). Werden die Ressourcen in
+  `configuration.yaml` gepflegt, lädt die Integration die Karte selbst nach. Wird die
+  Integration entfernt, verschwindet auch der Eintrag.
+- **Symbole aus Home Assistant** (Diskussion #18). Die Seite „eQ-3 MAX!“ und die Karte
+  zeigen das Symbol, das für die Entität in Home Assistant gewählt ist, etwa ein eigenes
+  für eine Fußbodenheizung. Ein Fensterkontakt mit der Geräteklasse „Tür“ oder „Garagentor“
+  erscheint als Tür bzw. Tor, offen wie geschlossen; die Karte nennt ihn dann auch
+  „Tür offen“. Eingestellt wird beides wie gewohnt in den Einstellungen der Entität
+  („Symbol“ und „Anzeigen als“).
+- **Bereiche einklappen und anordnen** (Diskussion #18). Auf der Seite „eQ-3 MAX!“ klappt
+  ein Klick auf die Überschrift eines Bereichs dessen Geräte ein und wieder auf; das merkt
+  sich der Browser, am Handy können also andere Bereiche zu sein als am Rechner. Über
+  „Anordnen“ lassen sich Bereiche und die Geräte darin mit Pfeilknöpfen verschieben. Die
+  Reihenfolge wird je Benutzer in Home Assistant gespeichert und gilt auf allen Geräten;
+  neue Bereiche und Geräte reihen sich dahinter ein, „Reihenfolge zurücksetzen“ stellt die
+  alphabetische wieder her.
+
+### Geändert
+- **„Funkmodul wartet auf Sendezeit“** (#20). Die Seite unterscheidet jetzt, wer einen
+  Befehl zurückhält: die Sendezeit-Grenze der Integration („wartet auf Sendezeit“) oder
+  das Funkmodul selbst, dessen Firmware die 1-%-Regel einhält und den Befehl mit `LOVF`
+  ablehnt („Funkmodul wartet auf Sendezeit“). Der Hinweis am Funkmodul sagt dazu, dass die
+  Einstellung „Sendezeit begrenzen“ daran nichts ändert.
+
+### Behoben
+- **Karte, Layout „Kachel“: Text lief in die Sollwert-Knöpfe.** Mit externem Fühler und
+  Luftfeuchte ragte die Zeile unter dem Messwert („47 % · Thermostat 20,5 °C“) auf schmalen
+  Karten, etwa am Handy, in die Knöpfe für den Sollwert. Sie steht jetzt unter der Zeile mit
+  Messwert und Knöpfen und hat die volle Breite.
+
+### Umstieg von der getrennt installierten Karte
+Wer die Karte bisher als eigenes Repository in HACS (oder von Hand unter `/config/www/`)
+installiert hat, behält sie zunächst: Die Integration erkennt den vorhandenen Eintrag, lädt
+ihre eigene Karte nicht zusätzlich und meldet das unter Einstellungen → Reparaturen. Karte
+in HACS entfernen und Home Assistant neu starten – danach trägt die Integration ihre Karte
+ein, an den Dashboards ist nichts zu ändern.
+
 ## [0.10.1] – 2026-11-22
 
 Weniger Sendezeit, und die Sendezeit-Grenze hält auch über einen Neustart.

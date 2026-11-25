@@ -39,7 +39,7 @@ eq3_max needs a **radio module with culfw** (868 MHz, MAX! support). Two options
     minutes. Nothing is lost, it just takes time: a whole
     [week program](../handbuch/dienste.md) (7 to 14 telegrams) fits into the Cube's
     reserve, on the nanoCUL it takes a quarter of an hour and more. Meanwhile the
-    "eQ-3 MAX!" panel shows "waiting for airtime" on the radio module, and the log shows
+    "eQ-3 MAX!" panel shows "radio module waiting for airtime" on the radio module, and the log shows
     `culfw refused to send … (LOVF)` once per command.
 
 !!! warning "Nothing received after sending? Change the USB port first."

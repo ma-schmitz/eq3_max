@@ -108,6 +108,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     from .migration import takeover_issue_id  # noqa: PLC0415
 
     ir.async_delete_issue(hass, DOMAIN, takeover_issue_id(entry.entry_id))
+    if not [other for other in hass.config_entries.async_entries(DOMAIN) if other.entry_id != entry.entry_id]:
+        # The last entry is gone: the dashboard resource of the card goes with it.
+        from .card import async_unregister_card  # noqa: PLC0415
+
+        await async_unregister_card(hass)
 
 
 async def async_remove_config_entry_device(hass: HomeAssistant, entry: ConfigEntry, device_entry: DeviceEntry) -> bool:

@@ -12,7 +12,9 @@ mit Countdown. Darunter eine Kachel je Funkmodul: USB-Pfad bzw. Netzwerkziel (de
 und Sendezeit der letzten Stunde als Balken (Grenze 36 s; gelb ab der Hälfte, rot ab 80 %).
 Ein Klick auf **„Warteschlange N“** klappt die Liste der anstehenden Befehle auf (ab 0.9.3):
 Gerät, Art des Befehls und Zustand („wird gesendet“, „wartet auf Sendezeit“, „wartet“), in
-Sendereihenfolge. Die Zahl zählt die wartenden Befehle; der Befehl, der gerade auf Sendung
+Sendereihenfolge. Steht dort „Funkmodul wartet auf Sendezeit“ (ab 0.11.0), hält nicht die
+Integration den Befehl zurück, sondern das Funkmodul selbst: Seine Firmware hält die
+1-%-Regel ein, die Einstellung „Sendezeit begrenzen“ ändert daran nichts. Die Zahl zählt die wartenden Befehle; der Befehl, der gerade auf Sendung
 ist, steht zusätzlich in der Liste.
 Eine Leiste mit Kennzahlen zählt Thermostate, gerade heizende Thermostate (Ventil offen),
 offene Fenster, schwache Batterien und auffällige Geräte (ausstehend, nicht quittiert,
@@ -26,6 +28,17 @@ Funkfehler); was nicht null ist, ist farbig hinterlegt.
 | Wandthermostat | Ist → Soll, Modus/Preset |
 | Fensterkontakt | offen / geschlossen |
 | Eco-Taster | – |
+
+Die Symbole der Karten folgen Home Assistant (ab 0.11.0): Ein Symbol, das in den
+Einstellungen der Entität gewählt ist, wird übernommen; ein Fensterkontakt, der dort als
+„Tür“ oder „Garagentor“ angezeigt wird, erscheint auch hier als Tür bzw. Tor.
+
+Ein Klick auf die Überschrift eines Bereichs klappt ihn ein und wieder auf (ab 0.11.0); das
+merkt sich der Browser, am Handy können also andere Bereiche zu sein als am Rechner.
+**„Anordnen“** rechts über den Bereichen blendet Pfeilknöpfe ein, mit denen sich Bereiche
+und die Geräte darin verschieben lassen. Die Reihenfolge wird je Benutzer in Home Assistant
+gespeichert und gilt auf allen Geräten; Neues reiht sich dahinter ein, „Reihenfolge
+zurücksetzen“ stellt die alphabetische wieder her.
 
 **„On“/„Off“ statt 30,5/4,5 °C** (ab 0.9.1): Unter Einstellungen → Geräte & Dienste →
 eQ-3 MAX! → Konfigurieren → Einstellungen lässt sich einschalten, dass die Karten die beiden

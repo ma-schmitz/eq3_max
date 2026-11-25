@@ -1,8 +1,8 @@
 # Thermostatkarte
 
 Eine eigene Dashboard-Karte für MAX!-Thermostate:
-[eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (eigenes Repository,
-braucht eq3_max ab 0.8.0). Sie zeigt auf einen Blick, was die eingebaute HA-Karte nicht zeigt –
+`eq3-max-thermostat-card`. Seit eq3_max 0.11.0 wird sie mit der Integration ausgeliefert
+(vorher ein eigenes Repository). Sie zeigt auf einen Blick, was die eingebaute HA-Karte nicht zeigt –
 Ventilstellung, Batterie, Funkempfang, verknüpftes Fenster – und lässt Einstellungen und
 Wochenprogramm direkt im Dashboard ändern.
 
@@ -11,11 +11,24 @@ Wochenprogramm direkt im Dashboard ändern.
 
 ## Installation
 
-1. HACS → ⋮ → **Benutzerdefinierte Repositories** →
-   `https://github.com/ma-schmitz/eq3-max-thermostat-card`, Kategorie **Dashboard** → installieren.
-   (Ohne HACS: `eq3-max-thermostat-card.js` nach `/config/www/` kopieren und unter
-   Einstellungen → Dashboards → Ressourcen als *JavaScript-Modul* eintragen.)
-2. Im Dashboard **Karte hinzufügen → „eQ-3 MAX! Thermostat“**, Thermostat wählen.
+Es ist nichts zu installieren: Die Integration bringt die Karte mit und trägt sie selbst
+unter Einstellungen → Dashboards → Ressourcen ein (`/eq3_max_static/eq3-max-thermostat-card.js`),
+bei jedem Update in der passenden Version. Karte und Integration haben dieselbe
+Versionsnummer.
+
+Im Dashboard **Karte hinzufügen → „eQ-3 MAX! Thermostat“**, Thermostat wählen. Erscheint die
+Karte nach einem Update nicht, die Seite im Browser einmal neu laden.
+
+!!! note "Ressourcen in configuration.yaml"
+    Wer die Dashboard-Ressourcen in `configuration.yaml` pflegt (`resource_mode: yaml`),
+    braucht ebenfalls nichts zu tun: Die Integration lädt die Karte dann selbst nach.
+
+!!! info "Karte bisher über HACS installiert?"
+    Die getrennt installierte Karte bleibt in Gebrauch, bis sie entfernt ist; die
+    Integration lädt ihre eigene nicht zusätzlich und meldet das unter
+    Einstellungen → Reparaturen. Karte in HACS entfernen (von Hand installiert: den Eintrag
+    unter Ressourcen und die Datei in `/config/www/` löschen) und Home Assistant neu
+    starten. An den Dashboards ändert sich nichts.
 
 ```yaml
 type: custom:eq3-max-thermostat-card
@@ -23,11 +36,11 @@ entity: climate.wohnzimmer
 layout: kompakt      # kompakt | ring | kachel
 name: Wohnzimmer     # optional, sonst der Gerätename
 show_modes: true     # optional, Modus-Knöpfe zeigen
-temperature_sensor: sensor.wohnzimmer_temperatur  # optional (ab Karte 0.1.2)
-humidity_sensor: sensor.wohnzimmer_feuchte        # optional (ab Karte 0.1.2)
+temperature_sensor: sensor.wohnzimmer_temperatur  # optional
+humidity_sensor: sensor.wohnzimmer_feuchte        # optional
 ```
 
-Seit **Karte 0.1.2** wird sie bei „Karte hinzufügen → Nach Entität“ für MAX!-Thermostate unter
+Sie wird bei „Karte hinzufügen → Nach Entität“ für MAX!-Thermostate unter
 „Community“ vorgeschlagen.
 
 ### Externe Sensoren
@@ -73,6 +86,14 @@ Abweichung erklärt, warum ein Raum wärmer oder kälter wird als erwartet.
 | Schloss | Bediensperre am Gerät |
 | Sanduhr | Befehl gesendet, noch nicht quittiert |
 | „vor 2 min“ | wann das Gerät zuletzt gemeldet hat |
+
+**Eigene Symbole** (ab 0.11.0): Die Karte übernimmt, was in Home Assistant an der Entität
+eingestellt ist. Ein dort gewähltes Symbol des Thermostats (etwa für eine Fußbodenheizung)
+ersetzt Heizkörper bzw. Thermostat im Kopf der Karte. Ein verknüpfter Kontakt mit der
+Geräteklasse „Tür“ oder „Garagentor“ erscheint als Tür bzw. Tor und heißt „Tür offen“;
+hat der Kontakt ein eigenes Symbol, wird dieses gezeigt. Sind mehrere Kontakte verknüpft,
+bestimmt ein offener das Symbol. Eingestellt wird das in den Einstellungen der jeweiligen
+Entität („Symbol“ und „Anzeigen als“).
 
 ## Einstellungen im Pop-up
 

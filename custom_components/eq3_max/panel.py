@@ -4,7 +4,7 @@ One panel per HA instance: registered with the first loaded entry, removed when
 the last one unloads. The static path cannot be unregistered and stays.
 
 Manifest: http and websocket_api are dependencies (static path, commands);
-frontend and panel_custom only after_dependencies (JSON has no comments, so
+frontend, lovelace and panel_custom only after_dependencies (JSON has no comments, so
 the reason is noted here). Registering a panel only writes hass.data and needs
 no set-up frontend; a hard dependency would make every setup (and the tests,
 which lack the hass_frontend package) set up the whole frontend.
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
@@ -23,7 +24,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.loader import async_get_integration
 
+from .card import async_register_card
 from .const import DOMAIN, PANEL_URL_PATH, SIGNAL_PANEL_UPDATE
+
+_LOGGER = logging.getLogger(__name__)
 
 __all__ = ["PANEL_URL_PATH", "async_register_panel", "async_unregister_panel"]
 
@@ -47,6 +51,11 @@ async def async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
             await _async_register(hass, data)
         # Counted only once the panel exists: a failed setup must not keep it alive.
         data["entries"].add(entry.entry_id)
+        try:
+            # Needs the static path; a dashboard problem must not stop the integration.
+            await async_register_card(hass)
+        except Exception:
+            _LOGGER.exception("Thermostat card could not be entered as a dashboard resource")
     async_dispatcher_send(hass, SIGNAL_PANEL_UPDATE)
 
 

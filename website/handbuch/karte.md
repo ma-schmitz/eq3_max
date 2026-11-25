@@ -1,8 +1,8 @@
 # Thermostat card
 
 A dashboard card of its own for MAX! thermostats:
-[eq3-max-thermostat-card](https://github.com/ma-schmitz/eq3-max-thermostat-card) (own repository,
-needs eq3_max 0.8.0 or newer). It shows at a glance what the built-in HA card does not – valve
+`eq3-max-thermostat-card`. Since eq3_max 0.11.0 it ships with the integration (before: a
+repository of its own). It shows at a glance what the built-in HA card does not – valve
 position, battery, radio reception, linked window – and lets you change settings and the week
 program right in the dashboard.
 
@@ -11,11 +11,22 @@ program right in the dashboard.
 
 ## Installation
 
-1. HACS → ⋮ → **Custom repositories** →
-   `https://github.com/ma-schmitz/eq3-max-thermostat-card`, category **Dashboard** → install.
-   (Without HACS: copy `eq3-max-thermostat-card.js` to `/config/www/` and add it under
-   Settings → Dashboards → Resources as *JavaScript module*.)
-2. In the dashboard **Add card → "eQ-3 MAX! Thermostat"**, pick the thermostat.
+There is nothing to install: the integration brings the card along and enters it itself
+under Settings → Dashboards → Resources (`/eq3_max_static/eq3-max-thermostat-card.js`), in
+the matching version with every update. Card and integration share one version number.
+
+In the dashboard **Add card → "eQ-3 MAX! Thermostat"**, pick the thermostat. If the card
+does not show up after an update, reload the page in the browser once.
+
+!!! note "Resources in configuration.yaml"
+    If you keep the dashboard resources in `configuration.yaml` (`resource_mode: yaml`),
+    there is nothing to do either: the integration then loads the card itself.
+
+!!! info "Card installed through HACS so far?"
+    The separately installed card stays in use until it is removed; the integration does
+    not load its own on top and reports this under Settings → Repairs. Remove the card in
+    HACS (installed by hand: delete the entry under Resources and the file in
+    `/config/www/`) and restart Home Assistant. Nothing changes in the dashboards.
 
 ```yaml
 type: custom:eq3-max-thermostat-card
@@ -23,11 +34,11 @@ entity: climate.living_room
 layout: kompakt      # kompakt | ring | kachel
 name: Living room    # optional, otherwise the device name
 show_modes: true     # optional, show the mode buttons
-temperature_sensor: sensor.living_room_temperature  # optional (card 0.1.2+)
-humidity_sensor: sensor.living_room_humidity        # optional (card 0.1.2+)
+temperature_sensor: sensor.living_room_temperature  # optional
+humidity_sensor: sensor.living_room_humidity        # optional
 ```
 
-Since **card 0.1.2** it is suggested for MAX! thermostats under "Community" in "Add card → By
+It is suggested for MAX! thermostats under "Community" in "Add card → By
 entity".
 
 ### External sensors
@@ -73,6 +84,13 @@ room gets warmer or colder than expected.
 | lock | operation lock on the device |
 | hourglass | command sent, not acknowledged yet |
 | "2 min ago" | when the device last reported |
+
+**Your own icons** (from 0.11.0): the card takes over what is set for the entity in Home
+Assistant. An icon chosen there for the thermostat (for underfloor heating, say) replaces
+radiator or thermostat in the card's header. A linked contact with the device class "Door"
+or "Garage door" shows as a door or garage door and reads "Door open"; if the contact has an
+icon of its own, that one is shown. With several linked contacts an open one decides the
+icon. Both are set in the settings of the entity in question ("Icon" and "Show as").
 
 ## Settings in the pop-up
 

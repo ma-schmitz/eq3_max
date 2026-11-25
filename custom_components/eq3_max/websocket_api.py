@@ -363,6 +363,8 @@ def _radios(ctx: _Context) -> list[dict[str, Any]]:
                 "queue": st.get("queue", 0),
                 # A command is held back: by the brake, or the stick refused it (LOVF).
                 "waiting_budget": bool(st.get("waiting_budget")),
+                # "brake": our own limit; "module": the stick itself refused (LOVF).
+                "waiting_reason": st.get("waiting_reason") if st.get("waiting_budget") else None,
                 # The command on air first, then the waiting ones in sending order.
                 "pending": [_pending(cmd) for cmd in st.get("pending", [])],
             }
