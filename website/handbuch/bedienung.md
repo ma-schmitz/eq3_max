@@ -21,7 +21,7 @@ on the thermostat card or at the handwheel it is the same (from 0.10.0):
 | **Away** | until the end time; a new temperature ends Away and then holds permanently (manual) |
 
 For a permanent value out of Auto, choose "Heat" first, then set the temperature. In
-automations this works in one step with `climate.set_temperature` and `hvac_mode: heat`;
+automations this works in one step with [`climate.set_temperature`](aktionen.md#climateset_temperature) and `hvac_mode: heat`;
 `hvac_mode: auto` with a temperature returns to the program and holds the temperature until
 the next switch point. Up to 0.9.x every change from Home Assistant switched to manual for good.
 

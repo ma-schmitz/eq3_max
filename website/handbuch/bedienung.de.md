@@ -21,7 +21,7 @@ Home Assistant, auf der Thermostat-Karte oder am Handrad ist es dasselbe (ab 0.1
 | **Abwesend** | bis zur Endzeit; eine neue Temperatur beendet Abwesend und gilt dann dauerhaft (manuell) |
 
 Für einen dauerhaften Wert aus der Automatik heraus zuerst „Heizbetrieb“ wählen, dann die
-Temperatur einstellen. In Automationen geht das in einem Schritt mit `climate.set_temperature`
+Temperatur einstellen. In Automationen geht das in einem Schritt mit [`climate.set_temperature`](aktionen.md#climateset_temperature)
 und `hvac_mode: heat`; `hvac_mode: auto` mit einer Temperatur kehrt zum Programm zurück und hält
 die Temperatur bis zum nächsten Schaltpunkt. Bis 0.9.x schaltete jede Änderung aus Home
 Assistant dauerhaft auf manuell.

@@ -49,7 +49,7 @@ Auf der Geräteseite jedes Thermostats unter **Konfiguration**:
     | Fenster-auf-Temperatur und -Dauer | |
     | Boost-Dauer und Boost-Ventilöffnung | |
     | Entkalkung (Tag, Stunde) | |
-    | Wochenprogramm ([Dienste](dienste.md)) | |
+    | Wochenprogramm ([Aktionen](aktionen.md#eq3_maxset_week_profile)) | |
 
     Je betroffenem Gerät kostet das ein Telegramm je Satz. Geräte, deren Werte heute schon
     voneinander abweichen, bleiben so, bis der Wert einmal geändert wird. Thermostate ohne

@@ -125,7 +125,8 @@ plugins:
             The "eQ-3 MAX!" panel: Seite „eQ-3 MAX!“
             Multiple radio modules: Mehrere Funkmodule
             Pairing devices: Geräte anlernen
-            Services: Dienste
+            Actions and automations: Aktionen und Automationen
+            Options and permissions: Optionen und Rechte
             Operation and faults: Betrieb und Störungen
   # Schriften und andere externe Dateien beim Bauen herunterladen und selbst ausliefern
   # (keine Verbindung zu Google beim Besuch der Seite).
@@ -151,7 +152,8 @@ nav:
       - Thermostat card: handbuch/karte.md
       - Multiple radio modules: handbuch/funkmodule.md
       - Pairing devices: handbuch/anlernen.md
-      - Services: handbuch/dienste.md
+      - Actions and automations: handbuch/aktionen.md
+      - Options and permissions: handbuch/dienste.md
       - Operation and faults: handbuch/betrieb.md
   - FAQ: faq.md
   - Changelog: changelog.md

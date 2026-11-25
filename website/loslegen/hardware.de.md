@@ -37,7 +37,7 @@ eq3_max braucht ein **Funkmodul mit culfw** (868 MHz, MAX!-Unterstützung). Zwei
     Ist der Vorrat leer, lehnt sie das Senden ab (`LOVF`). eq3_max wartet dann und versucht
     es alle 10 s wieder; ein Telegramm mit Weckpräambel (rund 1,1 s) geht nach knapp zwei
     Minuten hinaus. Verloren geht nichts, es dauert nur: Ein ganzes
-    [Wochenprogramm](../handbuch/dienste.md) (7 bis 14 Telegramme) passt beim Cube in den
+    [Wochenprogramm](../handbuch/aktionen.md#eq3_maxset_week_profile) (7 bis 14 Telegramme) passt beim Cube in den
     Vorrat, am nanoCUL braucht es eine Viertelstunde und mehr. Auf der Seite „eQ-3 MAX!“ steht am Funkmodul solange
     „Funkmodul wartet auf Sendezeit“, im Log einmal je Befehl `culfw refused to send … (LOVF)`.
 

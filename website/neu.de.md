@@ -25,7 +25,7 @@ Die wichtigsten Neuerungen der letzten Versionen – alle Details im [Changelog]
 | **Virtueller Fensterkontakt** | ein beliebiger Kontakt aus Home Assistant (z. B. Zigbee) meldet „offen“ direkt an die Thermostate | [Virtuelle Geräte](handbuch/virtuelle-geraete.md) |
 | **Virtuelles Wandthermostat** | ein beliebiger Temperatursensor regelt einen Raum wie ein echtes Wandthermostat | [Virtuelle Geräte](handbuch/virtuelle-geraete.md) |
 | **Auto und Manuell wie am Gerät** | ein Sollwert in Automatik gilt bis zum nächsten Schaltpunkt, in Manuell dauerhaft | [Bedienung](handbuch/bedienung.md) |
-| **Weniger Sendezeit** (0.10.1) | unveränderte Tage des Wochenprogramms werden nicht noch einmal gesendet; die Sendezeit übersteht einen Neustart | [Dienste](handbuch/dienste.md) |
+| **Weniger Sendezeit** (0.10.1) | unveränderte Tage des Wochenprogramms werden nicht noch einmal gesendet; die Sendezeit übersteht einen Neustart | [Aktionen](handbuch/aktionen.md#eq3_maxset_week_profile) |
 | **Installation über die HACS-Suche** | eq3_max steht im Standardkatalog von HACS | [Installation](loslegen/installation.md) |
 
 ## 0.9 – Mehr Überblick auf der Seite

@@ -37,7 +37,7 @@ eq3_max needs a **radio module with culfw** (868 MHz, MAX! support). Two options
     When the reserve is empty, it refuses to send (`LOVF`). eq3_max then waits and retries
     every 10 s; a telegram with wake-up preamble (about 1.1 s) goes out after just under two
     minutes. Nothing is lost, it just takes time: a whole
-    [week program](../handbuch/dienste.md) (7 to 14 telegrams) fits into the Cube's
+    [week program](../handbuch/aktionen.md#eq3_maxset_week_profile) (7 to 14 telegrams) fits into the Cube's
     reserve, on the nanoCUL it takes a quarter of an hour and more. Meanwhile the
     "eQ-3 MAX!" panel shows "radio module waiting for airtime" on the radio module, and the log shows
     `culfw refused to send … (LOVF)` once per command.

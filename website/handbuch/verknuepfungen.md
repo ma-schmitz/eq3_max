@@ -5,14 +5,9 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
 
 - Display: `sensor.<device>_verknuepfungen` — number of complete links, attribute
   `partner` (names), `ausstehend` (pending: running requests with their state).
-- Create/remove: services `eq3_max.link` / `eq3_max.unlink` with two devices; both
-  directions are sent and acknowledged separately.
-  ```yaml
-  action: eq3_max.link
-  data:
-    device_id: <window contact>
-    partner_device_id: <thermostat>
-  ```
+- Create/remove: actions `eq3_max.link` / `eq3_max.unlink` with two devices; both
+  directions are sent and acknowledged separately. Fields, allowed pairs and examples:
+  [Actions and automations](aktionen.md#links).
 - **Window contacts and eco buttons sleep.** Requests to them wait until they report:
   state "waiting for window contact – please press its pairing button briefly (or open and close the window)" (button:
   press it once; for both, the pairing button works too, the device stays paired). Sending
@@ -43,13 +38,8 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   adding works.
 - A factory reset also removes the links on the former partners.
 - **Cancelling a request.** An open or failed request can be dropped without sending
-  anything: button **"Cancel request"** next to it on the "eQ-3 MAX!" page, or
-  ```yaml
-  action: eq3_max.cancel_link
-  data:
-    device_id: <device with the request>
-    partner: MEQ0000001   # serial number or device; empty: all requests of the device
-  ```
+  anything: button **"Cancel request"** next to it on the "eQ-3 MAX!" page, or the action
+  [`eq3_max.cancel_link`](aktionen.md#eq3_maxcancel_link).
   Useful for requests that can never complete, e.g. a removal the device refused. Links and
   requests to devices deleted from the integration are dropped at the next start; only a removal
   still waiting stays, it can still arrive.
@@ -58,14 +48,8 @@ Window contacts and wall thermostats act **directly by radio** on linked thermos
   knows it. That partner never acknowledges: a wall thermostat reports a **radio error** on
   every target change, a window contact repeats its telegram for minutes. In the telegram
   trace you recognise it by telegrams from the device to an address that gets no answer.
-  Remove it, on this one device only:
-  ```yaml
-  action: eq3_max.unlink
-  data:
-    device_id: <device with the leftover>
-    partner_device_id: <old partner>
-    force: true
-  ```
+  Remove it, on this one device only: [`eq3_max.unlink`](aktionen.md#eq3_maxunlink) with
+  `force: true`.
   Nothing is sent to the old partner. For window contacts this request, too, waits for the
   next window event.
 

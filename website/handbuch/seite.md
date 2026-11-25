@@ -102,4 +102,4 @@ The panel follows the user's language in Home Assistant (German or English, from
 With several radio modules the module selection sits next to "Pair"
 (see [Pairing devices](anlernen.md)).
 
-Not on the panel: factory reset ([Services](dienste.md)), names and areas (as usual in HA).
+Not on the panel: factory reset ([Actions](aktionen.md#eq3_maxfactory_reset)), names and areas (as usual in HA).

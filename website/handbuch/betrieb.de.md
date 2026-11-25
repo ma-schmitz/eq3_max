@@ -57,7 +57,7 @@ nur weil die Integration neu geladen wurde. Gilt ab der ersten echten Änderung 
 
 ## Grenzen
 
-- Wochenprogramme lassen sich schreiben ([Dienste](dienste.md)), aber nicht aus den Geräten
+- Wochenprogramme lassen sich schreiben ([Aktionen](aktionen.md#eq3_maxset_week_profile)), aber nicht aus den Geräten
   auslesen; die Integration kennt nur, was sie selbst geschrieben hat.
 - Konfiguration wird nicht vom Gerät gelesen (die Geräte können das nicht). Einzige Ausnahme:
   Der Wandthermostat meldet, ob er Soll- oder Ist-Temperatur anzeigt.

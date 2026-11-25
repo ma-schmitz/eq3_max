@@ -10,6 +10,10 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 ### Dokumentation
 - README: eigener Abschnitt „Thermostatkarte“; Projektseite: „Neu in 0.8“ ersetzt durch
   „Was ist neu“ (0.8 bis 0.11), Startseite mit den Neuerungen von 0.10 und 0.11.
+- Handbuch: neue Seite **„Aktionen und Automationen“** – alle Aktionen (eq3_max und die
+  Standard-Aktionen von Home Assistant an MAX!-Geräten) mit Feldern, Rechten, Rückmeldung und
+  Beispielen, dazu Auslöser, Attribute und fertige Automationen. Die bisherige Seite „Dienste“
+  heißt jetzt „Optionen und Rechte“.
 
 ## [0.11.0] – 2026-11-25
 

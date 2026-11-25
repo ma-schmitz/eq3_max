@@ -105,4 +105,4 @@ Die Seite folgt der Sprache des Benutzers in Home Assistant (Deutsch oder Englis
 Mit mehreren Funkmodulen steht neben „Anlernen“ die Auswahl des Moduls
 (siehe [Geräte anlernen](anlernen.md)).
 
-Nicht auf der Seite: Werksreset ([Dienste](dienste.md)), Namen und Bereiche (wie gewohnt in HA).
+Nicht auf der Seite: Werksreset ([Aktionen](aktionen.md#eq3_maxfactory_reset)), Namen und Bereiche (wie gewohnt in HA).

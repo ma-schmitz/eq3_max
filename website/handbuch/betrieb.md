@@ -57,7 +57,7 @@ integration was reloaded. Applies from the first real change after the update.
 
 ## Limits
 
-- Week programs can be written ([Services](dienste.md)) but not read from the devices; the
+- Week programs can be written ([Actions](aktionen.md#eq3_maxset_week_profile)) but not read from the devices; the
   integration only knows what it has written itself.
 - Configuration is not read from the device (the devices cannot do that). The only exception:
   the wall thermostat reports whether it shows the set or the current temperature.

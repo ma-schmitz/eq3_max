@@ -5,14 +5,9 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
 
 - Anzeige: `sensor.<gerät>_verknuepfungen` — Zahl der vollständigen Verknüpfungen, Attribut
   `partner` (Namen), `ausstehend` (laufende Aufträge mit Zustand).
-- Anlegen/Lösen: Dienste `eq3_max.link` / `eq3_max.unlink` mit zwei Geräten; beide Richtungen
-  werden gesendet und einzeln quittiert.
-  ```yaml
-  action: eq3_max.link
-  data:
-    device_id: <Fensterkontakt>
-    partner_device_id: <Thermostat>
-  ```
+- Anlegen/Lösen: Aktionen `eq3_max.link` / `eq3_max.unlink` mit zwei Geräten; beide Richtungen
+  werden gesendet und einzeln quittiert. Felder, erlaubte Gerätepaare und Beispiele:
+  [Aktionen und Automationen](aktionen.md#verknupfungen).
 - **Fensterkontakte und Eco-Taster schlafen.** Aufträge an sie warten, bis sie sich melden:
   Zustand „wartet auf Fensterkontakt – bitte Anlerntaste kurz drücken (oder Fenster öffnen und schließen)“ (Taster:
   einmal drücken; bei beiden geht auch die Anlerntaste, das Gerät bleibt angelernt). Gesendet
@@ -44,13 +39,8 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   Hinzufügen funktioniert.
 - Ein Werksreset löst die Verknüpfungen auch bei den früheren Partnern.
 - **Auftrag abbrechen.** Ein offener oder fehlgeschlagener Auftrag lässt sich verwerfen, ohne
-  dass etwas gesendet wird: Knopf **„Auftrag abbrechen“** daneben auf der Seite „eQ-3 MAX!“, oder
-  ```yaml
-  action: eq3_max.cancel_link
-  data:
-    device_id: <Gerät mit dem Auftrag>
-    partner: MEQ0000001   # Seriennummer oder Gerät; leer: alle Aufträge des Geräts
-  ```
+  dass etwas gesendet wird: Knopf **„Auftrag abbrechen“** daneben auf der Seite „eQ-3 MAX!“, oder die Aktion
+  [`eq3_max.cancel_link`](aktionen.md#eq3_maxcancel_link).
   Nützlich für Aufträge, die nie abgeschlossen werden können, z. B. ein vom Gerät abgelehntes
   Lösen. Verknüpfungen und Aufträge zu Geräten, die aus der Integration gelöscht wurden, fallen
   beim nächsten Start weg; nur ein noch wartendes Lösen bleibt stehen, es kann weiter ankommen.
@@ -59,14 +49,8 @@ Fensterkontakte und Wandthermostate wirken **direkt per Funk** auf verknüpfte T
   nicht mehr kennt. Der Partner quittiert dann nie: Ein Wandthermostat meldet bei jeder
   Sollwertänderung **Funkfehler**, ein Fensterkontakt wiederholt sein Telegramm minutenlang.
   Im Telegramm-Trace erkennt man es an Telegrammen des Geräts an eine Adresse ohne Antwort.
-  Löschen, nur an diesem einen Gerät:
-  ```yaml
-  action: eq3_max.unlink
-  data:
-    device_id: <Gerät mit dem Überbleibsel>
-    partner_device_id: <alter Partner>
-    force: true
-  ```
+  Löschen, nur an diesem einen Gerät: [`eq3_max.unlink`](aktionen.md#eq3_maxunlink) mit
+  `force: true`.
   Der alte Partner bekommt nichts gesendet. Bei Fensterkontakten wartet auch dieser Auftrag
   auf das nächste Fenster-Ereignis.
 

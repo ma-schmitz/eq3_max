@@ -49,7 +49,7 @@ On the device page of each thermostat under **Configuration**:
     | Window-open temperature and duration | |
     | Boost duration and boost valve opening | |
     | Decalcification (day, hour) | |
-    | Week program ([Services](dienste.md)) | |
+    | Week program ([Actions](aktionen.md#eq3_maxset_week_profile)) | |
 
     This costs one telegram per set for each affected device. Devices whose values already
     differ today stay that way until the value is changed once. Thermostats without a wall
