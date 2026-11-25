@@ -8,10 +8,9 @@ Replaces Homegear and the legacy `homematic` integration.
 
 ![eQ-3 MAX! panel in Home Assistant](website/assets/panel-hero.png)
 
-**New in 0.8.0:** a [thermostat card](https://ma-schmitz.github.io/eq3_max/handbuch/karte/) (shipped with the integration since 0.11.0) of its
-own, presets Comfort/Eco, group ids for whole rooms, display set/current on the wall thermostat,
-polling the current temperature, permissions for users without admin rights –
-[what's new](https://ma-schmitz.github.io/eq3_max/neu/).
+**New in 0.11.0:** the [thermostat card](#thermostat-card) ships with the integration, panel and
+card take their icons from Home Assistant (door, garage door, your own icons), and the areas on
+the panel can be collapsed and arranged – [what's new](https://ma-schmitz.github.io/eq3_max/neu/).
 
 ![Thermostat card](website/assets/karte/card-kompakt-en-light.png)
 
@@ -32,7 +31,7 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
   next switch point of the week program (the thermostat stays in Auto), in **Heat** (manual)
   permanently; **Away** holds a temperature until the end time, a new setpoint ends it
 - Group ids (set per thermostat or for a whole room)
-- Own dashboard card, shipped with the integration: [eq3-max-thermostat-card](https://ma-schmitz.github.io/eq3_max/handbuch/karte/) (valve, battery, radio, window, settings and week program in a pop-up)
+- Own dashboard card, shipped with the integration: [thermostat card](#thermostat-card) (valve, battery, radio, window, settings and week program in a pop-up)
 - Permissions: device settings and week programs can be locked for users without admin rights
 - Device configuration (comfort/eco temperature, offset, window, boost, decalcification, valve;
   wall thermostat display: set or current temperature), every value explained on hover and with ⓘ
@@ -44,6 +43,35 @@ manual and FAQ. Source in the folder `website/` (Material for MkDocs, locally:
   another module without re-pairing
 - The "eQ-3 MAX!" panel in the sidebar: overview, links and device configuration
 - English and German: names, messages, dialogs and the panel follow the language of Home Assistant
+
+## Thermostat card
+
+The integration brings its own dashboard card: `custom:eq3-max-thermostat-card`. There is
+nothing to install – it is entered as a dashboard resource and arrives in the matching
+version with every update.
+
+| Ring – drag to set | Tile |
+|---|---|
+| ![Ring layout](website/assets/karte/card-ring-en-light.png) | ![Tile layout](website/assets/karte/card-kachel-en-light.png) |
+
+- Current and target temperature, −/+ and the modes manual, auto, comfort, eco, boost, off
+- Valve position, battery, radio reception, linked window, operation lock and pending
+  commands as symbols
+- Settings and the **week program in a pop-up**, without leaving the dashboard
+- Three layouts: `kompakt` (compact), `ring` (drag to set the target), `kachel` (tile)
+- Optionally an external temperature sensor and a humidity sensor
+
+In the dashboard **Add card → "eQ-3 MAX! Thermostat"** or as YAML:
+
+```yaml
+type: custom:eq3-max-thermostat-card
+entity: climate.living_room
+layout: kompakt      # kompakt | ring | kachel
+```
+
+Everything else in the [manual](https://ma-schmitz.github.io/eq3_max/handbuch/karte/). If you
+had installed the card separately through HACS: remove it there and reload the integration;
+nothing changes in the dashboards.
 
 ## Connection (USB or network)
 

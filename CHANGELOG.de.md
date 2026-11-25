@@ -7,6 +7,10 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Dokumentation
+- README: eigener Abschnitt „Thermostatkarte“; Projektseite: „Neu in 0.8“ ersetzt durch
+  „Was ist neu“ (0.8 bis 0.11), Startseite mit den Neuerungen von 0.10 und 0.11.
+
 ## [0.11.0] – 2026-11-25
 
 Die Thermostatkarte gehört jetzt zur Integration, und Seite wie Karte übernehmen die

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Documentation
+- README: a section of its own for the thermostat card; project site: "What's new in 0.8"
+  replaced by "What's new" (0.8 to 0.11), home page with the additions of 0.10 and 0.11.
+
 ## [0.11.0] – 2026-11-25
 
 The thermostat card is now part of the integration, and both the panel and the card take

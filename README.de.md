@@ -8,10 +8,9 @@ Ersetzt Homegear und die legacy `homematic`-Integration.
 
 ![Seite „eQ-3 MAX!“ in Home Assistant](website/assets/panel-hero.png)
 
-**Neu in 0.8.0:** eine eigene [Thermostatkarte](https://ma-schmitz.github.io/eq3_max/de/handbuch/karte/) (seit 0.11.0 mitgeliefert),
-Presets Komfort/Eco, Gruppen-IDs für ganze Räume, Anzeige Soll/Ist am Wandthermostat,
-Ist-Temperatur regelmäßig abfragen, Freigaben für Benutzer ohne Admin-Rechte –
-[alles Neue](https://ma-schmitz.github.io/eq3_max/de/neu/).
+**Neu in 0.11.0:** Die [Thermostatkarte](#thermostatkarte) wird mitgeliefert, Seite und Karte
+übernehmen die Symbole aus Home Assistant (Tür, Garagentor, eigene Symbole), Bereiche auf der
+Seite lassen sich einklappen und anordnen – [alles Neue](https://ma-schmitz.github.io/eq3_max/de/neu/).
 
 ![Thermostatkarte](website/assets/karte/card-kompakt-de-light.png)
 
@@ -33,7 +32,7 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
   (manuell) dauerhaft; **Abwesend** hält eine Temperatur bis zur Endzeit, ein neuer Sollwert
   beendet es
 - Gruppen-IDs (je Thermostat oder für einen ganzen Raum)
-- Eigene Dashboard-Karte, wird mitgeliefert: [eq3-max-thermostat-card](https://ma-schmitz.github.io/eq3_max/de/handbuch/karte/) (Ventil, Batterie, Funk, Fenster, Einstellungen und Wochenprogramm im Pop-up)
+- Eigene Dashboard-Karte, wird mitgeliefert: [Thermostatkarte](#thermostatkarte) (Ventil, Batterie, Funk, Fenster, Einstellungen und Wochenprogramm im Pop-up)
 - Freigaben: Geräteeinstellungen und Wochenprogramme für Benutzer ohne Admin-Rechte sperrbar
 - Gerätekonfiguration (Komfort-/Eco-Temperatur, Offset, Fenster, Boost, Entkalkung, Ventil;
   Anzeige Soll/Ist am Wandthermostat), jeder Wert per Mouseover und ⓘ erklärt
@@ -45,6 +44,35 @@ Handbuch und FAQ. Quelle im Ordner `website/` (Material for MkDocs, lokal:
   Neuanlernen einem anderen Modul zuordnen
 - Seite „eQ-3 MAX!“ in der Seitenleiste: Überblick, Verknüpfungen und Gerätekonfiguration
 - Deutsch und Englisch: Namen, Meldungen, Dialoge und die Seite folgen der Sprache von Home Assistant
+
+## Thermostatkarte
+
+Die Integration bringt eine eigene Dashboard-Karte mit: `custom:eq3-max-thermostat-card`.
+Es ist nichts zu installieren – sie wird als Dashboard-Ressource eingetragen und kommt mit
+jedem Update in der passenden Version.
+
+| Ring – zum Ziehen | Kachel |
+|---|---|
+| ![Layout Ring](website/assets/karte/card-ring-de-light.png) | ![Layout Kachel](website/assets/karte/card-kachel-de-light.png) |
+
+- Ist- und Solltemperatur, −/+ und die Modi Manuell, Auto, Komfort, Eco, Boost, Aus
+- Ventilstellung, Batterie, Funkempfang, verknüpftes Fenster, Bediensperre und ausstehende
+  Befehle als Symbole
+- Einstellungen und **Wochenprogramm im Pop-up**, ohne das Dashboard zu verlassen
+- Drei Layouts: `kompakt`, `ring` (Sollwert durch Ziehen), `kachel`
+- Optional ein externer Temperatur- und ein Feuchtesensor
+
+Im Dashboard **Karte hinzufügen → „eQ-3 MAX! Thermostat“** oder als YAML:
+
+```yaml
+type: custom:eq3-max-thermostat-card
+entity: climate.wohnzimmer
+layout: kompakt      # kompakt | ring | kachel
+```
+
+Alles Weitere im [Handbuch](https://ma-schmitz.github.io/eq3_max/de/handbuch/karte/). Wer die
+Karte bisher getrennt über HACS installiert hatte: dort entfernen und die Integration neu
+laden; an den Dashboards ändert sich nichts.
 
 ## Verbindung (USB oder Netzwerk)
 

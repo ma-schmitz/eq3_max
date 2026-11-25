@@ -109,7 +109,7 @@ plugins:
                   name: Helles Design
           nav_translations:
             Home: Start
-            "What's new in 0.8": Neu in 0.8
+            "What's new": Was ist neu
             Thermostat card: Thermostatkarte
             Getting started: Loslegen
             Installation: Installation
@@ -133,7 +133,7 @@ plugins:
 
 nav:
   - Home: index.md
-  - What's new in 0.8: neu.md
+  - What's new: neu.md
   - Getting started:
       - Installation: loslegen/installation.md
       - Setup: loslegen/einrichtung.md
