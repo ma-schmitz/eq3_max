@@ -1160,6 +1160,26 @@ async def test_poll_skips_when_fresh_busy_or_off(hub):
         h.set_poll(HT, 45)
 
 
+async def test_poll_pauses_while_half_the_airtime_is_used(hub):
+    """#20: polling is the first traffic to give way, from 18 s of airtime in the last
+    hour on, also with the brake off; below that it goes on."""
+    h, cul, rec = hub
+    clock = [1_700_000_000.0]
+    h._now = lambda: clock[0]
+    dev = h.devices[HT]
+    dev.mode, dev.target, dev.measured_at = Mode.MANUAL, 21.0, None
+    h.set_poll(HT, 15)
+    h._scheduler.book_airtime(18.0)
+    h._poll_check()
+    await asyncio.sleep(0.05)
+    assert sent(cul) == [] and HT not in h._pokes
+    h._scheduler._airtime.clear()
+    h._scheduler.book_airtime(17.9)
+    h._poll_check()
+    await until(lambda: len(sent(cul)) == 1)
+    assert HT in h._pokes
+
+
 async def test_poll_gives_up_after_timeout_and_restores(hub):
     h, cul, rec = hub
     clock = [1_700_000_000.0]

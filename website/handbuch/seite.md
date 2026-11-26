@@ -1,6 +1,6 @@
 # The "eQ-3 MAX!" panel
 
-![The "eQ-3 MAX!" panel: radio modules in the header, device cards by area](../assets/panel.png)
+![The "eQ-3 MAX!" panel: radio modules in the header, device cards by area](../assets/panel-en.png)
 
 
 Everything from [Device configuration](konfiguration.md) and [Links](verknuepfungen.md) (and pairing) is also available graphically: the **"eQ-3 MAX!"** entry in the
@@ -37,6 +37,8 @@ this, so other areas can be closed on the phone than on the desktop. **"Arrange"
 right above the areas shows arrow buttons that move areas and the devices within them. The
 order is stored per user in Home Assistant and applies on every device; new items line up
 behind, and "Reset order" brings back the alphabetical one.
+
+!["Arrange" on a phone: arrows on areas and devices, upper floor folded](../assets/panel-handy-en.png){ width="360" }
 
 **"On"/"Off" instead of 30.5/4.5 °C** (from 0.9.1): under Settings → Devices & services →
 eQ-3 MAX! → Configure → Settings you can have the cards show the two limit targets the way

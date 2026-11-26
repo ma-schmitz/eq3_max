@@ -74,7 +74,12 @@ Zeit hat Vorrang.
 
 - **Kosten:** zwei Telegramme je Anstoß (Funkbudget, Batterie); der Ventilmotor bewegt sich
   dabei in der Regel nicht. Ausgelassen wird bei Abwesend, Boost, offenem Fenster, einem
-  ausstehenden Befehl oder knappem Funkbudget.
+  ausstehenden Befehl oder knapper Sendezeit: Ab 18 s Sendezeit in der letzten Stunde (der
+  Hälfte der erlaubten 36 s) setzt die Abfrage über dieses Funkmodul aus, damit Bedienbefehle
+  Platz behalten – auch bei ausgeschalteter Sendezeitbremse (ab 0.11.1).
+- **Rechnung:** Ein Anstoß kostet gut 2 s Sendezeit. Sechs Thermostate alle 15 Minuten sind
+  schon rund 50 s je Stunde; dann kommt die Abfrage nur noch zum Teil durch. 30 oder 60 Minuten
+  reichen für Verlaufskurven meist aus.
 - Wandthermostate brauchen das nicht, sie melden ihre Temperatur alle paar Minuten.
 - Ein schnelles Hin und Her (Sollwert oder Modus nach einer Sekunde zurück) löst **keine**
   Meldung aus; das Gerät muss den geänderten Sollwert etwa eine Minute behalten.

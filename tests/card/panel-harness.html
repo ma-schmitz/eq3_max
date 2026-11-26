@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Testseite eq3-max-panel</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  :root { --app-header-background-color: #2b3440; --app-header-text-color: #fff; --primary-color: #03a9f4; }
+  html, body { margin: 0; background: #f5f6f8; font-family: Roboto, sans-serif; }
+  body.dark { background: #111; }
+</style>
+<script>
+  // Stand-in for HA's icon element (MDI webfont).
+  customElements.define("ha-icon", class extends HTMLElement {
+    static get observedAttributes() { return ["icon"]; }
+    attributeChangedCallback() { this.render(); }
+    set icon(v) { this.setAttribute("icon", v); }
+    get icon() { return this.getAttribute("icon"); }
+    render() {
+      const n = (this.getAttribute("icon") || "").replace("mdi:", "");
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css"><i class="mdi mdi-${n}" style="font-size:var(--mdc-icon-size,24px);line-height:1;display:inline-flex"></i>`;
+    }
+  });
+</script>
+</head>
+<body>
+<script type="module">
+  // Demo data for screenshots (tools/screenshots.py): neutral names, documentation
+  // addresses (192.0.2.x), made-up serials. ?lang=en, ?theme=dark, ?arrange=1,
+  // ?collapsed=1 (upper floor folded), ?narrow=1.
+  import "../../custom_components/eq3_max/frontend/eq3-max-panel.js";
+
+  const qs = new URLSearchParams(location.search);
+  const en = (qs.get("lang") || "de").startsWith("en");
+  const L = (de, enText) => (en ? enText : de);
+  const nowS = Date.now() / 1000;
+  const ago = (min) => nowS - min * 60;
+
+  const AREAS = { eg: L("Erdgeschoss", "Ground floor"), og: L("Obergeschoss", "Upper floor") };
+  const RADIO_EG = "";
+  const RADIO_OG = "og";
+
+  let n = 0;
+  const devices = [];
+  const states = {};
+  const ref = (d) => ({ serial: d.serial, name: d.name, device_id: d.device_id, area: AREAS[d.area_id] });
+
+  function add(type, name, area, entity, opts = {}) {
+    n += 1;
+    const typeNames = {
+      heating_thermostat: L("Heizkörperthermostat", "Radiator thermostat"),
+      wall_thermostat: L("Wandthermostat", "Wall thermostat"),
+      shutter_contact: L("Fensterkontakt", "Window contact"),
+      push_button: L("Eco-Taster", "Eco button"),
+    };
+    const dev = {
+      device_id: `dev${n}`, serial: `KEQ00000${10 + n}`, address: (0x1a0000 + n).toString(16).toUpperCase(),
+      name, type, type_name: typeNames[type], firmware: "1.0",
+      radio: opts.radio ?? RADIO_EG, area_id: area, area_name: AREAS[area], entity_id: entity,
+      sleeper: type === "shutter_contact" || type === "push_button", virtual: false, source: "",
+      source_ok: true, removing: false, room_form: null, room_interval: null, room_form_reason: null,
+      program_known: null, pending: !!opts.pending, group: 0, pending_group: null, group_failed: false,
+      state: {
+        target: opts.target ?? null, measured: opts.measured ?? null, mode: opts.mode ?? null,
+        hvac: opts.target != null ? "heat" : "unknown", preset: "none", valve: opts.valve ?? null,
+        window_open: opts.open ?? null, battery_low: !!opts.lowbat, rf_error: false, locked: false,
+        rssi: opts.rssi ?? -60, rssi_by_radio: {}, last_seen: ago(opts.ago ?? 3),
+        command_failed: false, config_failed: [],
+      },
+      links: { partners: [], pending: [] }, candidates: [], area_candidates: [], config: [],
+      poll_minutes: type === "heating_thermostat" ? 0 : null, week_profile: null,
+      week_profile_writing: [], week_profile_error: null,
+    };
+    devices.push(dev);
+    states[entity] = { entity_id: entity, state: opts.open ? "on" : "off", attributes: opts.attrs || {} };
+    return dev;
+  }
+
+  const wz = add("heating_thermostat", L("Wohnzimmer Fenster", "Living room window"), "eg", "climate.wohnzimmer_fenster",
+    { target: 21.5, measured: 21.1, mode: "auto", valve: 12, rssi: -58, ago: 3 });
+  const wzw = add("wall_thermostat", L("Wohnzimmer Wand", "Living room wall"), "eg", "climate.wohnzimmer_wand",
+    { target: 21.5, measured: 21.0, mode: "manual", rssi: -55, ago: 6 });
+  const ku = add("heating_thermostat", L("Küche", "Kitchen"), "eg", "climate.kueche",
+    { target: 20.0, measured: 19.4, mode: "auto", valve: 41, rssi: -66, ago: 9, pending: true });
+  const kf = add("shutter_contact", L("Küche Fenster", "Kitchen window"), "eg", "binary_sensor.kueche_fenster",
+    { open: true, rssi: -71, ago: 12, attrs: { device_class: "window" } });
+  const hd = add("shutter_contact", L("Haustür", "Front door"), "eg", "binary_sensor.haustuer",
+    { open: false, rssi: -68, ago: 25, attrs: { device_class: "door" } });
+  const gt = add("shutter_contact", L("Garagentor", "Garage door"), "eg", "binary_sensor.garagentor",
+    { open: false, rssi: -79, ago: 31, lowbat: true, attrs: { device_class: "garage_door" } });
+  const bo = add("heating_thermostat", L("Bad oben", "Bathroom upstairs"), "og", "climate.bad_oben",
+    { target: 23.0, measured: 22.4, mode: "manual", valve: 30, rssi: -61, ago: 15, radio: RADIO_OG });
+  const sz = add("heating_thermostat", L("Schlafzimmer", "Bedroom"), "og", "climate.schlafzimmer",
+    { target: 17.0, measured: 17.8, mode: "auto", valve: 0, rssi: -69, ago: 18, radio: RADIO_OG });
+  const et = add("push_button", L("Eco-Taster Flur", "Eco button hall"), "og", "event.eco_taster_flur",
+    { rssi: -74, ago: 21, radio: RADIO_OG });
+
+  const link = (a, b) => { a.links.partners.push(ref(b)); b.links.partners.push(ref(a)); };
+  link(wz, wzw); link(ku, kf); link(bo, et); link(sz, et);
+
+  const radio = (id, name, connection, target, airtime, extra = {}) => ({
+    id, name, connection, target, connected: true,
+    version: connection === "usb" ? "V 1.67 nanoCUL868" : "V 1.26.08 a-culfw Build: 1 (2024-01-01) MAX!Cube",
+    airtime, queue: 0, waiting_budget: false, waiting_reason: null, pending: [], ...extra,
+  });
+  const radios = [
+    radio(RADIO_EG, L("Erdgeschoss", "Ground floor"), "usb", "/dev/serial/by-id/usb-SHK_NANO_CUL_868-if00-port0", 9.4),
+    radio(RADIO_OG, L("Obergeschoss", "Upper floor"), "network", "192.0.2.60:2323", 4.1),
+  ];
+
+  const overview = {
+    entries: [{
+      entry_id: "demo", title: "eQ-3 MAX! C0FFEE", state: "loaded", loaded: true, show_on_off: false,
+      hub: {
+        address: "C0FFEE", device_id: "hub", connected: true, any_connected: true, connection: "usb",
+        target: radios[0].target, version: radios[0].version, airtime: 13.5, airtime_limit: 36, queue: 0,
+        pairing_remaining: 0, pairing_radio: null, pairing_foreign: [], radios,
+      },
+      devices: devices.sort((a, b) => a.name.localeCompare(b.name)),
+    }],
+    factory_week_profile: {},
+  };
+
+  const connection = {
+    async subscribeMessage() { return async () => {}; },
+    async sendMessagePromise(msg) {
+      if (msg.type === "eq3_max/overview") return overview;
+      // The user's own order (feature "Anordnen"): thermostats first in the ground floor.
+      if (msg.type === "frontend/get_user_data") {
+        return { value: { areas: {}, devices: { demo: { eg: [wz, wzw, ku, kf, hd, gt].map((d) => d.serial) } } } };
+      }
+      return {};
+    },
+    addEventListener() {}, removeEventListener() {},
+  };
+
+  const dark = qs.get("theme") === "dark";
+  if (dark) {
+    document.body.classList.add("dark");
+    Object.entries({
+      "--primary-background-color": "#111111", "--secondary-background-color": "#202020",
+      "--card-background-color": "#1c1c1c", "--primary-text-color": "#e1e1e1",
+      "--secondary-text-color": "#9b9b9b", "--divider-color": "rgba(225,225,225,.12)",
+      "--app-header-background-color": "#101e24", "--app-header-text-color": "#e1e1e1",
+    }).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+  }
+
+  if (qs.get("collapsed")) {
+    try { localStorage.setItem("eq3_max_panel_collapsed", JSON.stringify(["demo|og"])); } catch (e) { /* egal */ }
+  } else {
+    try { localStorage.removeItem("eq3_max_panel_collapsed"); } catch (e) { /* egal */ }
+  }
+
+  const panel = document.createElement("eq3-max-panel");
+  panel.narrow = !!qs.get("narrow");
+  document.body.appendChild(panel);
+  panel.hass = {
+    locale: { language: en ? "en" : "de" }, language: en ? "en" : "de",
+    user: { is_admin: true }, themes: { darkMode: dark },
+    areas: { eg: { area_id: "eg", name: AREAS.eg }, og: { area_id: "og", name: AREAS.og } },
+    states, connection,
+  };
+  if (qs.get("arrange")) {
+    setTimeout(() => { panel._arrange = true; panel._render(); }, 300);
+  }
+  // ?rects=1: positions of the area headings for cutting screenshots (tools/screenshots.py).
+  if (qs.get("rects")) {
+    setTimeout(() => {
+      const rects = [...panel.shadowRoot.querySelectorAll("h2.area")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return [r.left, r.top + scrollY, r.right, r.bottom + scrollY];
+      });
+      document.body.dataset.rects = JSON.stringify({ areas: rects, height: document.documentElement.scrollHeight });
+    }, 3000);
+  }
+</script>
+</body>
+</html>

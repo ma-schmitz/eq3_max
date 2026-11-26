@@ -74,6 +74,7 @@ from .messages import (
 )
 from .program import next_switch, override_over, program_target
 from .scheduler import (
+    BUDGET_S,
     LOVF_RETRY_S,
     PREAMBLE_S,
     PRIO_COMMAND,
@@ -107,6 +108,10 @@ SLEEPER_LINK_ROUNDS = 5
 SLEEPER_ROUND_GAP_S = 3.0
 POLL_TICK_S = 60.0
 POKE_TIMEOUT_S = 300.0
+# Polling is the most dispensable traffic: no poke once a module used this much airtime in
+# the last hour, so commands still find room. Also with the brake off, where the stick
+# itself refuses (LOVF) at 36 s (#20: six thermostats every 15 min came to 38 s an hour).
+POKE_AIRTIME_LIMIT_S = BUDGET_S / 2
 # An unacknowledged setpoint in automatic mode holds only until the program's next switch
 # point; without a known program it is not resent after this long.
 AUTO_OVERRIDE_STALE_S = 900.0
@@ -849,6 +854,7 @@ class MaxHub:
                 or (dev.mode is Mode.MANUAL and dev.target == dev.window_open_temperature)
                 or not self.reachable(dev.address)
                 or self._scheduler_for(dev.address).waiting_for_budget
+                or self._scheduler_for(dev.address).airtime_last_hour >= POKE_AIRTIME_LIMIT_S
                 # Its measured value is the virtual wall thermostat's own, echoed.
                 or self.virtual.wall_of(dev) is not None
                 # A setpoint from Home Assistant holds in automatic mode: a poke would

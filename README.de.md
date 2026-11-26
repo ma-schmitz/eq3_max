@@ -6,7 +6,7 @@ Home-Assistant-Integration für eQ-3 MAX! über einen CUL mit culfw: USB-Stick (
 oder im Netzwerk (a-culfw auf CUN oder geflashtem MAX! Cube).
 Ersetzt Homegear und die legacy `homematic`-Integration.
 
-![Seite „eQ-3 MAX!“ in Home Assistant](website/assets/panel-hero.png)
+![Seite „eQ-3 MAX!“ in Home Assistant](website/assets/panel-hero-de.png)
 
 **Neu in 0.11.0:** Die [Thermostatkarte](#thermostatkarte) wird mitgeliefert, Seite und Karte
 übernehmen die Symbole aus Home Assistant (Tür, Garagentor, eigene Symbole), Bereiche auf der

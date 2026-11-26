@@ -4,7 +4,7 @@
 // geprüft), unten die Karte, das Pop-up und der Editor (nur im Browser).
 
 // Gleich der Version der Integration (tests/ha/test_card_resource.py prüft das).
-export const VERSION = "0.11.0";
+export const VERSION = "0.11.1";
 
 // Wochentage, wie eq3_max sie speichert und der Dienst set_week_profile sie nimmt.
 export const WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];

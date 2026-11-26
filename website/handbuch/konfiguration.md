@@ -71,7 +71,12 @@ until the device reports something else, at most 12 hours). Home Assistant keeps
 target during the nudge; a command of your own in that time wins.
 
 - **Cost:** two telegrams per nudge (airtime, battery); the valve motor usually does not
-  move. Skipped when away, in boost, with a window open, a pending command or little airtime.
+  move. Skipped when away, in boost, with a window open, a pending command or little airtime:
+  from 18 s of airtime in the last hour (half the 36 s allowed) polling through that radio
+  module pauses, so commands keep their room – with the airtime brake off, too (from 0.11.1).
+- **Arithmetic:** one nudge costs a little over 2 s of airtime. Six thermostats every 15
+  minutes already come to about 50 s an hour; then only part of the polling gets through. 30
+  or 60 minutes are usually enough for history graphs.
 - Wall thermostats do not need it, they report their temperature every few minutes.
 - A quick back and forth (target or mode back after a second) does **not** make the device
   report; it has to keep the changed target for about a minute.

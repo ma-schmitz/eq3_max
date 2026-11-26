@@ -7,6 +7,17 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.1] – 2026-11-26
+
+### Geändert
+- **Ist-Temperatur abfragen: Pause ab halber Sendezeit** (#20). Die Abfrage ist der
+  verzichtbarste Funkverkehr. Hat ein Funkmodul in der letzten Stunde 18 s oder mehr gesendet
+  (die Hälfte der erlaubten 36 s), stößt eq3_max über dieses Modul keine Thermostate mehr an,
+  bis wieder Sendezeit frei ist; Bedienbefehle und Wochenprogramme gehen weiter sofort hinaus.
+  Das gilt auch bei ausgeschalteter Sendezeitbremse. Bisher setzte die Abfrage erst aus, wenn
+  das Funkmodul schon auf Sendezeit wartete – sechs Thermostate im 15-Minuten-Abstand konnten
+  so allein die ganze Sendezeit aufbrauchen.
+
 ### Dokumentation
 - README: eigener Abschnitt „Thermostatkarte“; Projektseite: „Neu in 0.8“ ersetzt durch
   „Was ist neu“ (0.8 bis 0.11), Startseite mit den Neuerungen von 0.10 und 0.11.
@@ -14,6 +25,10 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
   Standard-Aktionen von Home Assistant an MAX!-Geräten) mit Feldern, Rechten, Rückmeldung und
   Beispielen, dazu Auslöser, Attribute und fertige Automationen. Die bisherige Seite „Dienste“
   heißt jetzt „Optionen und Rechte“.
+- Neue Bildschirmfotos (Stand 0.11): Seite „eQ-3 MAX!“ mit Tür- und Garagentor-Symbol und
+  eigener Reihenfolge, „Anordnen“ am Handy, Karte mit neuer Kachel-Zeile; Seite und
+  Startbild jetzt auch auf Englisch. Erzeugt mit `tools/screenshots.py` aus Testseiten mit
+  Beispieldaten (`tests/card/panel-harness.html`).
 
 ## [0.11.0] – 2026-11-25
 

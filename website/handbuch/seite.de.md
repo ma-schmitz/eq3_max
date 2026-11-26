@@ -1,6 +1,6 @@
 # Seite „eQ-3 MAX!“
 
-![Seite „eQ-3 MAX!“: Funkmodule im Kopf, Gerätekarten nach Bereich](../assets/panel.png)
+![Seite „eQ-3 MAX!“: Funkmodule im Kopf, Gerätekarten nach Bereich](../assets/panel-de.png)
 
 
 Alles aus [Gerätekonfiguration](konfiguration.md) und [Verknüpfungen](verknuepfungen.md) (und das Anlernen) gibt es auch grafisch: Eintrag **„eQ-3 MAX!“** in der
@@ -39,6 +39,8 @@ merkt sich der Browser, am Handy können also andere Bereiche zu sein als am Rec
 und die Geräte darin verschieben lassen. Die Reihenfolge wird je Benutzer in Home Assistant
 gespeichert und gilt auf allen Geräten; Neues reiht sich dahinter ein, „Reihenfolge
 zurücksetzen“ stellt die alphabetische wieder her.
+
+![„Anordnen“ am Handy: Pfeile an Bereichen und Geräten, Obergeschoss eingeklappt](../assets/panel-handy-de.png){ width="360" }
 
 **„On“/„Off“ statt 30,5/4,5 °C** (ab 0.9.1): Unter Einstellungen → Geräte & Dienste →
 eQ-3 MAX! → Konfigurieren → Einstellungen lässt sich einschalten, dass die Karten die beiden

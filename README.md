@@ -6,7 +6,7 @@ Home Assistant integration for eQ-3 MAX! via a CUL with culfw: USB stick (e.g. n
 or on the network (a-culfw on a CUN or a flashed MAX! Cube).
 Replaces Homegear and the legacy `homematic` integration.
 
-![eQ-3 MAX! panel in Home Assistant](website/assets/panel-hero.png)
+![eQ-3 MAX! panel in Home Assistant](website/assets/panel-hero-en.png)
 
 **New in 0.11.0:** the [thermostat card](#thermostat-card) ships with the integration, panel and
 card take their icons from Home Assistant (door, garage door, your own icons), and the areas on

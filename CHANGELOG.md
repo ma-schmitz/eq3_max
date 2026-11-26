@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.1] – 2026-11-26
+
+### Changed
+- **Polling the measured temperature pauses from half the airtime on** (#20). Polling is the
+  most dispensable radio traffic. Once a radio module sent 18 s or more in the last hour (half
+  the 36 s allowed), eq3_max nudges no thermostats through that module until airtime is free
+  again; commands and week programs still go out right away. This holds with the airtime brake
+  switched off, too. So far polling paused only once the module was already waiting for
+  airtime – six thermostats every 15 minutes could use up the whole airtime on their own.
+
 ### Documentation
 - README: a section of its own for the thermostat card; project site: "What's new in 0.8"
   replaced by "What's new" (0.8 to 0.11), home page with the additions of 0.10 and 0.11.
@@ -14,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   standard actions on MAX! devices) with fields, permissions, feedback and examples, plus
   triggers, attributes and ready-made automations. The former "Services" page is now
   "Options and permissions".
+- New screenshots (as of 0.11): the "eQ-3 MAX!" panel with door and garage door symbols and
+  an own order, "Arrange" on a phone, the card with the new tile row; panel and hero image now
+  in English too. Made by `tools/screenshots.py` from test pages with demo data
+  (`tests/card/panel-harness.html`).
 
 ## [0.11.0] – 2026-11-25
 
